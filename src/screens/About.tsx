@@ -65,7 +65,7 @@ export default function About() {
               <Image
                 source={require("../../assets/logo.png")}
                 style={styles.aboutLogo}
-              />{" "}
+              />
             </View>
             <Text style={styles.appName}>Painel Econômico</Text>
             <Text style={styles.version}>

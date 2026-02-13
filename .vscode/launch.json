@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug (Emulador)",
+      "cwd": "${workspaceFolder}",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "android",
+    },
+    {
+      "name": "Debug (via USB)",
+      "cwd": "${workspaceFolder}",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "android",
+      "target": "device",
+    },
+    { // npx expo start --no-dev --minify
+      "name": "Produção (Simulação)",
+      "cwd": "${workspaceFolder}",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "android",
+      "env": {
+        "NODE_ENV": "production",
+        "EXPO_USE_DEV_SERVER": "false"
+      }
+    },
+    {
+      "name": "Anexar ao Packager",
+      "cwd": "${workspaceFolder}",
+      "type": "reactnative",
+      "request": "attach"
+    }
+  ]
+}

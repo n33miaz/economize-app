@@ -6,8 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
-    "test": "jest"
+    "prod:sim": "expo start --no-dev --minify",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@expo-google-fonts/roboto": "^0.4.1",
