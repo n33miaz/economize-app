@@ -85,11 +85,11 @@ export default function About() {
 
           <Text style={styles.sectionTitle}>Desenvolvedor</Text>
           <View style={styles.devContainer}>
-            <Ionicons
-              name="person-circle-outline"
-              size={40}
-              color={colors.textSecondary}
+            <Image
+              source={require("../../assets/neemias.jpeg")}
+              style={styles.devPhoto}
             />
+
             <View style={styles.devInfo}>
               <Text style={styles.devName}>Neemias Cormino Manso</Text>
               <Text style={styles.devRole}>FullStack Developer</Text>
@@ -118,7 +118,7 @@ export default function About() {
         </Animated.View>
 
         <Text style={styles.footerText}>
-          © 2025 Painel Econômico. Todos os direitos reservados.
+          © 2026 Painel Econômico. Todos os direitos reservados.
         </Text>
       </ScrollView>
     </PageContainer>
@@ -146,6 +146,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
+  devPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    resizeMode: "cover",
+  },
+
   aboutLogo: {
     width: 100,
     height: 100,

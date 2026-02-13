@@ -2,36 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug (Emulador)",
+      "name": "Debug Full (Task + Attach)",
       "cwd": "${workspaceFolder}",
       "type": "reactnative",
-      "request": "launch",
-      "platform": "android",
+      "request": "attach",
+      "port": 19000,
+      "sourceMaps": true,
+      "preLaunchTask": "Expo Android"
     },
     {
-      "name": "Debug (via USB)",
+      "name": "Apenas Anexar (Expo já rodando)",
       "cwd": "${workspaceFolder}",
       "type": "reactnative",
-      "request": "launch",
-      "platform": "android",
-      "target": "device",
-    },
-    { // npx expo start --no-dev --minify
-      "name": "Produção (Simulação)",
-      "cwd": "${workspaceFolder}",
-      "type": "reactnative",
-      "request": "launch",
-      "platform": "android",
-      "env": {
-        "NODE_ENV": "production",
-        "EXPO_USE_DEV_SERVER": "false"
-      }
-    },
-    {
-      "name": "Anexar ao Packager",
-      "cwd": "${workspaceFolder}",
-      "type": "reactnative",
-      "request": "attach"
+      "request": "attach",
+      "port": 19000,
+      "sourceMaps": true
     }
   ]
 }
