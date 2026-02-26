@@ -1,13 +1,6 @@
 import React, { useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Dimensions,
-} from "react-native";
-import { LineChart } from "react-native-chart-kit";
-
+import { View, Text, ActivityIndicator, Dimensions } from "react-native";
+import { LineChart } from "react-native-gifted-charts";
 import { colors } from "../theme/colors";
 import { useHistoricalChartData } from "../hooks/useHistoricalChartData";
 
@@ -22,85 +15,77 @@ export default function HistoricalChart({
 }: HistoricalChartProps) {
   const { data, loading, error } = useHistoricalChartData(currencyCode);
 
-  const chartConfig = useMemo(
-    () => ({
-      backgroundColor: colors.cardBackground,
-      backgroundGradientFrom: colors.cardBackground,
-      backgroundGradientTo: colors.cardBackground,
-      decimalPlaces: 2,
-      color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(28, 28, 30, ${opacity})`,
-      style: {
-        borderRadius: 16,
-      },
-      propsForDots: {
-        r: "4",
-        strokeWidth: "2",
-        stroke: colors.primary,
-      },
-    }),
-    []
-  );
+  const chartData = useMemo(() => {
+    if (!data || !data.datasets[0].data) return [];
+    return data.datasets[0].data.map((value, index) => ({
+      value,
+      label: data.labels[index],
+    }));
+  }, [data]);
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <View className="h-56 justify-center items-center bg-gray-50 dark:bg-slate-800 rounded-2xl mt-5">
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
-  if (error || !data) {
+  if (error || chartData.length === 0) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View className="h-56 justify-center items-center bg-gray-50 dark:bg-slate-800 rounded-2xl mt-5">
+        <Text className="text-red-500 font-regular">
+          {error || "Dados indisponíveis"}
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Variação (Últimos 7 dias)</Text>
-      <LineChart
-        data={data}
-        width={screenWidth * 0.85}
-        height={180}
-        yAxisLabel="R$ "
-        yAxisInterval={1}
-        chartConfig={chartConfig}
-        bezier
-        style={styles.chart}
-        withInnerLines={false}
-        withOuterLines={false}
-      />
+    <View className="mt-5 w-full items-center">
+      <Text className="text-sm text-gray-500 dark:text-gray-400 text-center mb-4 font-bold">
+        Variação (Últimos 7 dias)
+      </Text>
+
+      <View className="w-full items-center bg-white dark:bg-slate-900 rounded-2xl py-4 shadow-sm border border-gray-100 dark:border-gray-800">
+        <LineChart
+          data={chartData}
+          width={screenWidth * 0.7}
+          height={160}
+          color={colors.primary}
+          thickness={3}
+          dataPointsColor={colors.primaryDark}
+          dataPointsRadius={4}
+          hideRules
+          hideYAxisText
+          xAxisLabelTextStyle={{ color: colors.inactive, fontSize: 10 }}
+          yAxisThickness={0}
+          xAxisThickness={0}
+          curved
+          pointerConfig={{
+            pointerStripColor: colors.primary,
+            pointerStripWidth: 2,
+            pointerColor: colors.primaryDark,
+            radius: 6,
+            pointerLabelWidth: 100,
+            pointerLabelHeight: 90,
+            activatePointersOnLongPress: false,
+            autoAdjustPointerLabelPosition: true,
+            pointerLabelComponent: (items: any) => {
+              return (
+                <View className="bg-slate-800 p-3 rounded-xl shadow-lg items-center justify-center -ml-12">
+                  <Text className="text-white font-bold text-base">
+                    R$ {items[0].value.toFixed(2)}
+                  </Text>
+                  <Text className="text-gray-300 text-xs mt-1">
+                    {items[0].label}
+                  </Text>
+                </View>
+              );
+            },
+          }}
+        />
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 20,
-    width: "100%",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginBottom: 12,
-    fontFamily: "Roboto_700Bold",
-  },
-  centered: {
-    height: 220,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorText: {
-    color: colors.danger,
-    fontFamily: "Roboto_400Regular",
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-});

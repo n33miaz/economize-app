@@ -2,9 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
-  ActivityIndicator,
   LayoutAnimation,
   RefreshControl,
   ScrollView,
@@ -16,10 +14,13 @@ import IndicatorCard from "./IndicatorCard";
 import HighlightCard from "./HighlightCard";
 import DetailsModal from "./DetailsModal";
 import SearchBar from "./SearchBar";
+import Skeleton from "./Skeleton";
 import PageContainer from "./PageContainer";
 import HistoricalChart from "./HistoricalChart";
+import ErrorState from "./ErrorState";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { useIndicatorStore } from "../store/indicatorStore";
+import * as Haptics from "expo-haptics";
 
 interface AssetListScreenProps {
   data: Indicator[];
@@ -35,7 +36,7 @@ export default function AssetListScreen({
   symbol,
   featuredItems = [],
 }: AssetListScreenProps) {
-  const { loading, fetchIndicators } = useIndicatorStore();
+  const { loading, error, fetchIndicators } = useIndicatorStore();
   const { favorites, toggleFavorite } = useFavoritesStore();
 
   const [searchText, setSearchText] = useState("");
@@ -53,12 +54,13 @@ export default function AssetListScreen({
       (item) =>
         item.name.toLowerCase().includes(lowerSearch) ||
         item.code.toLowerCase().includes(lowerSearch) ||
-        item.id.toLowerCase().includes(lowerSearch)
+        item.id.toLowerCase().includes(lowerSearch),
     );
   }, [data, searchText]);
 
   const onRefresh = useCallback(async () => {
     await fetchIndicators();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [fetchIndicators]);
 
   const handleToggleFavorite = useCallback(
@@ -66,7 +68,7 @@ export default function AssetListScreen({
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       toggleFavorite(id);
     },
-    [toggleFavorite]
+    [toggleFavorite],
   );
 
   const handleOpenModal = useCallback((item: Indicator) => {
@@ -85,28 +87,24 @@ export default function AssetListScreen({
     return (
       <View>
         {featuredItems.length > 0 && (
-          <View style={styles.highlightsContainer}>
+          <View className="mb-6 mt-2">
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.highlightsScroll}
+              contentContainerClassName="px-4"
             >
               {featuredItems.map((item) => (
-                <View
+                <HighlightCard
                   key={`highlight-${item.id}`}
-                  style={styles.highlightWrapper}
-                >
-                  <HighlightCard
-                    title={item.code || item.name}
-                    value={item.points || item.buy}
-                    variation={item.variation}
-                    iconName={
-                      item.code === "BTC" || item.id.includes("BTC")
-                        ? "logo-bitcoin"
-                        : "stats-chart"
-                    }
-                  />
-                </View>
+                  title={item.code || item.name}
+                  value={item.points || item.buy}
+                  variation={item.variation}
+                  iconName={
+                    item.code === "BTC" || item.id.includes("BTC")
+                      ? "logo-bitcoin"
+                      : "stats-chart"
+                  }
+                />
               ))}
             </ScrollView>
           </View>
@@ -126,43 +124,63 @@ export default function AssetListScreen({
       const displayValue = item.points !== undefined ? item.points : item.buy;
 
       return (
-        <IndicatorCard
-          name={item.name}
-          id={item.id}
-          value={displayValue}
-          variation={item.variation}
-          isFavorite={favorites.includes(item.id)}
-          onPress={() => handleOpenModal(item)}
-          onToggleFavorite={handleToggleFavorite}
-          symbol={displaySymbol}
-        />
+        <View className="px-5">
+          <IndicatorCard
+            name={item.name}
+            id={item.id}
+            value={displayValue}
+            variation={item.variation}
+            isFavorite={favorites.includes(item.id)}
+            onPress={() => handleOpenModal(item)}
+            onToggleFavorite={handleToggleFavorite}
+            symbol={displaySymbol}
+          />
+        </View>
       );
     },
-    [favorites, handleToggleFavorite, handleOpenModal, symbol]
+    [favorites, handleToggleFavorite, handleOpenModal, symbol],
   );
 
   return (
     <PageContainer>
-      <View style={styles.searchContainer}>
+      <View className="px-5 pt-4 bg-background z-10">
         <SearchBar
-          placeholder="Buscar..."
+          placeholder="Buscar ativo..."
           value={searchText}
           onChangeText={setSearchText}
           onClear={() => setSearchText("")}
         />
       </View>
 
-      {loading && data.length === 0 ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Atualizando mercado...</Text>
+      {error && data.length === 0 ? (
+        <ErrorState message={error} onRetry={onRefresh} />
+      ) : loading && data.length === 0 ? (
+        <View className="px-5 pt-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <View
+              key={i}
+              className="bg-white rounded-2xl p-5 mb-3 border border-gray-100"
+            >
+              <View className="flex-row items-center mb-4">
+                <Skeleton width={40} height={40} borderRadius={12} />
+                <View className="ml-3 flex-1">
+                  <Skeleton width="60%" height={16} className="mb-1.5" />
+                  <Skeleton width="30%" height={12} />
+                </View>
+              </View>
+              <View className="flex-row justify-between">
+                <Skeleton width="40%" height={24} />
+                <Skeleton width="20%" height={24} />
+              </View>
+            </View>
+          ))}
         </View>
       ) : (
         <FlatList
           data={filteredData}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerClassName="pb-10 pt-2"
           ListHeaderComponent={renderHeader}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -176,8 +194,8 @@ export default function AssetListScreen({
           }
           ListEmptyComponent={
             !loading ? (
-              <View style={styles.centeredEmpty}>
-                <Text style={styles.emptyText}>
+              <View className="mt-16 items-center px-10">
+                <Text className="text-gray-400 text-base text-center">
                   {searchText
                     ? `Nenhum resultado para "${searchText}"`
                     : emptyMessage}
@@ -199,17 +217,17 @@ export default function AssetListScreen({
         >
           <View>
             {isCurrencyData(selectedItem) ? (
-              <View style={styles.infoRow}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Compra</Text>
-                  <Text style={styles.infoValue}>
+              <View className="flex-row justify-around items-center mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <View className="items-center">
+                  <Text className="text-xs text-gray-500 mb-1">Compra</Text>
+                  <Text className="text-lg font-bold text-slate-800">
                     R$ {selectedItem.buy.toFixed(2)}
                   </Text>
                 </View>
-                <View style={styles.divider} />
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Venda</Text>
-                  <Text style={styles.infoValue}>
+                <View className="w-[1px] h-8 bg-gray-200" />
+                <View className="items-center">
+                  <Text className="text-xs text-gray-500 mb-1">Venda</Text>
+                  <Text className="text-lg font-bold text-slate-800">
                     {selectedItem.sell
                       ? `R$ ${selectedItem.sell.toFixed(2)}`
                       : "N/A"}
@@ -217,23 +235,21 @@ export default function AssetListScreen({
                 </View>
               </View>
             ) : (
-              <Text style={styles.modalText}>
+              <Text className="text-xl font-bold text-center text-slate-800 mb-4">
                 Pontos: {(selectedItem.points || 0).toFixed(2)}
               </Text>
             )}
 
-            <View style={styles.variationContainer}>
-              <Text style={styles.variationLabel}>Variação do Dia</Text>
+            <View className="items-center mb-4">
+              <Text className="text-xs text-gray-500 mb-1">
+                Variação do Dia
+              </Text>
               <Text
-                style={[
-                  styles.variationValue,
-                  {
-                    color:
-                      selectedItem.variation >= 0
-                        ? colors.success
-                        : colors.danger,
-                  },
-                ]}
+                className={`text-3xl font-bold ${
+                  selectedItem.variation >= 0
+                    ? "text-green-600"
+                    : "text-red-500"
+                }`}
               >
                 {selectedItem.variation > 0 ? "+" : ""}
                 {selectedItem.variation.toFixed(2)}%
@@ -249,98 +265,3 @@ export default function AssetListScreen({
     </PageContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  searchContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: colors.background,
-    zIndex: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  listContent: {
-    padding: 20,
-    paddingTop: 8,
-  },
-  highlightsContainer: {
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  highlightsScroll: {
-    paddingHorizontal: 16,
-  },
-  highlightWrapper: {
-    width: 150,
-    marginRight: 0,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  centeredEmpty: {
-    marginTop: 60,
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    color: colors.textSecondary,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: 16,
-    textAlign: "center",
-  },
-  modalText: {
-    fontSize: 18,
-    color: colors.textPrimary,
-    textAlign: "center",
-    fontFamily: "Roboto_700Bold",
-    marginBottom: 10,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    marginBottom: 20,
-    backgroundColor: colors.background,
-    padding: 16,
-    borderRadius: 12,
-  },
-  infoItem: {
-    alignItems: "center",
-  },
-  divider: {
-    width: 1,
-    height: 30,
-    backgroundColor: colors.border,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 18,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  variationContainer: {
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  variationLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  variationValue: {
-    fontSize: 24,
-    fontFamily: "Roboto_700Bold",
-  },
-});

@@ -2,7 +2,6 @@ import React from "react";
 import {
   View,
   TextInput,
-  StyleSheet,
   TouchableOpacity,
   TextInputProps,
 } from "react-native";
@@ -20,18 +19,13 @@ export default function SearchBar({
   ...rest
 }: SearchBarProps) {
   return (
-    <View style={styles.container}>
-      <Ionicons
-        name="search"
-        size={20}
-        color={colors.textSecondary}
-        style={styles.icon}
-      />
+    <View className="flex-row items-center bg-white rounded-xl px-3 h-12 border border-gray-200 mb-4 shadow-sm">
+      <Ionicons name="search" size={20} color="#6B7280" className="mr-2" />
       <TextInput
-        style={styles.input}
+        className="flex-1 h-full text-base text-text-primary font-regular"
         value={value}
         onChangeText={onChangeText}
-        placeholderTextColor={colors.inactive}
+        placeholderTextColor="#94A3B8"
         {...rest}
       />
       {value ? (
@@ -39,33 +33,9 @@ export default function SearchBar({
           onPress={onClear}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="close-circle" size={18} color={colors.inactive} />
+          <Ionicons name="close-circle" size={18} color="#94A3B8" />
         </TouchableOpacity>
       ) : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  icon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    height: "100%",
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontFamily: "Roboto_400Regular",
-  },
-});

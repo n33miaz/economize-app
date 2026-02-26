@@ -9,16 +9,27 @@ interface IndicatorState {
   getCurrencies: () => Indicator[];
   getIndexes: () => Indicator[];
   getGlobalCurrencies: (targetCodes: string[]) => Indicator[];
+  lastFetched: number | null;
 }
 
 export const useIndicatorStore = create<IndicatorState>((set, get) => ({
   indicators: [],
   loading: false,
   error: null,
+  lastFetched: null,
 
   fetchIndicators: async () => {
-    if (get().indicators.length > 0 && !get().error) {
-      // TODO: lógica de expiração de tempo aqui
+    const CACHE_TIME = 5 * 60 * 1000; // 5 minutos
+    const now = Date.now();
+    const { indicators, error, lastFetched } = get();
+
+    if (
+      indicators.length > 0 &&
+      !error &&
+      lastFetched &&
+      now - lastFetched < CACHE_TIME
+    ) {
+      return;
     }
 
     set({ loading: true, error: null });

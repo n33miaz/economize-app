@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   LayoutAnimation,
   ActivityIndicator,
@@ -10,7 +9,6 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
 import { colors } from "../theme/colors";
 import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import IndicatorCard from "../components/IndicatorCard";
@@ -41,7 +39,7 @@ export default function Favorites({ navigation }: any) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       toggleFavorite(id);
     },
-    [toggleFavorite]
+    [toggleFavorite],
   );
 
   const onRefresh = useCallback(async () => {
@@ -62,34 +60,33 @@ export default function Favorites({ navigation }: any) {
     ({ item }: { item: Indicator }) => {
       const isIndex = isIndexData(item);
       const displayValue = isIndex ? item.points || 0 : item.buy;
-
       return (
-        <IndicatorCard
-          name={item.name}
-          id={item.id}
-          value={displayValue}
-          variation={item.variation}
-          isFavorite={true}
-          onPress={() => handleOpenModal(item)}
-          onToggleFavorite={handleToggleFavorite}
-          symbol={isIndex && item.name === "IBOVESPA" ? "pts" : "R$"}
-        />
+        <View className="px-5">
+          <IndicatorCard
+            name={item.name}
+            id={item.id}
+            value={displayValue}
+            variation={item.variation}
+            isFavorite={true}
+            onPress={() => handleOpenModal(item)}
+            onToggleFavorite={handleToggleFavorite}
+            symbol={isIndex && item.name === "IBOVESPA" ? "pts" : "R$"}
+          />
+        </View>
       );
     },
-    [handleToggleFavorite, handleOpenModal]
+    [handleToggleFavorite, handleOpenModal],
   );
 
   return (
     <PageContainer>
       <ScreenHeader
         title="Meus Favoritos"
-        subtitle={`${favoriteItems.length} ${
-          favoriteItems.length === 1 ? "ativo" : "ativos"
-        } acompanhados`}
+        subtitle={`${favoriteItems.length} ${favoriteItems.length === 1 ? "ativo" : "ativos"} acompanhados`}
       />
 
       {loading && favoriteItems.length === 0 ? (
-        <View style={styles.centered}>
+        <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
@@ -97,7 +94,7 @@ export default function Favorites({ navigation }: any) {
           data={favoriteItems}
           keyExtractor={(item) => item.id}
           renderItem={renderFavoriteCard}
-          contentContainerStyle={styles.listContent}
+          contentContainerClassName="py-5"
           refreshControl={
             <RefreshControl
               refreshing={loading}
@@ -108,26 +105,30 @@ export default function Favorites({ navigation }: any) {
           }
           ListEmptyComponent={
             !loading ? (
-              <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconBg}>
+              <View className="flex-1 mt-16 items-center justify-center px-8">
+                <View className="w-24 h-24 rounded-full bg-blue-50 justify-center items-center mb-6">
                   <Ionicons
                     name="star-outline"
                     size={48}
                     color={colors.inactive}
                   />
                 </View>
-                <Text style={styles.emptyText}>Sua lista está vazia</Text>
-                <Text style={styles.emptySubText}>
+                <Text className="text-xl font-bold text-slate-800 text-center mb-2">
+                  Sua lista está vazia
+                </Text>
+                <Text className="text-base text-gray-500 text-center leading-6 mb-8">
                   Adicione moedas e índices para acompanhar suas cotações em
                   tempo real.
                 </Text>
                 <TouchableOpacity
-                  style={styles.ctaButton}
+                  className="bg-primary py-3.5 px-8 rounded-xl shadow-lg shadow-blue-500/30"
                   onPress={() =>
                     navigation.navigate("Início", { screen: "Dashboard" })
                   }
                 >
-                  <Text style={styles.ctaButtonText}>Explorar Mercado</Text>
+                  <Text className="text-white text-base font-bold">
+                    Explorar Mercado
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : null
@@ -146,20 +147,18 @@ export default function Favorites({ navigation }: any) {
         >
           <View>
             {isIndexData(selectedItem) && (
-              <Text style={styles.modalText}>
+              <Text className="mb-4 text-center text-base text-gray-500 font-regular">
                 Pontos: {(selectedItem.points || 0).toFixed(2)}
               </Text>
             )}
             {isCurrencyData(selectedItem) && (
-              <Text style={styles.modalText}>
+              <Text className="mb-4 text-center text-base text-gray-500 font-regular">
                 Compra: R$ {selectedItem.buy.toFixed(2)}
               </Text>
             )}
-
-            <Text style={styles.modalText}>
+            <Text className="mb-4 text-center text-base text-gray-500 font-regular">
               Variação: {selectedItem.variation.toFixed(2)}%
             </Text>
-
             {isCurrencyData(selectedItem) && (
               <HistoricalChart currencyCode={selectedItem.code} />
             )}
@@ -169,68 +168,3 @@ export default function Favorites({ navigation }: any) {
     </PageContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  listContent: {
-    paddingTop: 20,
-    paddingBottom: 20,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyContainer: {
-    flex: 1,
-    marginTop: 60,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-  },
-  emptyIconBg: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#EBF8FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  emptyText: {
-    fontSize: 20,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  emptySubText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  ctaButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  ctaButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-  },
-  modalText: {
-    marginBottom: 15,
-    textAlign: "center",
-    fontSize: 16,
-    color: colors.textSecondary,
-    fontFamily: "Roboto_400Regular",
-  },
-});

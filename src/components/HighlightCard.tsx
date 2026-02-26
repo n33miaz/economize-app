@@ -1,7 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
 import { colors } from "../theme/colors";
 
 interface HighlightCardProps {
@@ -18,66 +17,32 @@ export default function HighlightCard({
   iconName,
 }: HighlightCardProps) {
   const isPositive = variation >= 0;
-  const variationColor = isPositive ? colors.success : colors.danger;
+  const variationColor = isPositive ? "text-green-600" : "text-red-500";
+  const iconColor = isPositive ? colors.success : colors.danger;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <Ionicons name={iconName} size={24} color={colors.textSecondary} />
-        <Text style={styles.title}>{title}</Text>
+    <View className="bg-white rounded-2xl p-5 flex-1 mx-2 shadow-sm border border-gray-100 min-w-[150px]">
+      <View className="flex-row items-center mb-3">
+        <View className="bg-gray-50 p-2 rounded-full mr-2">
+          <Ionicons name={iconName} size={20} color="#64748B" />
+        </View>
+        <Text className="text-gray-500 font-regular text-sm">{title}</Text>
       </View>
-      <Text style={styles.value}>R$ {value.toFixed(2)}</Text>
-      <View style={styles.variationContainer}>
+
+      <Text className="text-2xl font-bold text-slate-800 mb-2">
+        R$ {value.toFixed(2)}
+      </Text>
+
+      <View className="flex-row items-center bg-gray-50 self-start px-2 py-1 rounded-lg">
         <Ionicons
           name={isPositive ? "caret-up" : "caret-down"}
-          size={16}
-          color={variationColor}
+          size={14}
+          color={iconColor}
         />
-        <Text style={[styles.variationText, { color: variationColor }]}>
+        <Text className={`${variationColor} font-bold text-xs ml-1`}>
           {variation.toFixed(2)}%
         </Text>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 16,
-    padding: 20,
-    flex: 1,
-    marginHorizontal: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 16,
-    fontFamily: "Roboto_400Regular",
-    color: colors.textSecondary,
-    marginLeft: 8,
-  },
-  value: {
-    fontSize: 28,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  variationContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  variationText: {
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-    marginLeft: 4,
-  },
-});

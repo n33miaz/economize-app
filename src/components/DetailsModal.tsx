@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   Modal,
   TouchableOpacity,
   TextInput,
@@ -10,12 +9,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Animated,
   Dimensions,
   TouchableWithoutFeedback,
-  Easing,
 } from "react-native";
-
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+} from "react-native-reanimated";
 import { colors } from "../theme/colors";
 import { convertCurrency } from "../services/api";
 
@@ -27,7 +30,7 @@ interface DetailsModalProps {
   children: React.ReactNode;
 }
 
-const { height } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function DetailsModal({
   visible,
@@ -39,116 +42,96 @@ export default function DetailsModal({
   const [amount, setAmount] = useState("100");
   const [conversionResult, setConversionResult] = useState<number | null>(null);
   const [loadingConversion, setLoadingConversion] = useState(false);
-
   const [showModal, setShowModal] = useState(visible);
 
-  const slideAnim = useRef(new Animated.Value(height)).current;
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
       setShowModal(true);
       setConversionResult(null);
       setAmount("100");
-
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 20,
-        stiffness: 90,
-      }).start();
+      translateY.value = withSpring(0, { damping: 20, stiffness: 90 });
+      opacity.value = withTiming(1, { duration: 300 });
     } else {
-      Animated.timing(slideAnim, {
-        toValue: height,
-        duration: 300,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.cubic),
-      }).start(() => {
-        setShowModal(false);
+      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 300 }, () => {
+        runOnJS(setShowModal)(false);
       });
+      opacity.value = withTiming(0, { duration: 300 });
     }
   }, [visible]);
 
   const handleConvert = async () => {
     if (!currencyCode || !amount) return;
-
     setLoadingConversion(true);
     const numericAmount = parseFloat(amount.replace(",", "."));
-
     if (isNaN(numericAmount)) {
       setLoadingConversion(false);
       return;
     }
-
     const result = await convertCurrency(currencyCode, numericAmount);
-    if (result) {
-      setConversionResult(result.result);
-    }
+    if (result) setConversionResult(result.result);
     setLoadingConversion(false);
   };
 
-  const handleBackdropPress = () => {
-    Animated.timing(slideAnim, {
-      toValue: height,
-      duration: 300,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start(() => {
-      onClose();
-    });
+  const handleClose = () => {
+    onClose();
   };
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  const modalStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   if (!showModal) return null;
 
   return (
-    <Modal
-      transparent={true}
-      visible={showModal}
-      onRequestClose={onClose}
-      animationType="none"
-    >
+    <Modal transparent visible={showModal} onRequestClose={handleClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.overlay}
+        className="flex-1 justify-end"
       >
-        <TouchableWithoutFeedback onPress={handleBackdropPress}>
+        <TouchableWithoutFeedback onPress={handleClose}>
           <Animated.View
-            style={[
-              styles.backdrop,
-              {
-                opacity: slideAnim.interpolate({
-                  inputRange: [0, height],
-                  outputRange: [1, 0],
-                }),
-              },
-            ]}
+            className="absolute inset-0 bg-black/60"
+            style={backdropStyle}
           />
         </TouchableWithoutFeedback>
 
         <Animated.View
-          style={[styles.modalView, { transform: [{ translateY: slideAnim }] }]}
+          className="bg-white dark:bg-slate-900 rounded-t-3xl px-6 pt-3 pb-8 max-h-[85%] shadow-2xl"
+          style={modalStyle}
         >
-          <View style={styles.handleBar} />
+          <View className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full self-center mb-5 mt-2" />
 
-          <View style={styles.header}>
-            <Text style={styles.modalTitle}>{title}</Text>
+          <View className="items-center justify-center mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
+            <Text className="text-xl font-bold text-slate-800 dark:text-white text-center">
+              {title}
+            </Text>
           </View>
 
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            contentContainerClassName="pb-5"
           >
             {children}
 
             {currencyCode && (
-              <View style={styles.conversionContainer}>
-                <Text style={styles.conversionTitle}>
+              <View className="mt-6 bg-gray-50 dark:bg-slate-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <Text className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wider">
                   Simulador de Conversão
                 </Text>
 
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.currencyLabel}>BRL</Text>
+                <View className="flex-row items-center bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-gray-700 px-4 h-14 mb-4">
+                  <Text className="text-base font-bold text-gray-500 mr-3 pr-3 border-r border-gray-200">
+                    BRL
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    className="flex-1 text-lg text-slate-800 dark:text-white font-regular"
                     value={amount}
                     onChangeText={setAmount}
                     keyboardType="numeric"
@@ -158,7 +141,7 @@ export default function DetailsModal({
                 </View>
 
                 <TouchableOpacity
-                  style={styles.convertButton}
+                  className="bg-primary rounded-xl h-14 justify-center items-center shadow-md shadow-blue-500/20 active:bg-primaryDark"
                   onPress={handleConvert}
                   disabled={loadingConversion}
                   activeOpacity={0.8}
@@ -166,16 +149,18 @@ export default function DetailsModal({
                   {loadingConversion ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text style={styles.convertButtonText}>
+                    <Text className="text-white text-base font-bold">
                       Converter Agora
                     </Text>
                   )}
                 </TouchableOpacity>
 
                 {conversionResult !== null && (
-                  <View style={styles.resultContainer}>
-                    <Text style={styles.resultLabel}>Valor Aproximado</Text>
-                    <Text style={styles.resultValue}>
+                  <View className="mt-4 items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-900">
+                    <Text className="text-xs text-gray-500 dark:text-gray-300 mb-1">
+                      Valor Aproximado
+                    </Text>
+                    <Text className="text-2xl font-bold text-green-600 dark:text-green-400">
                       $ {conversionResult.toFixed(2)}
                     </Text>
                   </View>
@@ -188,132 +173,3 @@ export default function DetailsModal({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
-  modalView: {
-    backgroundColor: colors.cardBackground,
-    borderTopLeftRadius: 28, 
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 30,
-    maxHeight: "85%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  handleBar: {
-    width: 48,
-    height: 5,
-    backgroundColor: "#E0E0E0",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 20,
-    marginTop: 8,
-  },
-  header: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-    paddingBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-    textAlign: "center",
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  conversionContainer: {
-    marginTop: 24,
-    backgroundColor: "#F8F9FA",
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#EAEAEA",
-  },
-  conversionTitle: {
-    fontSize: 14,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textSecondary,
-    marginBottom: 16,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    height: 56,
-    marginBottom: 16,
-  },
-  currencyLabel: {
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textSecondary,
-    marginRight: 12,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-    paddingRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 18,
-    fontFamily: "Roboto_400Regular",
-    color: colors.textPrimary,
-  },
-  convertButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  convertButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-  },
-  resultContainer: {
-    marginTop: 16,
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#E8F5E9",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#C8E6C9",
-  },
-  resultLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  resultValue: {
-    fontSize: 26,
-    fontFamily: "Roboto_700Bold",
-    color: colors.success,
-  },
-});

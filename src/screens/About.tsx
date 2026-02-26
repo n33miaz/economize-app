@@ -2,25 +2,20 @@ import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Linking,
   ScrollView,
   Animated,
-  Dimensions,
   Image,
 } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
-
 import { colors } from "../theme/colors";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 
 const LINKEDIN_URL = "https://www.linkedin.com/in/neemiasmanso/";
 const GITHUB_URL = "https://github.com/n33miaz";
-
-const { width } = Dimensions.get("window");
 
 export default function About() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -42,218 +37,91 @@ export default function About() {
     ]).start();
   }, []);
 
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url);
-  };
+  const handleLinkPress = (url: string) => Linking.openURL(url);
 
   return (
     <PageContainer>
       <ScreenHeader title="Sobre o App" subtitle="Informações do Projeto" />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerClassName="p-5 pb-10 items-center">
         <Animated.View
-          style={[
-            styles.card,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+          className="bg-white rounded-3xl p-6 w-full shadow-sm border border-gray-100"
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
         >
-          <View style={styles.logoContainer}>
-            <View style={styles.iconCircle}>
+          <View className="items-center mt-5">
+            <View className="w-20 h-20 rounded-full bg-blue-50 justify-center items-center mb-3">
               <Image
                 source={require("../../assets/logo.png")}
-                style={styles.aboutLogo}
+                className="w-24 h-24 rounded-2xl mb-4"
+                resizeMode="contain"
               />
             </View>
-            <Text style={styles.appName}>Painel Econômico</Text>
-            <Text style={styles.version}>
+            <Text className="text-2xl font-bold text-primaryDark">
+              Painel Econômico
+            </Text>
+            <Text className="text-sm text-gray-500 font-regular mt-1">
               v{Constants.expoConfig?.version || "1.0.0"}
             </Text>
           </View>
 
-          <View style={styles.divider} />
+          <View className="h-[1px] bg-gray-200 w-full my-5" />
 
-          <Text style={styles.sectionTitle}>Projeto</Text>
-          <Text style={styles.description}>
+          <Text className="text-base font-bold text-slate-800 mb-2">
+            Projeto
+          </Text>
+          <Text className="text-sm text-gray-500 leading-6 font-regular mb-5 text-justify">
             Focado em performance e experiência do usuário, utilizando React
-            Native com Expo no fronted e Java com Spring Boot no backend. O
+            Native com Expo no frontend e Java com Spring Boot no backend. O
             sistema consome APIs públicas para fornecer dados financeiros em
             tempo real, simulando um ambiente corporativo de alta fidelidade.
           </Text>
 
-          <Text style={styles.sectionTitle}>Desenvolvedor</Text>
-          <View style={styles.devContainer}>
+          <Text className="text-base font-bold text-slate-800 mb-2">
+            Desenvolvedor
+          </Text>
+          <View className="flex-row items-center bg-background p-3 rounded-xl mb-6">
             <Image
               source={require("../../assets/neemias.jpeg")}
-              style={styles.devPhoto}
+              className="w-10 h-10 rounded-full"
+              resizeMode="cover"
             />
-
-            <View style={styles.devInfo}>
-              <Text style={styles.devName}>Neemias Cormino Manso</Text>
-              <Text style={styles.devRole}>FullStack Developer</Text>
+            <View className="ml-3">
+              <Text className="text-base font-bold text-slate-800">
+                Neemias Cormino Manso
+              </Text>
+              <Text className="text-xs text-gray-500 font-regular">
+                FullStack Developer
+              </Text>
             </View>
           </View>
 
-          <View style={styles.buttonGroup}>
+          <View className="flex-row justify-between gap-3">
             <TouchableOpacity
-              style={[styles.button, styles.linkedinButton]}
+              className="flex-1 flex-row items-center justify-center py-3 rounded-xl bg-primaryDark shadow-sm"
               onPress={() => handleLinkPress(LINKEDIN_URL)}
               activeOpacity={0.8}
             >
               <Ionicons name="logo-linkedin" size={20} color="#FFF" />
-              <Text style={styles.buttonText}>LinkedIn</Text>
+              <Text className="text-white text-sm font-bold ml-2">
+                LinkedIn
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.button, styles.githubButton]}
+              className="flex-1 flex-row items-center justify-center py-3 rounded-xl bg-slate-800 shadow-sm"
               onPress={() => handleLinkPress(GITHUB_URL)}
               activeOpacity={0.8}
             >
               <Ionicons name="logo-github" size={20} color="#FFF" />
-              <Text style={styles.buttonText}>GitHub</Text>
+              <Text className="text-white text-sm font-bold ml-2">GitHub</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
-        <Text style={styles.footerText}>
+        <Text className="mt-6 text-xs text-gray-400 text-center">
           © 2026 Painel Econômico. Todos os direitos reservados.
         </Text>
       </ScrollView>
     </PageContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    alignItems: "center",
-  },
-  card: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 20,
-    padding: 24,
-    width: "100%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginTop: 20,
-  },
-  devPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    resizeMode: "cover",
-  },
-
-  aboutLogo: {
-    width: 100,
-    height: 100,
-    borderRadius: 20,
-    marginBottom: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(0, 173, 239, 0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  appName: {
-    fontSize: 22,
-    fontFamily: "Roboto_700Bold",
-    color: colors.primaryDark,
-  },
-  version: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontFamily: "Roboto_400Regular",
-    marginTop: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    width: "100%",
-    marginVertical: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 22,
-    fontFamily: "Roboto_400Regular",
-    marginBottom: 20,
-    textAlign: "justify",
-  },
-  devContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background,
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 24,
-  },
-  devInfo: {
-    marginLeft: 12,
-  },
-  devName: {
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  devRole: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontFamily: "Roboto_400Regular",
-  },
-  buttonGroup: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  button: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 10,
-    elevation: 2,
-  },
-  linkedinButton: {
-    backgroundColor: colors.primaryDark,
-  },
-  githubButton: {
-    backgroundColor: colors.textPrimary,
-  },
-  buttonText: {
-    color: "#FFF",
-    fontSize: 14,
-    fontFamily: "Roboto_700Bold",
-    marginLeft: 8,
-  },
-  footerText: {
-    marginTop: 24,
-    fontSize: 12,
-    color: colors.inactive,
-    textAlign: "center",
-  },
-});

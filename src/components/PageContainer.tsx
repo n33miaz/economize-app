@@ -1,12 +1,11 @@
 import React, { useEffect } from "react";
-import { StyleSheet, ViewStyle, StyleProp, View } from "react-native";
+import { View, ViewStyle, StyleProp } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSpring,
 } from "react-native-reanimated";
-import { colors } from "../theme/colors";
 
 interface PageContainerProps {
   children: React.ReactNode;
@@ -19,7 +18,6 @@ export default function PageContainer({ children, style }: PageContainerProps) {
 
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 500 });
-
     translateY.value = withSpring(0, {
       damping: 20,
       stiffness: 90,
@@ -33,22 +31,13 @@ export default function PageContainer({ children, style }: PageContainerProps) {
   }));
 
   return (
-    <View style={styles.staticWrapper}>
-      <Animated.View style={[styles.container, style, animatedStyle]}>
+    <View className="flex-1 bg-background-light overflow-hidden">
+      <Animated.View
+        className="flex-1 bg-background-light"
+        style={[style, animatedStyle]}
+      >
         {children}
       </Animated.View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  staticWrapper: {
-    flex: 1,
-    backgroundColor: colors.background,
-    overflow: "hidden",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-});

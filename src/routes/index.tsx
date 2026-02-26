@@ -8,14 +8,7 @@ import {
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { NavigationContainer } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Platform,
-  Image,
-} from "react-native";
+import { View, Text, TouchableOpacity, Platform, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "../theme/colors";
@@ -57,7 +50,7 @@ function MainTabScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View className="flex-1 bg-background">
       <ScreenHeader title={headerTitle} subtitle={headerSubtitle} />
 
       <Tab.Navigator
@@ -66,10 +59,10 @@ function MainTabScreen() {
         screenOptions={{
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.inactive,
-          tabBarPressColor: "transparent", // Remove o ripple effect nativo feio
+          tabBarPressColor: "transparent",
           tabBarIndicatorStyle: {
             backgroundColor: colors.primary,
-            height: 3, // Ligeiramente mais grosso
+            height: 3,
             borderTopLeftRadius: 3,
             borderTopRightRadius: 3,
             top: 0,
@@ -80,8 +73,8 @@ function MainTabScreen() {
             paddingBottom: Platform.OS === "ios" ? insets.bottom : 10,
             borderTopWidth: 1,
             borderTopColor: colors.border,
-            elevation: 8, // Sombra suave no Android
-            shadowColor: "#000", // Sombra no iOS
+            elevation: 8,
+            shadowColor: "#000",
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.05,
             shadowRadius: 4,
@@ -151,35 +144,37 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.drawerContainer, { paddingTop: insets.top }]}>
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
       <TouchableOpacity
-        style={styles.drawerHeader}
+        className="p-6 border-b border-gray-200 flex-row items-center bg-gray-50"
         onPress={() => props.navigation.navigate("Sobre")}
         activeOpacity={0.7}
       >
         <Image
           source={require("../../assets/logo.png")}
-          style={styles.drawerLogo}
+          className="w-12 h-12 rounded-xl mr-4 bg-gray-200"
           resizeMode="contain"
         />
         <View>
-          <Text style={styles.appName}>Painel Econômico</Text>
-          <Text style={styles.appSlogan}>Soluções Inteligentes</Text>
+          <Text className="text-lg font-bold text-primary-dark">
+            Painel Econômico
+          </Text>
+          <Text className="text-xs text-gray-500 font-regular">
+            Soluções Inteligentes
+          </Text>
         </View>
       </TouchableOpacity>
 
-      <DrawerContentScrollView
-        {...props}
-        contentContainerStyle={{ paddingTop: 10 }}
-      >
+      <DrawerContentScrollView {...props} contentContainerClassName="pt-2.5">
         <DrawerItemList {...props} />
       </DrawerContentScrollView>
 
       <View
-        style={[styles.drawerFooter, { paddingBottom: 20 + insets.bottom }]}
+        className="px-5 border-t border-gray-200 pt-4 bg-gray-50"
+        style={{ paddingBottom: 20 + insets.bottom }}
       >
         <TouchableOpacity
-          style={styles.aboutButton}
+          className="flex-row items-center py-2.5"
           onPress={() => props.navigation.navigate("Sobre")}
         >
           <Ionicons
@@ -187,7 +182,9 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
             size={24}
             color={colors.textSecondary}
           />
-          <Text style={styles.aboutText}>Sobre o App</Text>
+          <Text className="ml-3 text-sm font-bold text-textSecondary">
+            Sobre o App
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -277,53 +274,3 @@ export default function Routes() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  drawerContainer: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  drawerHeader: {
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8F9FA",
-  },
-  drawerLogo: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    marginRight: 16,
-    backgroundColor: "#EEE",
-  },
-  appName: {
-    fontSize: 18,
-    fontFamily: "Roboto_700Bold",
-    color: colors.primaryDark,
-  },
-  appSlogan: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontFamily: "Roboto_400Regular",
-  },
-  drawerFooter: {
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 15,
-    backgroundColor: "#F8F9FA",
-  },
-  aboutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  aboutText: {
-    marginLeft: 12,
-    fontSize: 14,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textSecondary,
-  },
-});

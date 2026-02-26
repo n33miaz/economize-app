@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getHistoricalData } from "../services/api";
+import { getHistoricalData, HistoricalDataPoint } from "../services/api";
 
 interface ChartData {
   labels: string[];
@@ -17,9 +17,10 @@ export function useHistoricalChartData(currencyCode: string) {
     try {
       setLoading(true);
       setError(null);
-      const historicalData = await getHistoricalData(currencyCode);
+      const historicalData: HistoricalDataPoint[] =
+        await getHistoricalData(currencyCode);
 
-      if (historicalData.length === 0) {
+      if (!historicalData || historicalData.length === 0) {
         throw new Error("Dados históricos indisponíveis.");
       }
 
@@ -30,14 +31,18 @@ export function useHistoricalChartData(currencyCode: string) {
         return `${date.getDate()}/${date.getMonth() + 1}`;
       });
 
-      const values = reversedData.map((point) => point.high);
+      const values = reversedData.map((point) => Number(point.high));
 
       setData({
         labels,
         datasets: [{ data: values }],
       });
-    } catch (e: any) {
-      setError(e.message || "Erro ao carregar gráfico.");
+    } catch (e) {
+      const errorMessage =
+        e instanceof Error
+          ? e.message
+          : "Erro desconhecido ao carregar gráfico.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

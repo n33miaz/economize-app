@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
-  StyleSheet,
-  ActivityIndicator,
   ScrollView,
   TouchableOpacity,
   Linking,
@@ -12,12 +10,14 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
+import { Indicator, isCurrencyData } from "../services/api";
 import { colors } from "../theme/colors";
 import useNewsData from "../hooks/useNewsData";
-import { Indicator, isCurrencyData } from "../services/api";
+import { useIndicatorStore } from "../store/indicatorStore";
 import HighlightCard from "../components/HighlightCard";
 import PageContainer from "../components/PageContainer";
-import { useIndicatorStore } from "../store/indicatorStore";
+import Skeleton from "../components/Skeleton";
+import * as Haptics from "expo-haptics";
 
 const HIGHLIGHT_ITEMS = ["USD", "EUR", "JPY", "GBP"];
 
@@ -43,29 +43,25 @@ export default function Home() {
 
     const uniqueMap = new Map();
     filtered.forEach((item) => {
-      if (!uniqueMap.has(item.code)) {
-        uniqueMap.set(item.code, item);
-      }
+      if (!uniqueMap.has(item.code)) uniqueMap.set(item.code, item);
     });
 
     return Array.from(uniqueMap.values());
   }, [indicators]);
 
-  const recentNews = useMemo(() => {
-    return news ? news.slice(0, 4) : [];
-  }, [news]);
-
+  const recentNews = useMemo(() => (news ? news.slice(0, 4) : []), [news]);
   const isContentLoading = indicatorsLoading || newsLoading;
 
   const onRefresh = useCallback(async () => {
-    await Promise.all([fetchIndicators(), fetchNews()]);
-  }, [fetchIndicators, fetchNews]);
+    await fetchIndicators();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [fetchIndicators]);
 
   return (
     <PageContainer>
       <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={{ paddingBottom: 40, paddingTop: 20 }}
+        className="flex-1"
+        contentContainerClassName="pb-10 pt-5"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -76,45 +72,67 @@ export default function Home() {
           />
         }
       >
-        <View style={styles.highlightsSection}>
+        {/* Seção de Destaques */}
+        <View className="mb-8">
+          <Text className="px-5 text-lg font-bold text-slate-800 mb-4">
+            Destaques do Mercado
+          </Text>
+
           {isContentLoading && highlights.length === 0 ? (
-            <ActivityIndicator
-              size="large"
-              color={colors.primary}
-              style={{ marginTop: 20 }}
-            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="px-4"
+            >
+              {[1, 2, 3].map((i) => (
+                <View
+                  key={i}
+                  className="bg-white rounded-2xl p-5 mx-2 shadow-sm border border-gray-100 min-w-[150px]"
+                >
+                  <View className="flex-row items-center mb-3">
+                    <Skeleton width={36} height={36} borderRadius={18} />
+                    <Skeleton width={60} height={14} className="ml-2" />
+                  </View>
+                  <Skeleton width={100} height={28} className="mb-2" />
+                  <Skeleton width={70} height={20} />
+                </View>
+              ))}
+            </ScrollView>
           ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.highlightsScroll}
+              contentContainerClassName="px-4"
             >
               {highlights.map((item, index) => (
-                <View
+                <HighlightCard
                   key={`${item.id}-${index}`}
-                  style={styles.highlightWrapper}
-                >
-                  <HighlightCard
-                    title={item.code}
-                    value={item.buy}
-                    variation={item.variation}
-                    iconName={
-                      item.code === "BTC" ? "logo-bitcoin" : "cash-outline"
-                    }
-                  />
-                </View>
+                  title={item.code}
+                  value={item.buy}
+                  variation={item.variation}
+                  iconName={
+                    item.code === "BTC" ? "logo-bitcoin" : "cash-outline"
+                  }
+                />
               ))}
             </ScrollView>
           )}
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Giro de Notícias</Text>
+        {/* Seção de Notícias */}
+        <View className="px-5">
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-lg font-bold text-slate-800">
+              Giro de Notícias
+            </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("Notícias" as never)}
+              className="flex-row items-center"
             >
-              <Text style={styles.seeAll}>Ver tudo</Text>
+              <Text className="text-primary font-bold text-sm mr-1">
+                Ver tudo
+              </Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -122,26 +140,26 @@ export default function Home() {
             ? recentNews.map((article, index) => (
                 <TouchableOpacity
                   key={`${article.url}-${index}`}
-                  style={styles.newsItem}
+                  className="bg-white rounded-xl p-4 mb-3 flex-row items-center shadow-sm border border-gray-100"
                   onPress={() => Linking.openURL(article.url)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.newsContent}>
-                    <Text style={styles.newsSource}>{article.source.name}</Text>
-                    <Text style={styles.newsTitle} numberOfLines={2}>
+                  <View className="flex-1 mr-3">
+                    <Text className="text-primary text-[10px] font-bold uppercase mb-1">
+                      {article.source.name}
+                    </Text>
+                    <Text
+                      className="text-slate-800 text-sm font-bold leading-5"
+                      numberOfLines={2}
+                    >
                       {article.title}
                     </Text>
-                    <Text style={styles.newsDate}>Toque para ler mais</Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.inactive}
-                  />
+                  <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
                 </TouchableOpacity>
               ))
             : !isContentLoading && (
-                <Text style={styles.emptyText}>
+                <Text className="text-center text-gray-400 mt-5">
                   Nenhuma notícia no momento.
                 </Text>
               )}
@@ -150,80 +168,3 @@ export default function Home() {
     </PageContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollContainer: {
-    flex: 1,
-  },
-  highlightsSection: {
-    marginBottom: 24,
-  },
-  highlightsScroll: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  highlightWrapper: {
-    width: 160,
-    marginRight: 0,
-  },
-  section: {
-    paddingHorizontal: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  seeAll: {
-    fontSize: 14,
-    color: colors.primary,
-    fontFamily: "Roboto_700Bold",
-  },
-  newsItem: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  newsContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  newsSource: {
-    color: colors.primary,
-    fontSize: 10,
-    fontFamily: "Roboto_700Bold",
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  newsTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontFamily: "Roboto_700Bold",
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  newsDate: {
-    color: colors.textSecondary,
-    fontSize: 10,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: colors.textSecondary,
-    marginTop: 20,
-  },
-});

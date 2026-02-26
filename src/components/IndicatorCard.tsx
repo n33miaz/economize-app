@@ -1,14 +1,13 @@
-import React, { useMemo, useRef } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  GestureResponderEvent,
-  Animated,
-} from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme/colors";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 interface IndicatorCardProps {
   name: string;
@@ -21,7 +20,7 @@ interface IndicatorCardProps {
   symbol?: string;
 }
 
-const IndicatorCard: React.FC<IndicatorCardProps> = React.memo(
+const IndicatorCard = React.memo(
   ({
     name,
     id,
@@ -31,17 +30,16 @@ const IndicatorCard: React.FC<IndicatorCardProps> = React.memo(
     onPress,
     onToggleFavorite,
     symbol = "R$",
-  }) => {
-    const scaleAnim = useRef(new Animated.Value(1)).current;
+  }: IndicatorCardProps) => {
+    const scale = useSharedValue(1);
 
-    const variationStyle = useMemo(() => {
+    const variationInfo = useMemo(() => {
       const isPositive = variation >= 0;
       return {
-        color: isPositive ? colors.success : colors.danger,
-        icon: (isPositive
-          ? "caret-up"
-          : "caret-down") as keyof typeof Ionicons.glyphMap,
-        bg: isPositive ? "rgba(0, 200, 83, 0.1)" : "rgba(255, 59, 48, 0.1)",
+        color: isPositive ? "text-green-600" : "text-red-500",
+        bgColor: isPositive ? "bg-green-100" : "bg-red-100",
+        icon: isPositive ? "caret-up" : "caret-down",
+        formatted: `${isPositive ? "+" : ""}${variation.toFixed(2)}%`,
       };
     }, [variation]);
 
@@ -49,158 +47,94 @@ const IndicatorCard: React.FC<IndicatorCardProps> = React.memo(
       return name.split("/")[0].replace("Comercial", "").trim();
     }, [name]);
 
-    const handleFavoritePress = (e: GestureResponderEvent) => {
-      e.stopPropagation();
-      onToggleFavorite(id);
-    };
+    const animatedStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: scale.value }],
+    }));
 
     const handlePressIn = () => {
-      Animated.spring(scaleAnim, {
-        toValue: 0.96,
-        useNativeDriver: true,
-      }).start();
+      scale.value = withSpring(0.97);
     };
 
     const handlePressOut = () => {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
+      scale.value = withSpring(1);
     };
 
     return (
-      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Animated.View style={animatedStyle} className="mb-3">
         <TouchableOpacity
-          style={styles.card}
           onPress={onPress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          activeOpacity={0.9}
+          activeOpacity={1}
+          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
         >
-          <View style={styles.headerRow}>
-            <View style={styles.iconContainer}>
-              <Ionicons
-                name="cash-outline"
-                size={20}
-                color={colors.primaryDark}
-              />
+          {/* Header do Card */}
+          <View className="flex-row justify-between items-start mb-4">
+            <View className="flex-row items-center flex-1 mr-2">
+              <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center mr-3">
+                <Ionicons name="cash-outline" size={20} color="#00ADEF" />
+              </View>
+              <View className="flex-1">
+                <Text
+                  className="text-gray-900 font-bold text-base"
+                  numberOfLines={1}
+                >
+                  {displayName}
+                </Text>
+                <Text className="text-gray-400 text-xs font-regular">
+                  {symbol} - BRL
+                </Text>
+              </View>
             </View>
-            <View style={styles.titleContainer}>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                {displayName}
-              </Text>
-              <Text style={styles.cardSubtitle}>{symbol} - BRL</Text>
-            </View>
+
             <TouchableOpacity
-              onPress={handleFavoritePress}
-              style={styles.favoriteButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onToggleFavorite(id);
+              }}
+              className="p-2 -mr-2 -mt-2"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons
                 name={isFavorite ? "star" : "star-outline"}
                 size={22}
-                color={isFavorite ? colors.secondary : colors.inactive}
+                color={isFavorite ? "#FBBA00" : "#CBD5E1"}
               />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.divider} />
+          {/* Divider Sutil */}
+          <View className="h-[1px] bg-gray-50 w-full mb-4" />
 
-          <View style={styles.footerRow}>
-            <Text style={styles.cardValue}>
-              {symbol} {value.toFixed(2)}
-            </Text>
+          {/* Footer com Valores */}
+          <View className="flex-row justify-between items-end">
+            <View>
+              <Text className="text-gray-400 text-xs mb-1 font-medium">
+                Cotação Atual
+              </Text>
+              <Text className="text-2xl font-bold text-slate-800 tracking-tight">
+                {symbol} {value.toFixed(2)}
+              </Text>
+            </View>
 
             <View
-              style={[styles.badge, { backgroundColor: variationStyle.bg }]}
+              className={`flex-row items-center px-2.5 py-1.5 rounded-lg ${variationInfo.bgColor}`}
             >
               <Ionicons
-                name={variationStyle.icon}
+                name={variationInfo.icon as any}
                 size={12}
-                color={variationStyle.color}
+                color={variation >= 0 ? "#16A34A" : "#EF4444"}
+                style={{ marginRight: 4 }}
               />
-              <Text
-                style={[styles.variationText, { color: variationStyle.color }]}
-              >
-                {Math.abs(variation).toFixed(2)}%
+              <Text className={`${variationInfo.color} font-bold text-xs`}>
+                {variationInfo.formatted}
               </Text>
             </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
     );
-  }
+  },
 );
 
 export default IndicatorCard;
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 16,
-    padding: 22, 
-    marginVertical: 8, 
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1, 
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#EBF8FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  titleContainer: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontFamily: "Roboto_400Regular",
-  },
-  favoriteButton: {
-    padding: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginBottom: 12,
-  },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  cardValue: {
-    fontSize: 20,
-    fontFamily: "Roboto_700Bold",
-    color: colors.primaryDark,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  variationText: {
-    fontSize: 12,
-    fontFamily: "Roboto_700Bold",
-    marginLeft: 4,
-  },
-});

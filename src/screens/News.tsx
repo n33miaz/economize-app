@@ -2,19 +2,18 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
-
 import { colors } from "../theme/colors";
 import NewsCard from "../components/NewsCard";
 import useNewsData from "../hooks/useNewsData";
 import { NewsArticle } from "../services/api";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import ErrorState from "../components/ErrorState";
 
 export default function News() {
   const { articles, loading, error, fetchNews } = useNewsData();
@@ -28,7 +27,7 @@ export default function News() {
 
   const renderNewsCard = useCallback(
     ({ item }: { item: NewsArticle }) => <NewsCard article={item} />,
-    []
+    [],
   );
 
   return (
@@ -36,17 +35,14 @@ export default function News() {
       <ScreenHeader title="Notícias" subtitle="Fique por dentro do mercado" />
 
       {loading && !articles?.length ? (
-        <View style={styles.centered}>
+        <View className="flex-1 justify-center items-center p-5">
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Carregando notícias...</Text>
+          <Text className="mt-3 text-gray-500 font-regular">
+            Carregando notícias...
+          </Text>
         </View>
       ) : error && !articles?.length ? (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchNews}>
-            <Text style={styles.retryText}>Tentar Novamente</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState message={error} onRetry={fetchNews} />
       ) : (
         <FlatList
           data={articles}
@@ -62,16 +58,19 @@ export default function News() {
             />
           }
           renderItem={renderNewsCard}
-          contentContainerStyle={styles.listContent}
+          contentContainerClassName="pt-3 pb-5"
           ListEmptyComponent={
-            <View style={styles.centered}>
-              <Text style={styles.emptyText}>
+            <View className="flex-1 justify-center items-center p-5 mt-10">
+              <Text className="text-gray-500 text-base font-regular mb-4">
                 {error
                   ? "Não foi possível carregar as notícias."
                   : "Nenhuma notícia encontrada."}
               </Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchNews}>
-                <Text style={styles.retryText}>Atualizar</Text>
+              <TouchableOpacity
+                className="bg-primary px-6 py-3 rounded-lg"
+                onPress={fetchNews}
+              >
+                <Text className="text-white font-bold">Atualizar</Text>
               </TouchableOpacity>
             </View>
           }
@@ -80,43 +79,3 @@ export default function News() {
     </PageContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  listContent: {
-    paddingTop: 10,
-    paddingBottom: 20,
-  },
-  centered: {
-    flex: 1,
-    padding: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    color: colors.textSecondary,
-    fontFamily: "Roboto_400Regular",
-  },
-  errorText: {
-    color: colors.textSecondary,
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 16,
-    fontFamily: "Roboto_400Regular",
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: 16,
-    fontFamily: "Roboto_400Regular",
-  },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: "#FFF",
-    fontFamily: "Roboto_700Bold",
-  },
-});

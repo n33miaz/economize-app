@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   Modal,
@@ -16,6 +15,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PieChart } from "react-native-chart-kit";
+import * as LocalAuthentication from "expo-local-authentication";
+import * as Haptics from "expo-haptics";
 
 import { colors } from "../theme/colors";
 import { useWalletStore, Transaction } from "../store/walletStore";
@@ -37,11 +38,45 @@ const CHART_COLORS = [
 export default function Wallet() {
   const { transactions, addTransaction, removeTransaction } = useWalletStore();
   const { indicators } = useIndicatorStore();
+
+  // Estados para Biometria e Modal
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Estados do Formulário
   const [code, setCode] = useState("USD");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
+
+  // Lógica de Autenticação Biométrica
+  useEffect(() => {
+    async function authenticate() {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        // TODO: Se não tiver biometria, outra forma de autenticação
+        setIsAuthenticated(true);
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Desbloquear Carteira",
+        fallbackLabel: "Usar Senha",
+      });
+
+      if (result.success) {
+        setIsAuthenticated(true);
+      } else {
+        Alert.alert(
+          "Acesso Negado",
+          "Não foi possível verificar sua identidade.",
+        );
+      }
+    }
+
+    authenticate();
+  }, []);
 
   const getCurrentPrice = (code: string) => {
     const indicator = indicators.find((i) => i.code === code);
@@ -86,7 +121,9 @@ export default function Wallet() {
       return;
     }
 
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
     addTransaction({
       currencyCode: code.toUpperCase(),
       amount: parseFloat(amount.replace(",", ".")),
@@ -100,12 +137,15 @@ export default function Wallet() {
   };
 
   const handleDelete = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     Alert.alert("Remover", "Deseja excluir esta transação?", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Excluir",
         style: "destructive",
         onPress: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           removeTransaction(id);
         },
@@ -121,64 +161,96 @@ export default function Wallet() {
     const isProfit = profit >= 0;
 
     return (
-      <View style={styles.transactionCard}>
-        <View style={styles.transactionIcon}>
-          <Text style={styles.transactionIconText}>{item.currencyCode}</Text>
+      <View className="bg-white rounded-xl p-4 mb-3 flex-row items-center shadow-sm border border-gray-100">
+        <View className="w-10 h-10 rounded-full bg-blue-50 justify-center items-center mr-3">
+          <Text className="text-primaryDark font-bold text-xs">
+            {item.currencyCode}
+          </Text>
         </View>
 
-        <View style={styles.transactionInfo}>
-          <Text style={styles.transactionTitle}>
+        <View className="flex-1">
+          <Text className="text-base font-bold text-slate-800">
             {item.amount} {item.currencyCode}
           </Text>
-          <Text style={styles.transactionSubtitle}>
+          <Text className="text-xs text-gray-500">
             Pago: R$ {item.priceAtPurchase.toFixed(2)}
           </Text>
         </View>
 
-        <View style={styles.transactionValues}>
-          <Text style={styles.currentValueText}>
+        <View className="items-end mr-3">
+          <Text className="text-sm font-bold text-slate-800">
             R$ {currentValue.toFixed(2)}
           </Text>
           <Text
-            style={[
-              styles.profitText,
-              { color: isProfit ? colors.success : colors.danger },
-            ]}
+            className={`text-xs font-bold ${isProfit ? "text-green-600" : "text-red-500"}`}
           >
             {isProfit ? "+" : ""}R$ {profit.toFixed(2)}
           </Text>
         </View>
 
-        <TouchableOpacity
-          onPress={() => handleDelete(item.id)}
-          style={styles.deleteButton}
-        >
+        <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-2">
           <Ionicons name="trash-outline" size={18} color={colors.inactive} />
         </TouchableOpacity>
       </View>
     );
   };
 
+  // Tela de Bloqueio se não autenticado
+  if (!isAuthenticated) {
+    return (
+      <PageContainer>
+        <ScreenHeader title="Minha Carteira" subtitle="Protegida" />
+        <View className="flex-1 justify-center items-center p-5">
+          <View className="bg-blue-50 p-6 rounded-full mb-6">
+            <Ionicons name="lock-closed" size={48} color={colors.primaryDark} />
+          </View>
+          <Text className="text-xl font-bold text-slate-800 mb-2">
+            Acesso Bloqueado
+          </Text>
+          <Text className="text-gray-500 text-center mb-8">
+            Para visualizar seus investimentos, precisamos confirmar sua
+            identidade.
+          </Text>
+          <TouchableOpacity
+            className="bg-primary px-8 py-3 rounded-xl"
+            onPress={async () => {
+              const result = await LocalAuthentication.authenticateAsync();
+              if (result.success) setIsAuthenticated(true);
+            }}
+          >
+            <Text className="text-white font-bold">Desbloquear</Text>
+          </TouchableOpacity>
+        </View>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer>
       <ScreenHeader title="Minha Carteira" subtitle="Gestão de Ativos" />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.balanceCard}>
+      <ScrollView contentContainerClassName="p-5 pb-24">
+        {/* Card de Saldo */}
+        <View className="bg-primaryDark rounded-2xl p-6 flex-row justify-between items-center mb-6 shadow-lg shadow-blue-900/20">
           <View>
-            <Text style={styles.balanceLabel}>Saldo Estimado</Text>
-            <Text style={styles.balanceValue}>
+            <Text className="text-white/80 text-sm font-regular mb-1">
+              Saldo Estimado
+            </Text>
+            <Text className="text-white text-3xl font-bold">
               R$ {totalBalance.toFixed(2)}
             </Text>
           </View>
-          <View style={styles.balanceIcon}>
-            <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.8)" />
+          <View className="bg-white/10 p-3 rounded-2xl">
+            <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
           </View>
         </View>
 
+        {/* Gráfico */}
         {chartData.length > 0 ? (
-          <View style={styles.chartContainer}>
-            <Text style={styles.sectionTitle}>Alocação</Text>
+          <View className="bg-white rounded-2xl p-4 mb-6 items-center shadow-sm border border-gray-100">
+            <Text className="text-lg font-bold text-slate-800 self-start mb-4">
+              Alocação
+            </Text>
             <PieChart
               data={chartData}
               width={screenWidth - 60}
@@ -195,40 +267,44 @@ export default function Wallet() {
             />
           </View>
         ) : (
-          <View style={styles.emptyState}>
+          <View className="items-center justify-center p-10 bg-gray-50 rounded-2xl mb-6 border border-dashed border-gray-300">
             <Ionicons
               name="pie-chart-outline"
-              size={60}
+              size={48}
               color={colors.inactive}
             />
-            <Text style={styles.emptyText}>
+            <Text className="text-gray-400 mt-3 text-center">
               Adicione ativos para visualizar sua alocação.
             </Text>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Histórico de Transações</Text>
+        <Text className="text-lg font-bold text-slate-800 mb-4">
+          Histórico de Transações
+        </Text>
         <FlatList
           data={transactions}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           scrollEnabled={false}
           ListEmptyComponent={
-            <Text style={styles.emptyListText}>
+            <Text className="text-gray-400 text-center mt-5 italic">
               Nenhuma transação registrada.
             </Text>
           }
         />
       </ScrollView>
 
+      {/* FAB Button */}
       <TouchableOpacity
-        style={styles.fab}
+        className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-primary justify-center items-center shadow-lg shadow-blue-500/30"
         onPress={() => setModalVisible(true)}
         activeOpacity={0.9}
       >
         <Ionicons name="add" size={30} color="#FFF" />
       </TouchableOpacity>
 
+      {/* Modal de Adição */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -237,19 +313,23 @@ export default function Wallet() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
+          className="flex-1 bg-black/50 justify-end"
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova Transação</Text>
+          <View className="bg-white rounded-t-3xl p-6 pb-10">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-xl font-bold text-slate-800">
+                Nova Transação
+              </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Moeda (Código)</Text>
+            <Text className="text-sm font-bold text-gray-500 mb-2">
+              Moeda (Código)
+            </Text>
             <TextInput
-              style={styles.input}
+              className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
               placeholder="Ex: USD"
               value={code}
               onChangeText={setCode}
@@ -257,26 +337,35 @@ export default function Wallet() {
               maxLength={3}
             />
 
-            <Text style={styles.inputLabel}>Quantidade</Text>
+            <Text className="text-sm font-bold text-gray-500 mb-2">
+              Quantidade
+            </Text>
             <TextInput
-              style={styles.input}
+              className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
               placeholder="0.00"
               value={amount}
               onChangeText={setAmount}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Preço Pago (Unitário em R$)</Text>
+            <Text className="text-sm font-bold text-gray-500 mb-2">
+              Preço Pago (Unitário em R$)
+            </Text>
             <TextInput
-              style={styles.input}
+              className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
               placeholder="0.00"
               value={price}
               onChangeText={setPrice}
               keyboardType="numeric"
             />
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleAdd}>
-              <Text style={styles.saveButtonText}>Salvar Investimento</Text>
+            <TouchableOpacity
+              className="bg-primary rounded-xl py-4 items-center mt-2 shadow-md shadow-blue-500/20"
+              onPress={handleAdd}
+            >
+              <Text className="text-white text-base font-bold">
+                Salvar Investimento
+              </Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -284,200 +373,3 @@ export default function Wallet() {
     </PageContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  balanceCard: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: 20,
-    padding: 24,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  balanceLabel: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 14,
-    fontFamily: "Roboto_400Regular",
-    marginBottom: 4,
-  },
-  balanceValue: {
-    color: "#FFF",
-    fontSize: 32,
-    fontFamily: "Roboto_700Bold",
-  },
-  balanceIcon: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    padding: 12,
-    borderRadius: 16,
-  },
-  chartContainer: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-    marginBottom: 16,
-    alignSelf: "flex-start",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    backgroundColor: "rgba(0,0,0,0.02)",
-    borderRadius: 16,
-    marginBottom: 24,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    marginTop: 12,
-    textAlign: "center",
-  },
-  emptyListText: {
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginTop: 20,
-    fontStyle: "italic",
-  },
-  transactionCard: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  transactionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#EBF8FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  transactionIconText: {
-    color: colors.primaryDark,
-    fontFamily: "Roboto_700Bold",
-    fontSize: 12,
-  },
-  transactionInfo: {
-    flex: 1,
-  },
-  transactionTitle: {
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  transactionSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  transactionValues: {
-    alignItems: "flex-end",
-    marginRight: 12,
-  },
-  currentValueText: {
-    fontSize: 14,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  profitText: {
-    fontSize: 12,
-    fontFamily: "Roboto_700Bold",
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  fab: {
-    position: "absolute",
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textPrimary,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontFamily: "Roboto_700Bold",
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#F5F7FA",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: colors.textPrimary,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  saveButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontFamily: "Roboto_700Bold",
-  },
-});
