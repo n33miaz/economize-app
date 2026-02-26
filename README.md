@@ -13,14 +13,6 @@ O aplicativo foi compilado para Android e pode ser testado em dispositivos físi
 
 ---
 
-## 🔗 Integração Back for Front
-
-O backend dessa aplicação está documentado em:
-
-- **Repositório API:** [painel_economico-api](https://github.com/n33miaz/painel_economico-api)
-
----
-
 ## 🛠 Tecnologias Utilizadas
 
 Este projeto utiliza uma stack moderna focada no ecossistema React Native:

@@ -1,33 +1,23 @@
 {
   "version": "2.0.0",
-  "tasks": [
+  "tasks":[
     {
-      "label": "Expo Android",
+      "label": "Iniciar Expo (Limpa Cache)",
+      "type": "shell",
+      "command": "npx expo start -c",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Iniciar no Android",
       "type": "shell",
       "command": "npx expo start --android",
       "isBackground": true,
-      "problemMatcher": {
-        "owner": "custom",
-        "pattern": {
-          "regexp": "^.*"
-        },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "Starting project",
-          "endsPattern": "Android logs|Developer tools"
-        }
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    },
-    {
-      "label": "Produção (Simulação)",
-      "type": "shell",
-      "command": "npx expo start --no-dev --minify",
-      "isBackground": true,
-      "problemMatcher": []
+      "problemMatcher":[]
     }
   ]
 }

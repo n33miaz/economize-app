@@ -2,24 +2,26 @@
   "expo": {
     "name": "Painel Econômico",
     "slug": "painel-economico-br",
-    "version": "1.0.0",
+    "scheme": "painel-economico-br",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo-splash.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/logo-splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#053D99"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.n33miaz.paineleconomicobr"
     },
     "android": {
       "package": "com.n33miaz.paineleconomicobr",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo-splash.png",
-        "backgroundColor": "#053D99"
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {
@@ -27,11 +29,16 @@
     },
     "plugins": [
       "expo-font",
+      "expo-local-authentication",
       [
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.25"
+            "kotlinVersion": "1.9.25",
+            "newArchEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": true
           }
         }
       ]

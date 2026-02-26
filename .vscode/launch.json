@@ -2,20 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Full (Task + Attach)",
-      "cwd": "${workspaceFolder}",
-      "type": "reactnative",
+      "name": "Debug Expo (Attach)",
+      "type": "reactnativedirect",
       "request": "attach",
-      "port": 19000,
-      "sourceMaps": true,
-      "preLaunchTask": "Expo Android"
-    },
-    {
-      "name": "Apenas Anexar (Expo já rodando)",
       "cwd": "${workspaceFolder}",
-      "type": "reactnative",
-      "request": "attach",
-      "port": 19000,
       "sourceMaps": true
     }
   ]

@@ -1,3 +1,4 @@
+import "./global.css";
 import "react-native-gesture-handler";
 import React, { useCallback, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
@@ -6,12 +7,12 @@ import {
   Roboto_400Regular,
   Roboto_700Bold,
 } from "@expo-google-fonts/roboto";
-import { View, Platform, UIManager, StyleSheet } from "react-native";
+import { Platform, UIManager } from "react-native";
 import * as NavigationBar from "expo-navigation-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import Routes from "./src/routes";
-import { colors } from "./src/theme/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,7 +32,7 @@ export default function App() {
   useEffect(() => {
     async function configureSystemBars() {
       if (Platform.OS === "android") {
-        await NavigationBar.setBackgroundColorAsync("white");
+        await NavigationBar.setBackgroundColorAsync("#FFFFFF");
         await NavigationBar.setButtonStyleAsync("dark");
       }
     }
@@ -44,14 +45,12 @@ export default function App() {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <StatusBar style="light" backgroundColor={colors.primaryDark} />
+    <GestureHandlerRootView className="flex-1" onLayout={onLayoutRootView}>
+      <StatusBar style="light" backgroundColor="#053D99" />
       <Routes />
-    </View>
+    </GestureHandlerRootView>
   );
 }
