@@ -1,41 +1,69 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../services/api";
 
 export interface Transaction {
   id: string;
-  currencyCode: string;
-  amount: number;
-  priceAtPurchase: number;
-  date: string;
+  assetCode: string;
+  type: string;
+  quantity: number;
+  priceAtTransaction: number;
+  transactionDate: string;
 }
 
 interface WalletState {
   transactions: Transaction[];
-  addTransaction: (transaction: Omit<Transaction, "id">) => void;
-  removeTransaction: (id: string) => void;
+  isLoading: boolean;
+  error: string | null;
+  fetchTransactions: () => Promise<void>;
+  addTransaction: (
+    transaction: Omit<Transaction, "id" | "transactionDate">,
+  ) => Promise<void>;
+  removeTransaction: (id: string) => Promise<void>;
 }
 
-export const useWalletStore = create(
-  persist<WalletState>(
-    (set, get) => ({
-      transactions: [],
-      addTransaction: (transaction) => {
-        const newTransaction = {
-          ...transaction,
-          id: Math.random().toString(36).substr(2, 9),
-        };
-        set({ transactions: [...get().transactions, newTransaction] });
-      },
-      removeTransaction: (id) => {
-        set({
-          transactions: get().transactions.filter((t) => t.id !== id),
-        });
-      },
-    }),
-    {
-      name: "@wallet_transactions",
-      storage: createJSONStorage(() => AsyncStorage),
+export const useWalletStore = create<WalletState>((set, get) => ({
+  transactions: [],
+  isLoading: false,
+  error: null,
+
+  fetchTransactions: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.get<Transaction[]>("/wallet/transactions");
+      set({ transactions: response.data, isLoading: false });
+    } catch (error: any) {
+      set({ error: "Erro ao carregar carteira", isLoading: false });
     }
-  )
-);
+  },
+
+  addTransaction: async (transaction) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.post<Transaction>(
+        "/wallet/transactions",
+        transaction,
+      );
+      set({
+        transactions: [response.data, ...get().transactions],
+        isLoading: false,
+      });
+    } catch (error: any) {
+      set({ error: "Erro ao adicionar transação", isLoading: false });
+      throw error;
+    }
+  },
+
+  removeTransaction: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.delete(`/wallet/transactions/${id}`);
+      set({
+        transactions: get().transactions.filter((t) => t.id !== id),
+        isLoading: false,
+      });
+    } catch (error: any) {
+      set({ error: "Erro ao remover transação", isLoading: false });
+      throw error;
+    }
+  },
+}));

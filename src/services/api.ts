@@ -1,19 +1,17 @@
 import axios from "axios";
 import Constants from "expo-constants";
+import { useAuthStore } from "../store/authStore";
 
 const getBaseUrl = () => {
   if (process.env.API_BASE_URL) {
     return process.env.API_BASE_URL;
   }
-
   const debuggerHost =
     Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost;
-
   if (debuggerHost) {
     const ip = debuggerHost.split(":")[0];
     return `http://${ip}:8080/api`;
   }
-
   return "https://level-belinda-neemias-8be5fba4.koyeb.app/api";
 };
 
@@ -22,20 +20,29 @@ const api = axios.create({
   timeout: 10000,
 });
 
+api.interceptors.request.use(
+  (config) => {
+    const token = useAuthStore.getState().token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.code === "ECONNABORTED") {
-      console.error(
-        "Erro: A conexão demorou muito. Verifique se o PC e o Celular estão na mesma rede."
-      );
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      useAuthStore.getState().logout();
+    } else if (error.code === "ECONNABORTED") {
+      console.error("Erro: A conexão demorou muito.");
     } else if (error.message === "Network Error") {
-      console.error(
-        "Erro de Rede: O celular não consegue alcançar o backend. Verifique o Firewall do Windows."
-      );
+      console.error("Erro de Rede: O celular não consegue alcançar o backend.");
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
@@ -85,12 +92,12 @@ export function isIndexData(item: Indicator): boolean {
 
 export const getHistoricalData = async (
   currencyCode: string,
-  days: number = 7
+  days: number = 7,
 ): Promise<HistoricalDataPoint[]> => {
   try {
     const response = await api.get<HistoricalDataPoint[]>(
       `/indicators/historical/${currencyCode}`,
-      { params: { days } }
+      { params: { days } },
     );
     return response.data;
   } catch (error) {
@@ -101,7 +108,7 @@ export const getHistoricalData = async (
 
 export const convertCurrency = async (
   code: string,
-  amount: number
+  amount: number,
 ): Promise<ConversionResponse | null> => {
   try {
     const response = await api.get<ConversionResponse>("/indicators/convert", {

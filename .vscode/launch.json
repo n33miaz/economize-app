@@ -1,12 +1,16 @@
 {
-  "version": "0.2.0",
+  "version": "1.0.0",
   "configurations": [
     {
-      "name": "Debug Expo (Attach)",
-      "type": "reactnativedirect",
+      "name": "Debug Expo (Hermes)",
+      "type": "node",
       "request": "attach",
+      "port": 8081,
       "cwd": "${workspaceFolder}",
-      "sourceMaps": true
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ]
     }
   ]
 }

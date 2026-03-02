@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
   createDrawerNavigator,
   DrawerContentScrollView,
@@ -13,7 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "../theme/colors";
 
-// Importação das Telas
+import { useAuthStore } from "../store/authStore";
+import Login from "../screens/auth/Login";
+import Register from "../screens/auth/Register";
 import Home from "../screens/Home";
 import Currencies from "../screens/Currencies";
 import Indexes from "../screens/Indexes";
@@ -267,10 +270,23 @@ function DrawerNavigator() {
   );
 }
 
+const Stack = createNativeStackNavigator();
+
+function AuthRoutes() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login" component={Login} />
+      <Stack.Screen name="Register" component={Register} />
+    </Stack.Navigator>
+  );
+}
+
 export default function Routes() {
+  const token = useAuthStore((state) => state.token);
+
   return (
     <NavigationContainer>
-      <DrawerNavigator />
+      {token ? <DrawerNavigator /> : <AuthRoutes />}
     </NavigationContainer>
   );
 }
