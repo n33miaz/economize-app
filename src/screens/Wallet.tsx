@@ -36,26 +36,23 @@ const CHART_COLORS = [
 ];
 
 export default function Wallet() {
-  const { transactions, addTransaction, removeTransaction } = useWalletStore();
+  const { transactions, addTransaction, removeTransaction, fetchTransactions } =
+    useWalletStore();
   const { indicators } = useIndicatorStore();
 
-  // Estados para Biometria e Modal
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Estados do Formulário
   const [code, setCode] = useState("USD");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
 
-  // Lógica de Autenticação Biométrica
   useEffect(() => {
     async function authenticate() {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
       if (!hasHardware || !isEnrolled) {
-        // TODO: Se não tiver biometria, outra forma de autenticação
         setIsAuthenticated(true);
         return;
       }
@@ -78,6 +75,12 @@ export default function Wallet() {
     authenticate();
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchTransactions();
+    }
+  }, [isAuthenticated, fetchTransactions]);
+
   const getCurrentPrice = (code: string) => {
     const indicator = indicators.find((i) => i.code === code);
     return indicator ? indicator.buy : 0;
@@ -88,14 +91,14 @@ export default function Wallet() {
     const allocation: Record<string, number> = {};
 
     transactions.forEach((t) => {
-      const currentPrice = getCurrentPrice(t.currencyCode);
-      const currentVal = t.amount * currentPrice;
+      const currentPrice = getCurrentPrice(t.assetCode);
+      const currentVal = t.quantity * currentPrice;
       total += currentVal;
 
-      if (allocation[t.currencyCode]) {
-        allocation[t.currencyCode] += currentVal;
+      if (allocation[t.assetCode]) {
+        allocation[t.assetCode] += currentVal;
       } else {
-        allocation[t.currencyCode] = currentVal;
+        allocation[t.assetCode] = currentVal;
       }
     });
 
@@ -116,20 +119,16 @@ export default function Wallet() {
       return;
     }
 
-    if (code.length !== 3) {
-      Alert.alert("Erro", "O código da moeda deve ter 3 letras (ex: USD).");
-      return;
-    }
-
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
     addTransaction({
-      currencyCode: code.toUpperCase(),
-      amount: parseFloat(amount.replace(",", ".")),
-      priceAtPurchase: parseFloat(price.replace(",", ".")),
-      date: new Date().toISOString(),
+      assetCode: code.toUpperCase(),
+      type: "BUY",
+      quantity: parseFloat(amount.replace(",", ".")),
+      priceAtTransaction: parseFloat(price.replace(",", ".")),
     });
+
     setModalVisible(false);
     setAmount("");
     setPrice("");
@@ -154,9 +153,9 @@ export default function Wallet() {
   };
 
   const renderItem = ({ item }: { item: Transaction }) => {
-    const currentPrice = getCurrentPrice(item.currencyCode);
-    const totalInvested = item.amount * item.priceAtPurchase;
-    const currentValue = item.amount * currentPrice;
+    const currentPrice = getCurrentPrice(item.assetCode);
+    const totalInvested = item.quantity * item.priceAtTransaction;
+    const currentValue = item.quantity * currentPrice;
     const profit = currentValue - totalInvested;
     const isProfit = profit >= 0;
 
@@ -164,16 +163,16 @@ export default function Wallet() {
       <View className="bg-white rounded-xl p-4 mb-3 flex-row items-center shadow-sm border border-gray-100">
         <View className="w-10 h-10 rounded-full bg-blue-50 justify-center items-center mr-3">
           <Text className="text-primaryDark font-bold text-xs">
-            {item.currencyCode}
+            {item.assetCode}
           </Text>
         </View>
 
         <View className="flex-1">
           <Text className="text-base font-bold text-slate-800">
-            {item.amount} {item.currencyCode}
+            {item.quantity} {item.assetCode}
           </Text>
           <Text className="text-xs text-gray-500">
-            Pago: R$ {item.priceAtPurchase.toFixed(2)}
+            Pago: R$ {item.priceAtTransaction.toFixed(2)}
           </Text>
         </View>
 
@@ -195,7 +194,6 @@ export default function Wallet() {
     );
   };
 
-  // Tela de Bloqueio se não autenticado
   if (!isAuthenticated) {
     return (
       <PageContainer>
@@ -230,7 +228,6 @@ export default function Wallet() {
       <ScreenHeader title="Minha Carteira" subtitle="Gestão de Ativos" />
 
       <ScrollView contentContainerClassName="p-5 pb-24">
-        {/* Card de Saldo */}
         <View className="bg-primaryDark rounded-2xl p-6 flex-row justify-between items-center mb-6 shadow-lg shadow-blue-900/20">
           <View>
             <Text className="text-white/80 text-sm font-regular mb-1">
@@ -245,7 +242,6 @@ export default function Wallet() {
           </View>
         </View>
 
-        {/* Gráfico */}
         {chartData.length > 0 ? (
           <View className="bg-white rounded-2xl p-4 mb-6 items-center shadow-sm border border-gray-100">
             <Text className="text-lg font-bold text-slate-800 self-start mb-4">
@@ -295,7 +291,6 @@ export default function Wallet() {
         />
       </ScrollView>
 
-      {/* FAB Button */}
       <TouchableOpacity
         className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-primary justify-center items-center shadow-lg shadow-blue-500/30"
         onPress={() => setModalVisible(true)}
@@ -304,7 +299,6 @@ export default function Wallet() {
         <Ionicons name="add" size={30} color="#FFF" />
       </TouchableOpacity>
 
-      {/* Modal de Adição */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -326,15 +320,14 @@ export default function Wallet() {
             </View>
 
             <Text className="text-sm font-bold text-gray-500 mb-2">
-              Moeda (Código)
+              Ativo (Código)
             </Text>
             <TextInput
               className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
-              placeholder="Ex: USD"
+              placeholder="Ex: PETR4, USD"
               value={code}
               onChangeText={setCode}
               autoCapitalize="characters"
-              maxLength={3}
             />
 
             <Text className="text-sm font-bold text-gray-500 mb-2">

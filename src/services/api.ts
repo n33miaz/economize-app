@@ -1,17 +1,19 @@
 import axios from "axios";
 import Constants from "expo-constants";
-import { useAuthStore } from "../store/authStore";
 
 const getBaseUrl = () => {
-  if (process.env.API_BASE_URL) {
-    return process.env.API_BASE_URL;
+  const envUrl = (process.env as Record<string, string | undefined>)
+    .API_BASE_URL;
+  if (envUrl) {
+    return envUrl;
   }
-  const debuggerHost =
-    Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost;
-  if (debuggerHost) {
-    const ip = debuggerHost.split(":")[0];
+
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(":")[0];
     return `http://${ip}:8080/api`;
   }
+
   return "https://level-belinda-neemias-8be5fba4.koyeb.app/api";
 };
 
@@ -20,9 +22,12 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// Interceptor de Requisição
 api.interceptors.request.use(
   (config) => {
+    const { useAuthStore } = require("../store/authStore");
     const token = useAuthStore.getState().token;
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,10 +36,12 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+// Interceptor de Resposta
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
+      const { useAuthStore } = require("../store/authStore");
       useAuthStore.getState().logout();
     } else if (error.code === "ECONNABORTED") {
       console.error("Erro: A conexão demorou muito.");

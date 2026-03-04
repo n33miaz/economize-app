@@ -6,6 +6,7 @@ interface IndicatorState {
   loading: boolean;
   error: string | null;
   fetchIndicators: () => Promise<void>;
+  searchIndicators: (query: string) => Promise<Indicator[]>;
   getCurrencies: () => Indicator[];
   getIndexes: () => Indicator[];
   getGlobalCurrencies: (targetCodes: string[]) => Indicator[];
@@ -42,6 +43,18 @@ export const useIndicatorStore = create<IndicatorState>((set, get) => ({
         error: "Não foi possível conectar ao servidor.",
         loading: false,
       });
+    }
+  },
+
+  searchIndicators: async (query: string) => {
+    try {
+      const response = await api.get<Indicator[]>("/indicators/search", {
+        params: { query },
+      });
+      return response.data;
+    } catch (e) {
+      console.error("Erro na busca dinâmica:", e);
+      return [];
     }
   },
 

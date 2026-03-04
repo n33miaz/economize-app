@@ -8,6 +8,8 @@ import {
   ScrollView,
 } from "react-native";
 
+import { useDebounce } from "../hooks/useDebounce";
+import { ActivityIndicator } from "react-native";
 import { colors } from "../theme/colors";
 import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import IndicatorCard from "./IndicatorCard";
@@ -43,9 +45,29 @@ export default function AssetListScreen({
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Indicator | null>(null);
 
+  const debouncedSearch = useDebounce(searchText, 600);
+  const [searchResults, setSearchResults] = useState<Indicator[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   useEffect(() => {
     fetchIndicators();
   }, [fetchIndicators]);
+
+  useEffect(() => {
+    async function performSearch() {
+      if (debouncedSearch.trim().length >= 2) {
+        setIsSearching(true);
+        const results = await useIndicatorStore
+          .getState()
+          .searchIndicators(debouncedSearch);
+        setSearchResults(results);
+        setIsSearching(false);
+      } else {
+        setSearchResults([]);
+      }
+    }
+    performSearch();
+  }, [debouncedSearch]);
 
   const filteredData = useMemo(() => {
     if (!searchText) return data;
@@ -57,6 +79,22 @@ export default function AssetListScreen({
         item.id.toLowerCase().includes(lowerSearch),
     );
   }, [data, searchText]);
+
+  const displayData = useMemo(() => {
+    if (debouncedSearch.trim().length >= 2) {
+      const localFilter = data.filter(
+        (item) =>
+          item.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          item.code.toLowerCase().includes(debouncedSearch.toLowerCase()),
+      );
+
+      const combined = [...localFilter, ...searchResults];
+      return Array.from(
+        new Map(combined.map((item) => [item.id, item])).values(),
+      );
+    }
+    return data;
+  }, [data, debouncedSearch, searchResults]);
 
   const onRefresh = useCallback(async () => {
     await fetchIndicators();
@@ -150,6 +188,14 @@ export default function AssetListScreen({
           onChangeText={setSearchText}
           onClear={() => setSearchText("")}
         />
+        {isSearching && (
+          <View className="flex-row items-center justify-center py-2">
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text className="ml-2 text-gray-500 text-xs">
+              Buscando na bolsa...
+            </Text>
+          </View>
+        )}
       </View>
 
       {error && data.length === 0 ? (

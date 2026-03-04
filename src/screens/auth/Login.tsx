@@ -34,7 +34,7 @@ export default function Login({ navigation }: any) {
       <View className="items-center mb-10">
         <View className="w-24 h-24 bg-blue-50 rounded-3xl justify-center items-center mb-4">
           <Image
-            source={require("../../assets/logo.png")}
+            source={require("../../../assets/logo.png")}
             className="w-16 h-16"
             resizeMode="contain"
           />
