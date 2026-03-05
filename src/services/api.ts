@@ -1,5 +1,6 @@
 import axios from "axios";
 import Constants from "expo-constants";
+import * as DocumentPicker from "expo-document-picker";
 
 const getBaseUrl = () => {
   const envUrl = (process.env as Record<string, string | undefined>)
@@ -78,6 +79,15 @@ export interface NewsArticle {
   content: string | null;
 }
 
+export interface BankTransaction {
+  id: string;
+  transactionId: string;
+  type: "CREDIT" | "DEBIT";
+  amount: number;
+  description: string;
+  date: string;
+}
+
 export interface HistoricalDataPoint {
   timestamp: string;
   high: number;
@@ -125,5 +135,44 @@ export const convertCurrency = async (
   } catch (error) {
     console.error("Erro na conversão:", error);
     return null;
+  }
+};
+
+export const uploadBankStatement = async (
+  file: DocumentPicker.DocumentPickerAsset,
+) => {
+  const formData = new FormData();
+
+  const fileToUpload = {
+    uri: file.uri,
+    name: file.name,
+    type: file.mimeType || "application/octet-stream",
+  } as any;
+
+  formData.append("file", fileToUpload);
+
+  try {
+    const response = await api.post("/bank-statements/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      transformRequest: (data, headers) => {
+        return formData;
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Erro no upload:", error);
+    throw error;
+  }
+};
+
+export const getBankTransactions = async (): Promise<BankTransaction[]> => {
+  try {
+    const response = await api.get<BankTransaction[]>("/bank-statements");
+    return response.data;
+  } catch (error) {
+    console.error("Erro ao buscar extrato:", error);
+    return [];
   }
 };

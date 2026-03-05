@@ -17,6 +17,7 @@ import { colors } from "../theme/colors";
 import { useAuthStore } from "../store/authStore";
 import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
+
 import Home from "../screens/Home";
 import Currencies from "../screens/Currencies";
 import Indexes from "../screens/Indexes";
@@ -24,6 +25,7 @@ import News from "../screens/News";
 import About from "../screens/About";
 import Favorites from "../screens/Favorites";
 import Wallet from "../screens/Wallet";
+import BankIntegration from "../screens/BankIntegration";
 
 import ScreenHeader from "../components/ScreenHeader";
 
@@ -256,6 +258,15 @@ function DrawerNavigator() {
         options={{
           drawerIcon: ({ color }) => (
             <Ionicons name="star-outline" size={22} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="Conciliação Bancária"
+        component={BankIntegration}
+        options={{
+          drawerIcon: ({ color }) => (
+            <Ionicons name="receipt-outline" size={22} color={color} />
           ),
         }}
       />
