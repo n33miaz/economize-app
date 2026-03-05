@@ -5,15 +5,14 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 interface IndicatorCardProps {
   name: string;
   id: string;
-  value: number;
-  variation: number;
+  value: number | null | undefined;
+  variation: number | null | undefined; 
   isFavorite: boolean;
   onPress: () => void;
   onToggleFavorite: (id: string) => void;
@@ -33,18 +32,21 @@ const IndicatorCard = React.memo(
   }: IndicatorCardProps) => {
     const scale = useSharedValue(1);
 
+    const safeValue = Number(value) || 0;
+    const safeVariation = Number(variation) || 0;
+
     const variationInfo = useMemo(() => {
-      const isPositive = variation >= 0;
+      const isPositive = safeVariation >= 0;
       return {
         color: isPositive ? "text-green-600" : "text-red-500",
         bgColor: isPositive ? "bg-green-100" : "bg-red-100",
         icon: isPositive ? "caret-up" : "caret-down",
-        formatted: `${isPositive ? "+" : ""}${variation.toFixed(2)}%`,
+        formatted: `${isPositive ? "+" : ""}${safeVariation.toFixed(2)}%`,
       };
-    }, [variation]);
+    }, [safeVariation]);
 
     const displayName = useMemo(() => {
-      return name.split("/")[0].replace("Comercial", "").trim();
+      return name?.split("/")[0].replace("Comercial", "").trim() || "Ativo";
     }, [name]);
 
     const animatedStyle = useAnimatedStyle(() => ({
@@ -68,7 +70,6 @@ const IndicatorCard = React.memo(
           activeOpacity={1}
           className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
         >
-          {/* Header do Card */}
           <View className="flex-row justify-between items-start mb-4">
             <View className="flex-row items-center flex-1 mr-2">
               <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center mr-3">
@@ -103,17 +104,15 @@ const IndicatorCard = React.memo(
             </TouchableOpacity>
           </View>
 
-          {/* Divider Sutil */}
           <View className="h-[1px] bg-gray-50 w-full mb-4" />
 
-          {/* Footer com Valores */}
           <View className="flex-row justify-between items-end">
             <View>
               <Text className="text-gray-400 text-xs mb-1 font-medium">
                 Cotação Atual
               </Text>
               <Text className="text-2xl font-bold text-slate-800 tracking-tight">
-                {symbol} {value.toFixed(2)}
+                {symbol} {safeValue.toFixed(2)}
               </Text>
             </View>
 
@@ -123,7 +122,7 @@ const IndicatorCard = React.memo(
               <Ionicons
                 name={variationInfo.icon as any}
                 size={12}
-                color={variation >= 0 ? "#16A34A" : "#EF4444"}
+                color={safeVariation >= 0 ? "#16A34A" : "#EF4444"}
                 style={{ marginRight: 4 }}
               />
               <Text className={`${variationInfo.color} font-bold text-xs`}>

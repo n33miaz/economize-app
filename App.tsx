@@ -1,16 +1,17 @@
 import "./global.css";
 import "react-native-gesture-handler";
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   useFonts,
   Roboto_400Regular,
   Roboto_700Bold,
 } from "@expo-google-fonts/roboto";
-import { Platform, UIManager } from "react-native";
+import { Platform, UIManager, View, Text } from "react-native";
 import * as NavigationBar from "expo-navigation-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Routes from "./src/routes";
 
@@ -24,33 +25,57 @@ if (
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [appIsReady, setAppIsReady] = useState(false);
+  const [fontsLoaded, fontError] = useFonts({
     Roboto_400Regular,
     Roboto_700Bold,
   });
 
   useEffect(() => {
-    async function configureSystemBars() {
-      if (Platform.OS === "android") {
-        await NavigationBar.setBackgroundColorAsync("#FFFFFF");
-        await NavigationBar.setButtonStyleAsync("dark");
+    async function prepare() {
+      try {
+        if (Platform.OS === "android") {
+          try {
+            await NavigationBar.setBackgroundColorAsync("#FFFFFF");
+            await NavigationBar.setButtonStyleAsync("dark");
+          } catch (e) {
+            console.log("Erro ao configurar NavigationBar:", e);
+          }
+        }
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setAppIsReady(true);
       }
     }
-    configureSystemBars();
+
+    prepare();
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
+    if (appIsReady && (fontsLoaded || fontError)) {
       await SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [appIsReady, fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  if (!appIsReady || (!fontsLoaded && !fontError)) {
+    return null;
+  }
+
+  if (fontError) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Erro ao carregar recursos do sistema.</Text>
+      </View>
+    );
+  }
 
   return (
-    <GestureHandlerRootView className="flex-1" onLayout={onLayoutRootView}>
-      <StatusBar style="light" backgroundColor="#053D99" />
-      <Routes />
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <StatusBar style="light" backgroundColor="#053D99" />
+        <Routes />
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
