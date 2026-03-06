@@ -56,7 +56,9 @@ function MainTabScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title={headerTitle} subtitle={headerSubtitle} />
+      {activeTab !== "Dashboard" && (
+        <ScreenHeader title={headerTitle} subtitle={headerSubtitle} />
+      )}
 
       <Tab.Navigator
         initialRouteName="Dashboard"

@@ -58,7 +58,7 @@ export default api;
 // --- Interfaces ---
 export interface Indicator {
   id: string;
-  type: "currency" | "index" | "unknown";
+  type: "currency" | "index" | "crypto" | "unknown";
   code: string;
   name: string;
   buy: number;
