@@ -6,14 +6,13 @@ import {
   TouchableOpacity,
   Linking,
   RefreshControl,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
-import { Indicator, isCurrencyData } from "../services/api";
+import { Indicator } from "../services/api";
 import { colors } from "../theme/colors";
 import useNewsData from "../hooks/useNewsData";
 import { useIndicatorStore } from "../store/indicatorStore";
@@ -92,52 +91,9 @@ export default function Home() {
 
   return (
     <View className="flex-1 bg-background">
-      {/* Header Premium Integrado */}
-      <View
-        className="bg-primaryDark px-5 pb-6 rounded-b-[32px] shadow-lg z-10"
-        style={{ paddingTop: insets.top + 20 }}
-      >
-        <View className="flex-row justify-between items-center mb-6">
-          <View className="flex-row items-center">
-            <View className="w-12 h-12 bg-white/10 rounded-full justify-center items-center mr-3 border border-white/20">
-              <Ionicons name="person" size={20} color="#FFF" />
-            </View>
-            <View>
-              <Text className="text-white/70 text-sm font-regular">Olá,</Text>
-              <Text className="text-white text-lg font-bold">
-                {userName || "Investidor"}
-              </Text>
-            </View>
-          </View>
-          <View className="flex-row gap-4">
-            <TouchableOpacity onPress={toggleBalance}>
-              <Ionicons
-                name={showBalance ? "eye-outline" : "eye-off-outline"}
-                size={24}
-                color="#FFF"
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Notícias" as never)}
-            >
-              <Ionicons name="notifications-outline" size={24} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View>
-          <Text className="text-white/70 text-sm font-medium mb-1">
-            Patrimônio Total
-          </Text>
-          <Text className="text-white text-3xl font-bold tracking-tight">
-            {showBalance ? `R$ ${totalNetWorth.toFixed(2)}` : "R$ •••••••"}
-          </Text>
-        </View>
-      </View>
-
       <ScrollView
-        className="flex-1 -mt-4"
-        contentContainerClassName="pb-10 pt-8"
+        className="flex-1"
+        contentContainerClassName="pb-10 pt-5"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -147,6 +103,32 @@ export default function Home() {
           />
         }
       >
+        {/* Patrimônio */}
+        <View className="mx-5 mb-8 bg-primaryDark rounded-3xl p-6 shadow-lg shadow-blue-900/20">
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-white/80 text-sm font-medium">
+              Patrimônio Total
+            </Text>
+            <View className="flex-row gap-4">
+              <TouchableOpacity onPress={toggleBalance}>
+                <Ionicons
+                  name={showBalance ? "eye-outline" : "eye-off-outline"}
+                  size={22}
+                  color="#FFF"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Notícias" as never)}
+              >
+                <Ionicons name="notifications-outline" size={22} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text className="text-white text-3xl font-bold tracking-tight">
+            {showBalance ? `R$ ${totalNetWorth.toFixed(2)}` : "R$ •••••••"}
+          </Text>
+        </View>
+
         {/* Quick Actions */}
         <View className="flex-row justify-between px-6 mb-8">
           <QuickAction
@@ -259,12 +241,12 @@ export default function Home() {
         <View className="px-5">
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-lg font-bold text-textPrimary">
-              Radar Financeiro
+              Radar de Notícias
             </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("Notícias" as never)}
             >
-              <Text className="text-primary font-bold text-sm">Ver tudo</Text>
+              <Text className="text-primary font-bold text-sm">Ver Mais</Text>
             </TouchableOpacity>
           </View>
 

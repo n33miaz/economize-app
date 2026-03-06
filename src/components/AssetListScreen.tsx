@@ -7,9 +7,12 @@ import {
   RefreshControl,
   ScrollView,
 } from "react-native";
+import { ActivityIndicator } from "react-native";
+import * as Haptics from "expo-haptics";
+import { Keyboard } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { useDebounce } from "../hooks/useDebounce";
-import { ActivityIndicator } from "react-native";
 import { colors } from "../theme/colors";
 import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import IndicatorCard from "./IndicatorCard";
@@ -22,7 +25,6 @@ import HistoricalChart from "./HistoricalChart";
 import ErrorState from "./ErrorState";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { useIndicatorStore } from "../store/indicatorStore";
-import * as Haptics from "expo-haptics";
 
 interface AssetListScreenProps {
   data: Indicator[];
@@ -158,22 +160,19 @@ export default function AssetListScreen({
         displaySymbol =
           isIndexData(item) && item.name === "IBOVESPA" ? "pts" : "R$";
       }
-
       const displayValue = item.points !== undefined ? item.points : item.buy;
 
       return (
-        <View className="px-5">
-          <IndicatorCard
-            name={item.name}
-            id={item.id}
-            value={displayValue}
-            variation={item.variation}
-            isFavorite={favorites.includes(item.id)}
-            onPress={() => handleOpenModal(item)}
-            onToggleFavorite={handleToggleFavorite}
-            symbol={displaySymbol}
-          />
-        </View>
+        <IndicatorCard
+          name={item.name}
+          id={item.id}
+          value={displayValue}
+          variation={item.variation}
+          isFavorite={favorites.includes(item.id)}
+          onPress={() => handleOpenModal(item)}
+          onToggleFavorite={handleToggleFavorite}
+          symbol={displaySymbol}
+        />
       );
     },
     [favorites, handleToggleFavorite, handleOpenModal, symbol],
@@ -181,18 +180,21 @@ export default function AssetListScreen({
 
   return (
     <PageContainer>
-      <View className="px-5 pt-4 bg-background z-10">
+      <View className="px-5 pt-4 bg-background z-10 shadow-sm shadow-gray-200/50">
         <SearchBar
-          placeholder="Buscar ativo..."
+          placeholder="Buscar ativo (ex: USD, PETR4)..."
           value={searchText}
           onChangeText={setSearchText}
-          onClear={() => setSearchText("")}
+          onClear={() => {
+            setSearchText("");
+            Keyboard.dismiss();
+          }}
         />
         {isSearching && (
           <View className="flex-row items-center justify-center py-2">
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text className="ml-2 text-gray-500 text-xs">
-              Buscando na bolsa...
+            <Text className="ml-2 text-gray-500 text-xs font-medium">
+              Filtrando mercado...
             </Text>
           </View>
         )}
@@ -201,8 +203,8 @@ export default function AssetListScreen({
       {error && data.length === 0 ? (
         <ErrorState message={error} onRetry={onRefresh} />
       ) : loading && data.length === 0 ? (
-        <View className="px-5 pt-2">
-          {[1, 2, 3, 4, 5].map((i) => (
+        <View className="px-5 pt-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <View
               key={i}
               className="bg-white rounded-2xl p-5 mb-3 border border-gray-100"
@@ -226,8 +228,10 @@ export default function AssetListScreen({
           data={filteredData}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerClassName="pb-10 pt-2"
+          contentContainerClassName="pb-32 pt-4 px-5"
+          ItemSeparatorComponent={() => <View style={{ height: 16 }} />} 
           ListHeaderComponent={renderHeader}
+          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
@@ -235,15 +239,20 @@ export default function AssetListScreen({
               onRefresh={onRefresh}
               colors={[colors.primary]}
               tintColor={colors.primary}
-              progressViewOffset={10}
+              progressViewOffset={20}
             />
           }
           ListEmptyComponent={
             !loading ? (
-              <View className="mt-16 items-center px-10">
-                <Text className="text-gray-400 text-base text-center">
+              <View className="mt-20 items-center px-10 opacity-60">
+                <Ionicons
+                  name="search-outline"
+                  size={48}
+                  color={colors.inactive}
+                />
+                <Text className="text-gray-500 text-base text-center mt-4 font-medium">
                   {searchText
-                    ? `Nenhum resultado para "${searchText}"`
+                    ? `Nenhum ativo encontrado para "${searchText}"`
                     : emptyMessage}
                 </Text>
               </View>
@@ -263,43 +272,50 @@ export default function AssetListScreen({
         >
           <View>
             {isCurrencyData(selectedItem) ? (
-              <View className="flex-row justify-around items-center mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <View className="flex-row justify-around items-center mb-8 bg-gray-50 p-5 rounded-2xl border border-gray-100">
                 <View className="items-center">
-                  <Text className="text-xs text-gray-500 mb-1">Compra</Text>
-                  <Text className="text-lg font-bold text-slate-800">
+                  <Text className="text-xs text-gray-500 mb-1 font-bold uppercase tracking-wider">
+                    Compra
+                  </Text>
+                  <Text className="text-2xl font-bold text-slate-800">
                     R$ {selectedItem.buy.toFixed(2)}
                   </Text>
                 </View>
-                <View className="w-[1px] h-8 bg-gray-200" />
+                <View className="w-[1px] h-10 bg-gray-200" />
                 <View className="items-center">
-                  <Text className="text-xs text-gray-500 mb-1">Venda</Text>
-                  <Text className="text-lg font-bold text-slate-800">
+                  <Text className="text-xs text-gray-500 mb-1 font-bold uppercase tracking-wider">
+                    Venda
+                  </Text>
+                  <Text className="text-2xl font-bold text-slate-800">
                     {selectedItem.sell
                       ? `R$ ${selectedItem.sell.toFixed(2)}`
-                      : "N/A"}
+                      : "-"}
                   </Text>
                 </View>
               </View>
             ) : (
-              <Text className="text-xl font-bold text-center text-slate-800 mb-4">
-                Pontos: {(selectedItem.points || 0).toFixed(2)}
-              </Text>
+              <View className="items-center mb-6">
+                <Text className="text-4xl font-bold text-slate-800 tracking-tighter">
+                  {(selectedItem.points || 0).toLocaleString("pt-BR")} pts
+                </Text>
+              </View>
             )}
 
-            <View className="items-center mb-4">
-              <Text className="text-xs text-gray-500 mb-1">
-                Variação do Dia
-              </Text>
-              <Text
-                className={`text-3xl font-bold ${
-                  selectedItem.variation >= 0
-                    ? "text-green-600"
-                    : "text-red-500"
-                }`}
+            <View className="items-center mb-6">
+              <View
+                className={`px-4 py-2 rounded-full ${selectedItem.variation >= 0 ? "bg-green-100" : "bg-red-100"}`}
               >
-                {selectedItem.variation > 0 ? "+" : ""}
-                {selectedItem.variation.toFixed(2)}%
-              </Text>
+                <Text
+                  className={`text-lg font-bold ${
+                    selectedItem.variation >= 0
+                      ? "text-green-700"
+                      : "text-red-600"
+                  }`}
+                >
+                  {selectedItem.variation > 0 ? "▲" : "▼"}{" "}
+                  {Math.abs(selectedItem.variation).toFixed(2)}% (Hoje)
+                </Text>
+              </View>
             </View>
 
             {isCurrencyData(selectedItem) && (

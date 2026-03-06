@@ -75,8 +75,8 @@ export default function App() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
         <StatusBar style="light" backgroundColor="#053D99" />
-        <Toast />
         <Routes />
+        <Toast />
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

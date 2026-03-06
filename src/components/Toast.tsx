@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,56 +13,67 @@ import { useToastStore } from "../store/toastStore";
 export default function Toast() {
   const { visible, message, type } = useToastStore();
   const insets = useSafeAreaInsets();
-  const translateY = useSharedValue(-100);
-  const opacity = useSharedValue(0);
+
+  const translateY = useSharedValue(-150);
 
   useEffect(() => {
     if (visible) {
       translateY.value = withSpring(insets.top + 10, {
         damping: 15,
-        stiffness: 90,
+        stiffness: 120,
       });
-      opacity.value = withTiming(1, { duration: 300 });
     } else {
-      translateY.value = withTiming(-100, { duration: 300 });
-      opacity.value = withTiming(0, { duration: 300 });
+      translateY.value = withTiming(-150, { duration: 300 });
     }
   }, [visible, insets.top]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
   }));
 
   const getToastConfig = () => {
     switch (type) {
       case "error":
-        return { color: "bg-red-500", icon: "alert-circle" };
+        return { bg: "bg-red-500", icon: "alert-circle" };
       case "success":
-        return { color: "bg-green-500", icon: "checkmark-circle" };
+        return { bg: "bg-green-500", icon: "checkmark-circle" };
       case "warning":
-        return { color: "bg-amber-500", icon: "warning" };
+        return { bg: "bg-amber-500", icon: "warning" };
       default:
-        return { color: "bg-slate-800", icon: "information-circle" };
+        return { bg: "bg-slate-800", icon: "information-circle" };
     }
   };
 
   const config = getToastConfig();
 
   return (
-    <Animated.View
-      className="absolute left-5 right-5 z-[999]"
-      style={animatedStyle}
-      pointerEvents="none"
-    >
-      <View
-        className={`${config.color} flex-row items-center p-4 rounded-2xl shadow-lg shadow-black/20`}
-      >
-        <Ionicons name={config.icon as any} size={24} color="#FFF" />
-        <Text className="text-white font-bold text-sm ml-3 flex-1 leading-5">
-          {message}
-        </Text>
-      </View>
-    </Animated.View>
+    <View style={styles.absoluteContainer} pointerEvents="box-none">
+      <Animated.View style={[styles.toastWrapper, animatedStyle]}>
+        <View
+          className={`${config.bg} flex-row items-center px-4 py-3 rounded-full shadow-lg`}
+        >
+          <Ionicons name={config.icon as any} size={20} color="#FFF" />
+          <Text className="text-white font-bold text-sm ml-2 shrink">
+            {message}
+          </Text>
+        </View>
+      </Animated.View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  absoluteContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
+    elevation: 99,
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  toastWrapper: {
+    position: "absolute",
+    top: 0,
+    alignSelf: "center",
+    maxWidth: "90%",
+  },
+});

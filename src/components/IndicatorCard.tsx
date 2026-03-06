@@ -62,13 +62,13 @@ const IndicatorCard = React.memo(
     };
 
     return (
-      <Animated.View style={animatedStyle} className="mb-3">
+      <Animated.View style={animatedStyle}>
         <TouchableOpacity
           onPress={onPress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          activeOpacity={1}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+          activeOpacity={0.8}
+          className="bg-white rounded-3xl p-5 shadow-md shadow-gray-200/50 border border-gray-100/80"
         >
           <View className="flex-row justify-between items-start mb-4">
             <View className="flex-row items-center flex-1 mr-2">

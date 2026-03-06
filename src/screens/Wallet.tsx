@@ -197,7 +197,6 @@ export default function Wallet() {
   if (!isAuthenticated) {
     return (
       <PageContainer>
-        <ScreenHeader title="Minha Carteira" subtitle="Protegida" />
         <View className="flex-1 justify-center items-center p-5">
           <View className="bg-blue-50 p-6 rounded-full mb-6">
             <Ionicons name="lock-closed" size={48} color={colors.primaryDark} />
@@ -225,8 +224,6 @@ export default function Wallet() {
 
   return (
     <PageContainer>
-      <ScreenHeader title="Minha Carteira" subtitle="Gestão de Ativos" />
-
       <ScrollView contentContainerClassName="p-5 pb-24">
         <View className="bg-primaryDark rounded-2xl p-6 flex-row justify-between items-center mb-6 shadow-lg shadow-blue-900/20">
           <View>
@@ -305,17 +302,34 @@ export default function Wallet() {
         transparent
         onRequestClose={() => setModalVisible(false)}
       >
+        <View
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}
+        >
+          <TouchableOpacity
+            className="flex-1"
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
+        </View>
+
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1 bg-black/50 justify-end"
+          className="flex-1 justify-end"
+          pointerEvents="box-none"
         >
-          <View className="bg-white rounded-t-3xl p-6 pb-10">
+          <View className="bg-white rounded-t-3xl p-6 pb-10 shadow-2xl">
+            <View className="w-12 h-1.5 bg-gray-300 rounded-full self-center mb-6" />
+
             <View className="flex-row justify-between items-center mb-6">
               <Text className="text-xl font-bold text-slate-800">
                 Nova Transação
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                className="bg-gray-100 p-2 rounded-full"
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -330,30 +344,36 @@ export default function Wallet() {
               autoCapitalize="characters"
             />
 
-            <Text className="text-sm font-bold text-gray-500 mb-2">
-              Quantidade
-            </Text>
-            <TextInput
-              className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
-              placeholder="0.00"
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="numeric"
-            />
+            <View className="flex-row gap-4 mb-6">
+              <View className="flex-1">
+                <Text className="text-sm font-bold text-gray-500 mb-2">
+                  Quantidade
+                </Text>
+                <TextInput
+                  className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 border border-gray-200"
+                  placeholder="0.00"
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="numeric"
+                />
+              </View>
 
-            <Text className="text-sm font-bold text-gray-500 mb-2">
-              Preço Pago (Unitário em R$)
-            </Text>
-            <TextInput
-              className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
-              placeholder="0.00"
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="numeric"
-            />
+              <View className="flex-1">
+                <Text className="text-sm font-bold text-gray-500 mb-2">
+                  Preço (R$)
+                </Text>
+                <TextInput
+                  className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 border border-gray-200"
+                  placeholder="0.00"
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
 
             <TouchableOpacity
-              className="bg-primary rounded-xl py-4 items-center mt-2 shadow-md shadow-blue-500/20"
+              className="bg-primary rounded-xl py-4 items-center shadow-md shadow-blue-500/20 active:bg-primaryDark"
               onPress={handleAdd}
             >
               <Text className="text-white text-base font-bold">

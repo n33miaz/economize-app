@@ -90,48 +90,61 @@ export default function DetailsModal({
   if (!showModal) return null;
 
   return (
-    <Modal transparent visible={showModal} onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1 justify-end"
+    <Modal
+      transparent
+      visible={showModal}
+      onRequestClose={handleClose}
+      animationType="none"
+    >
+      {/* Fundo escuro clicável para fechar */}
+      <Animated.View
+        className="absolute inset-0"
+        style={[{ backgroundColor: "rgba(15, 23, 42, 0.6)" }, backdropStyle]}
       >
-        <TouchableWithoutFeedback onPress={handleClose}>
-          <Animated.View
-            className="absolute inset-0 bg-black/60"
-            style={backdropStyle}
-          />
-        </TouchableWithoutFeedback>
+        <TouchableOpacity
+          className="flex-1"
+          activeOpacity={1}
+          onPress={handleClose}
+        />
+      </Animated.View>
 
+      {/* Conteúdo do Modal */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1 justify-end"
+        pointerEvents="box-none"
+      >
         <Animated.View
-          className="bg-white dark:bg-slate-900 rounded-t-3xl px-6 pt-3 pb-8 max-h-[85%] shadow-2xl"
+          className="bg-white dark:bg-slate-900 rounded-t-[32px] px-6 pt-3 pb-10 max-h-[90%] shadow-2xl"
           style={modalStyle}
         >
-          <View className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full self-center mb-5 mt-2" />
+          <View className="w-14 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full self-center mb-6 mt-2" />
 
           <View className="items-center justify-center mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
-            <Text className="text-xl font-bold text-slate-800 dark:text-white text-center">
+            <Text className="text-2xl font-bold text-slate-800 dark:text-white text-center">
               {title}
             </Text>
           </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerClassName="pb-5"
+            contentContainerClassName="pb-8"
+            keyboardShouldPersistTaps="handled"
           >
             {children}
 
             {currencyCode && (
-              <View className="mt-6 bg-gray-50 dark:bg-slate-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700">
-                <Text className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wider">
+              <View className="mt-6 bg-gray-50 dark:bg-slate-800 p-5 rounded-3xl border border-gray-200 dark:border-gray-700">
+                <Text className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-widest">
                   Simulador de Conversão
                 </Text>
 
-                <View className="flex-row items-center bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-gray-700 px-4 h-14 mb-4">
-                  <Text className="text-base font-bold text-gray-500 mr-3 pr-3 border-r border-gray-200">
+                <View className="flex-row items-center bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-gray-700 px-4 h-16 mb-4 shadow-sm">
+                  <Text className="text-base font-bold text-gray-400 mr-3 pr-3 border-r border-gray-100">
                     BRL
                   </Text>
                   <TextInput
-                    className="flex-1 text-lg text-slate-800 dark:text-white font-regular"
+                    className="flex-1 text-xl text-slate-800 dark:text-white font-bold h-full"
                     value={amount}
                     onChangeText={setAmount}
                     keyboardType="numeric"
@@ -141,7 +154,7 @@ export default function DetailsModal({
                 </View>
 
                 <TouchableOpacity
-                  className="bg-primary rounded-xl h-14 justify-center items-center shadow-md shadow-blue-500/20 active:bg-primaryDark"
+                  className="bg-primary rounded-2xl h-16 justify-center items-center shadow-lg shadow-blue-500/30 active:bg-primaryDark"
                   onPress={handleConvert}
                   disabled={loadingConversion}
                   activeOpacity={0.8}
@@ -149,18 +162,18 @@ export default function DetailsModal({
                   {loadingConversion ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text className="text-white text-base font-bold">
+                    <Text className="text-white text-lg font-bold">
                       Converter Agora
                     </Text>
                   )}
                 </TouchableOpacity>
 
                 {conversionResult !== null && (
-                  <View className="mt-4 items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-900">
-                    <Text className="text-xs text-gray-500 dark:text-gray-300 mb-1">
+                  <View className="mt-5 items-center p-5 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-100 dark:border-green-900">
+                    <Text className="text-xs text-gray-500 dark:text-gray-300 mb-1 font-medium uppercase tracking-wider">
                       Valor Aproximado
                     </Text>
-                    <Text className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    <Text className="text-3xl font-bold text-green-600 dark:text-green-400">
                       $ {conversionResult.toFixed(2)}
                     </Text>
                   </View>

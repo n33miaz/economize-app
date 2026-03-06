@@ -32,34 +32,26 @@ import ScreenHeader from "../components/ScreenHeader";
 
 const Tab = createMaterialTopTabNavigator();
 const Drawer = createDrawerNavigator();
+const FinancesTab = createMaterialTopTabNavigator();
 
 function MainTabScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState("Dashboard");
 
-  let headerTitle = "Olá, Investidor";
+  let headerTitle = "Olá, Investidor"; // TODO: nome de usuário
   let headerSubtitle = "Resumo do Mercado";
 
-  switch (activeTab) {
-    case "Moedas":
-      headerTitle = "Cotações";
-      headerSubtitle = "Moedas Globais";
-      break;
-    case "Dashboard":
-      headerTitle = "Olá, Investidor";
-      headerSubtitle = "Resumo do Mercado";
-      break;
-    case "Índices":
-      headerTitle = "Indicadores";
-      headerSubtitle = "Bolsas e Taxas";
-      break;
+  if (activeTab === "Moedas") {
+    headerTitle = "Cotações";
+    headerSubtitle = "Moedas Globais";
+  } else if (activeTab === "Índices") {
+    headerTitle = "Indicadores";
+    headerSubtitle = "Bolsas e Taxas";
   }
 
   return (
     <View className="flex-1 bg-background">
-      {activeTab !== "Dashboard" && (
-        <ScreenHeader title={headerTitle} subtitle={headerSubtitle} />
-      )}
+      <ScreenHeader title={headerTitle} subtitle={headerSubtitle} />
 
       <Tab.Navigator
         initialRouteName="Dashboard"
@@ -67,12 +59,9 @@ function MainTabScreen() {
         screenOptions={{
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.inactive,
-          tabBarPressColor: "transparent",
           tabBarIndicatorStyle: {
             backgroundColor: colors.primary,
             height: 3,
-            borderTopLeftRadius: 3,
-            borderTopRightRadius: 3,
             top: 0,
           },
           tabBarStyle: {
@@ -81,23 +70,12 @@ function MainTabScreen() {
             paddingBottom: Platform.OS === "ios" ? insets.bottom : 10,
             borderTopWidth: 1,
             borderTopColor: colors.border,
-            elevation: 8,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
           },
           tabBarLabelStyle: {
             fontFamily: "Roboto_700Bold",
             fontSize: 11,
             textTransform: "capitalize",
-            marginTop: 2,
           },
-          tabBarItemStyle: {
-            marginBottom: -2,
-          },
-          swipeEnabled: true,
-          animationEnabled: true,
         }}
       >
         <Tab.Screen
@@ -148,6 +126,49 @@ function MainTabScreen() {
   );
 }
 
+function FinancesScreen({ navigation }: any) {
+  return (
+    <View className="flex-1 bg-background">
+      <ScreenHeader
+        title="Minhas Finanças"
+        subtitle="Carteira e Conta Corrente"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => navigation.navigate("IA Assist")}
+            className="bg-white/20 px-3 py-2 rounded-xl flex-row items-center shadow-sm"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="sparkles" size={16} color="#FFF" />
+            <Text className="text-white font-bold text-xs ml-2">
+              Assistente IA
+            </Text>
+          </TouchableOpacity>
+        }
+      />
+      <FinancesTab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.inactive,
+          tabBarIndicatorStyle: { backgroundColor: colors.primary, height: 3 },
+          tabBarStyle: {
+            backgroundColor: "white",
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+          tabBarLabelStyle: {
+            fontFamily: "Roboto_700Bold",
+            fontSize: 13,
+            textTransform: "capitalize",
+          },
+        }}
+      >
+        <FinancesTab.Screen name="Carteira" component={Wallet} />
+        <FinancesTab.Screen name="Extrato" component={BankIntegration} />
+      </FinancesTab.Navigator>
+    </View>
+  );
+}
+
 function CustomDrawerContent(props: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
 
@@ -168,7 +189,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
             Painel Econômico
           </Text>
           <Text className="text-xs text-gray-500 font-regular">
-            Soluções Inteligentes
+            Construindo Sonhos
           </Text>
         </View>
       </TouchableOpacity>
@@ -238,8 +259,8 @@ function DrawerNavigator() {
         }}
       />
       <Drawer.Screen
-        name="Carteira"
-        component={Wallet}
+        name="Finanças"
+        component={FinancesScreen}
         options={{
           drawerIcon: ({ color }) => (
             <Ionicons name="wallet-outline" size={22} color={color} />
@@ -247,12 +268,17 @@ function DrawerNavigator() {
         }}
       />
       <Drawer.Screen
-        name="Notícias"
-        component={News}
+        name="Open Finance"
+        component={BankIntegration}
         options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="newspaper-outline" size={22} color={color} />
-          ),
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
+        name="IA Assist"
+        component={AiAssistant}
+        options={{
+          drawerItemStyle: { display: "none" },
         }}
       />
       <Drawer.Screen
@@ -265,20 +291,11 @@ function DrawerNavigator() {
         }}
       />
       <Drawer.Screen
-        name="Open Finance"
-        component={BankIntegration}
+        name="Notícias"
+        component={News}
         options={{
           drawerIcon: ({ color }) => (
-            <Ionicons name="receipt-outline" size={22} color={color} />
-          ),
-        }}
-      />
-      <Drawer.Screen
-        name="IA Assist"
-        component={AiAssistant}
-        options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="sparkles-outline" size={22} color={color} />
+            <Ionicons name="newspaper-outline" size={22} color={color} />
           ),
         }}
       />
