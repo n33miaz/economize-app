@@ -157,14 +157,12 @@ export default function Home() {
           <QuickAction
             icon="receipt-outline"
             label="Extrato"
-            onPress={() => navigation.navigate("Conciliação Bancária" as never)}
+            onPress={() => navigation.navigate("Open Finance" as never)}
           />
           <QuickAction
             icon="sparkles-outline"
             label="IA Assist"
-            onPress={() => {
-              /* Futura tela de IA */
-            }}
+            onPress={() => navigation.navigate("IA Assist" as never)}
             isNew
           />
           <QuickAction

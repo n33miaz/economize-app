@@ -26,6 +26,7 @@ import About from "../screens/About";
 import Favorites from "../screens/Favorites";
 import Wallet from "../screens/Wallet";
 import BankIntegration from "../screens/BankIntegration";
+import AiAssistant from "../screens/AiAssistant";
 
 import ScreenHeader from "../components/ScreenHeader";
 
@@ -264,11 +265,20 @@ function DrawerNavigator() {
         }}
       />
       <Drawer.Screen
-        name="Conciliação Bancária"
+        name="Open Finance"
         component={BankIntegration}
         options={{
           drawerIcon: ({ color }) => (
             <Ionicons name="receipt-outline" size={22} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="IA Assist"
+        component={AiAssistant}
+        options={{
+          drawerIcon: ({ color }) => (
+            <Ionicons name="sparkles-outline" size={22} color={color} />
           ),
         }}
       />
