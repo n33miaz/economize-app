@@ -6,15 +6,17 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  Linking,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PieChart } from "react-native-chart-kit";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBankStore } from "../store/bankStore";
 import { useToastStore } from "../store/toastStore";
 import PageContainer from "../components/PageContainer";
-import ScreenHeader from "../components/ScreenHeader";
 import { colors } from "../theme/colors";
 
 const screenWidth = Dimensions.get("window").width;
@@ -27,13 +29,25 @@ export default function BankIntegration() {
     importStatement,
     calculateMetrics,
   } = useBankStore();
-
   const { showToast } = useToastStore();
   const metrics = calculateMetrics();
 
+  const insets = useSafeAreaInsets();
+
+  const BANK_SHORTCUTS = [
+    { id: "inter", name: "Inter", url: "bancointer://", color: "#FF7A00" },
+    { id: "nubank", name: "Nubank", url: "nubank://", color: "#8A05BE" },
+    { id: "flash", name: "Flash", url: "flash://", color: "pink" },
+    { id: "santander", name: "Santander", url: "santander://", color: "red" },
+    { id: "bradesco", name: "Bradesco", url: "bradesco://", color: "red" },
+    { id: "itau", name: "Itaú", url: "itau://", color: "#EC7000" },
+    { id: "bb", name: "BB", url: "bb://", color: "#F8D117" },
+    { id: "c6", name: "C6 Bank", url: "c6bank://", color: "#242424" },
+  ];
+
   useEffect(() => {
     fetchTransactions();
-  }, []);
+  }, [fetchTransactions]);
 
   const handleImport = async () => {
     try {
@@ -53,7 +67,6 @@ export default function BankIntegration() {
     }
   };
 
-  // Dados para o gráfico de Entradas vs Saídas
   const chartData = useMemo(() => {
     if (metrics.income === 0 && metrics.expense === 0) return [];
     return [
@@ -74,6 +87,19 @@ export default function BankIntegration() {
     ];
   }, [metrics]);
 
+  const openBankApp = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        showToast("App do banco não encontrado no dispositivo.", "warning");
+      }
+    } catch (error) {
+      showToast("Erro ao tentar abrir o aplicativo.", "error");
+    }
+  };
+
   const renderItem = ({ item }: { item: any }) => {
     const isCredit = item.type === "CREDIT";
     const date = new Date(item.date).toLocaleDateString("pt-BR", {
@@ -85,9 +111,7 @@ export default function BankIntegration() {
       <View className="bg-white p-4 mb-3 rounded-2xl border border-gray-100 shadow-sm flex-row items-center justify-between">
         <View className="flex-row items-center flex-1 mr-3">
           <View
-            className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${
-              isCredit ? "bg-green-50" : "bg-red-50"
-            }`}
+            className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${isCredit ? "bg-green-50" : "bg-red-50"}`}
           >
             <Ionicons
               name={isCredit ? "arrow-down" : "arrow-up"}
@@ -106,9 +130,7 @@ export default function BankIntegration() {
           </View>
         </View>
         <Text
-          className={`font-bold text-base ${
-            isCredit ? "text-green-600" : "text-slate-800"
-          }`}
+          className={`font-bold text-base ${isCredit ? "text-green-600" : "text-slate-800"}`}
         >
           {isCredit ? "+ " : "- "}R$ {Math.abs(item.amount).toFixed(2)}
         </Text>
@@ -117,12 +139,12 @@ export default function BankIntegration() {
   };
 
   return (
-    <PageContainer>
+    <PageContainer style={{ flex: 1, position: "relative" }}>
       <FlatList
         data={transactions}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerClassName="px-5 pb-10 pt-4"
+        contentContainerClassName="px-5 pb-24 pt-4"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -188,8 +210,53 @@ export default function BankIntegration() {
               </View>
             )}
 
+            {/* Atalhos dos Bancos */}
+            <View style={{ marginBottom: -12, marginTop: 16 }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "bold",
+                  color: "#0F172A",
+                  marginBottom: 12,
+                }}
+              >
+                Acesso Rápido
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 12 }}
+              >
+                {BANK_SHORTCUTS.map((bank) => (
+                  <TouchableOpacity
+                    key={bank.id}
+                    onPress={() => openBankApp(bank.url)}
+                    style={{
+                      backgroundColor: bank.color,
+                      width: 72,
+                      height: 72,
+                      borderRadius: 16,
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={{
+                        color: "#FFF",
+                        fontWeight: "bold",
+                        fontSize: 12,
+                      }}
+                    >
+                      {bank.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
             {transactions.length > 0 && (
-              <Text className="text-lg font-bold text-slate-800 mt-6 mb-2">
+              <Text className="text-lg font-bold text-slate-800 mt-2 mb-2">
                 Histórico de Transações
               </Text>
             )}
@@ -204,27 +271,37 @@ export default function BankIntegration() {
               Nenhum extrato importado
             </Text>
             <Text className="text-gray-500 text-sm text-center leading-5">
-              Exporte o arquivo .OFX do seu banco (Nubank, Itaú, Inter, etc) e
-              importe aqui para gerar seus gráficos automaticamente.
+              Exporte o arquivo de extrato em seu banco e importe aqui para gerar seus
+              gráficos e relatórios.
             </Text>
-            <TouchableOpacity
-              className="mt-6 bg-primary px-6 py-3 rounded-xl shadow-md shadow-blue-500/20"
-              onPress={handleImport}
-            >
-              <Text className="text-white font-bold">
-                Importar meu primeiro OFX
-              </Text>
-            </TouchableOpacity>
           </View>
         }
       />
+
+      {/* Botão Flutuante Importar */}
       <TouchableOpacity
-        className="absolute bottom-6 right-6 h-14 px-6 rounded-full bg-primary flex-row justify-center items-center shadow-lg shadow-blue-500/30"
+        style={{
+          position: "absolute",
+          bottom: 24, 
+          right: 24,
+          zIndex: 50,
+          elevation: 5,
+          backgroundColor: colors.primary,
+          height: 56,
+          paddingHorizontal: 24,
+          borderRadius: 28,
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          shadowColor: "#00AEEF",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+        }}
         onPress={handleImport}
         activeOpacity={0.9}
       >
         <Ionicons name="cloud-upload-outline" size={24} color="#FFF" />
-        <Text className="text-white font-bold ml-2">Importar OFX</Text>
       </TouchableOpacity>
     </PageContainer>
   );

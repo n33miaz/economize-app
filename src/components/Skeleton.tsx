@@ -7,9 +7,6 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { cssInterop } from "nativewind";
-
-cssInterop(Animated.View, { className: "style" });
 
 interface SkeletonProps {
   width?: DimensionValue;
@@ -22,7 +19,7 @@ export default function Skeleton({
   width = "100%",
   height = 20,
   borderRadius = 8,
-  className,
+  className = "",
 }: SkeletonProps) {
   const opacity = useSharedValue(0.3);
 

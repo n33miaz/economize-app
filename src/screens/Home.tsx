@@ -9,28 +9,28 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
 import { Indicator } from "../services/api";
 import { colors } from "../theme/colors";
 import useNewsData from "../hooks/useNewsData";
-import { useIndicatorStore } from "../store/indicatorStore";
 import { useAuthStore } from "../store/authStore";
+import { useIndicatorStore } from "../store/indicatorStore";
 import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
+import { useFavoritesStore } from "../store/favoritesStore";
 
 import HighlightCard from "../components/HighlightCard";
 import Skeleton from "../components/Skeleton";
+import ScreenHeader from "../components/ScreenHeader";
 
 const HIGHLIGHT_ITEMS = ["USD", "EUR", "BTC", "IBOVESPA"];
 
 export default function Home() {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const [showBalance, setShowBalance] = useState(true);
+   const { userName } = useAuthStore(); 
 
-  const { userName } = useAuthStore();
   const {
     indicators,
     loading: indicatorsLoading,
@@ -40,6 +40,7 @@ export default function Home() {
   const { fetchTransactions: fetchBank, calculateMetrics } = useBankStore();
   const { transactions: walletTxs, fetchTransactions: fetchWallet } =
     useWalletStore();
+  const { favorites } = useFavoritesStore();
 
   useEffect(() => {
     fetchIndicators();
@@ -59,7 +60,6 @@ export default function Home() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
-  // Cálculos de Patrimônio
   const bankMetrics = calculateMetrics();
   const bankBalance = bankMetrics.income - bankMetrics.expense;
 
@@ -73,13 +73,17 @@ export default function Home() {
 
   const totalNetWorth = bankBalance + walletBalance;
 
+  // Lógica de Favoritos Dinâmicos
   const highlights: Indicator[] = useMemo(() => {
+    if (favorites.length > 0) {
+      return indicators.filter((item) => favorites.includes(item.id));
+    }
     return indicators.filter(
       (item) =>
         HIGHLIGHT_ITEMS.includes(item.code) ||
         HIGHLIGHT_ITEMS.includes(item.name),
     );
-  }, [indicators]);
+  }, [indicators, favorites]);
 
   const recentNews = useMemo(() => (news ? news.slice(0, 3) : []), [news]);
   const isContentLoading = indicatorsLoading || newsLoading;
@@ -89,8 +93,12 @@ export default function Home() {
     setShowBalance(!showBalance);
   };
 
+  const firstName = userName ? userName.split(" ")[0] : "Investidor"; 
+
   return (
     <View className="flex-1 bg-background">
+      <ScreenHeader title={`Olá, ${firstName}`} subtitle="Resumo do Mercado" />
+
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-10 pt-5"
@@ -104,29 +112,46 @@ export default function Home() {
         }
       >
         {/* Patrimônio */}
-        <View className="mx-5 mb-8 bg-primaryDark rounded-3xl p-6 shadow-lg shadow-blue-900/20">
+        <View 
+          className="mx-5 mb-8 bg-primaryDark rounded-3xl p-6 shadow-lg shadow-blue-900/20 overflow-hidden"
+          style={{ position: 'relative' }}
+        >
+          {/* Elementos decorativos de fundo */}
+          <View style={{ position: 'absolute', right: -40, top: -40, width: 128, height: 128, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 64 }} />
+          <View style={{ position: 'absolute', left: -30, bottom: -30, width: 96, height: 96, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 48 }} />
+
           <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-white/80 text-sm font-medium">
-              Patrimônio Total
-            </Text>
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 bg-white/10 rounded-full justify-center items-center mr-2">
+                <Ionicons name="wallet-outline" size={16} color="#FFF" />
+              </View>
+              <Text className="text-white/80 text-sm font-medium">
+                Patrimônio Total
+              </Text>
+            </View>
             <View className="flex-row gap-4">
-              <TouchableOpacity onPress={toggleBalance}>
+              <TouchableOpacity onPress={toggleBalance} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons
                   name={showBalance ? "eye-outline" : "eye-off-outline"}
                   size={22}
                   color="#FFF"
                 />
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("Notícias" as never)}
-              >
-                <Ionicons name="notifications-outline" size={22} color="#FFF" />
-              </TouchableOpacity>
             </View>
           </View>
-          <Text className="text-white text-3xl font-bold tracking-tight">
+          
+          <Text className="text-white text-4xl font-bold tracking-tight mb-3">
             {showBalance ? `R$ ${totalNetWorth.toFixed(2)}` : "R$ •••••••"}
           </Text>
+
+          <View className="flex-row items-center mt-1">
+            <View className="bg-green-500/20 px-2 py-1 rounded-md flex-row items-center">
+              <Ionicons name="trending-up" size={14} color="#4ADE80" />
+              {/* TODO: Adicionar lógica real */}
+              <Text className="text-green-400 text-xs font-bold ml-1">+2.4%</Text> 
+            </View>
+            <Text className="text-white/60 text-xs ml-2">em relação ao mês passado</Text>
+          </View>
         </View>
 
         {/* Quick Actions */}
@@ -134,69 +159,30 @@ export default function Home() {
           <QuickAction
             icon="wallet-outline"
             label="Carteira"
-            onPress={() => navigation.navigate("Carteira" as never)}
+            onPress={() => navigation.navigate("Finanças" as never)}
           />
           <QuickAction
             icon="receipt-outline"
             label="Extrato"
-            onPress={() => navigation.navigate("Open Finance" as never)}
+            onPress={() => navigation.navigate("Finanças" as never)}
           />
           <QuickAction
             icon="sparkles-outline"
-            label="IA Assist"
+            label="Assistente"
             onPress={() => navigation.navigate("IA Assist" as never)}
             isNew
           />
           <QuickAction
             icon="swap-horizontal-outline"
             label="Câmbio"
-            onPress={() => navigation.navigate("Moedas" as never)}
+            onPress={() => navigation.navigate("Indicadores" as never)}
           />
         </View>
 
-        {/* Resumo Financeiro */}
-        <View className="px-5 mb-8">
-          <Text className="text-lg font-bold text-textPrimary mb-4">
-            Resumo Financeiro
-          </Text>
-          <View className="flex-row gap-3">
-            <View className="flex-1 bg-white p-4 rounded-2xl border border-border shadow-sm">
-              <View className="w-8 h-8 bg-blue-50 rounded-full justify-center items-center mb-2">
-                <Ionicons
-                  name="business-outline"
-                  size={16}
-                  color={colors.primary}
-                />
-              </View>
-              <Text className="text-textSecondary text-xs mb-1">
-                Conta Corrente
-              </Text>
-              <Text className="text-textPrimary font-bold text-base">
-                {showBalance ? `R$ ${bankBalance.toFixed(2)}` : "••••••"}
-              </Text>
-            </View>
-            <View className="flex-1 bg-white p-4 rounded-2xl border border-border shadow-sm">
-              <View className="w-8 h-8 bg-green-50 rounded-full justify-center items-center mb-2">
-                <Ionicons
-                  name="trending-up-outline"
-                  size={16}
-                  color={colors.success}
-                />
-              </View>
-              <Text className="text-textSecondary text-xs mb-1">
-                Investimentos
-              </Text>
-              <Text className="text-textPrimary font-bold text-base">
-                {showBalance ? `R$ ${walletBalance.toFixed(2)}` : "••••••"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Destaques do Mercado */}
+        {/* Destaques do Mercado (Favoritos) */}
         <View className="mb-8">
           <Text className="px-5 text-lg font-bold text-textPrimary mb-4">
-            Mercado Agora
+            {favorites.length > 0 ? "Favoritados" : "Mercado Agora"}
           </Text>
           <ScrollView
             horizontal
@@ -283,7 +269,6 @@ export default function Home() {
   );
 }
 
-// Componente Auxiliar para Ações Rápidas
 function QuickAction({
   icon,
   label,

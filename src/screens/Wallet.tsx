@@ -4,28 +4,23 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  Modal,
   TextInput,
   Alert,
-  ScrollView,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   LayoutAnimation,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PieChart } from "react-native-chart-kit";
-import * as LocalAuthentication from "expo-local-authentication";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "../theme/colors";
 import { useWalletStore, Transaction } from "../store/walletStore";
 import { useIndicatorStore } from "../store/indicatorStore";
-import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import CustomModal from "../components/CustomModal";
 
 const screenWidth = Dimensions.get("window").width;
-
 const CHART_COLORS = [
   "#00ADEF",
   "#053D99",
@@ -40,46 +35,16 @@ export default function Wallet() {
     useWalletStore();
   const { indicators } = useIndicatorStore();
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-
   const [code, setCode] = useState("USD");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
 
-  useEffect(() => {
-    async function authenticate() {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
-      if (!hasHardware || !isEnrolled) {
-        setIsAuthenticated(true);
-        return;
-      }
-
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Desbloquear Carteira",
-        fallbackLabel: "Usar Senha",
-      });
-
-      if (result.success) {
-        setIsAuthenticated(true);
-      } else {
-        Alert.alert(
-          "Acesso Negado",
-          "Não foi possível verificar sua identidade.",
-        );
-      }
-    }
-
-    authenticate();
-  }, []);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchTransactions();
-    }
-  }, [isAuthenticated, fetchTransactions]);
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   const getCurrentPrice = (code: string) => {
     const indicator = indicators.find((i) => i.code === code);
@@ -137,7 +102,6 @@ export default function Wallet() {
 
   const handleDelete = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     Alert.alert("Remover", "Deseja excluir esta transação?", [
       { text: "Cancelar", style: "cancel" },
       {
@@ -166,7 +130,6 @@ export default function Wallet() {
             {item.assetCode}
           </Text>
         </View>
-
         <View className="flex-1">
           <Text className="text-base font-bold text-slate-800">
             {item.quantity} {item.assetCode}
@@ -175,7 +138,6 @@ export default function Wallet() {
             Pago: R$ {item.priceAtTransaction.toFixed(2)}
           </Text>
         </View>
-
         <View className="items-end mr-3">
           <Text className="text-sm font-bold text-slate-800">
             R$ {currentValue.toFixed(2)}
@@ -186,7 +148,6 @@ export default function Wallet() {
             {isProfit ? "+" : ""}R$ {profit.toFixed(2)}
           </Text>
         </View>
-
         <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-2">
           <Ionicons name="trash-outline" size={18} color={colors.inactive} />
         </TouchableOpacity>
@@ -194,195 +155,149 @@ export default function Wallet() {
     );
   };
 
-  if (!isAuthenticated) {
-    return (
-      <PageContainer>
-        <View className="flex-1 justify-center items-center p-5">
-          <View className="bg-blue-50 p-6 rounded-full mb-6">
-            <Ionicons name="lock-closed" size={48} color={colors.primaryDark} />
-          </View>
-          <Text className="text-xl font-bold text-slate-800 mb-2">
-            Acesso Bloqueado
-          </Text>
-          <Text className="text-gray-500 text-center mb-8">
-            Para visualizar seus investimentos, precisamos confirmar sua
-            identidade.
-          </Text>
-          <TouchableOpacity
-            className="bg-primary px-8 py-3 rounded-xl"
-            onPress={async () => {
-              const result = await LocalAuthentication.authenticateAsync();
-              if (result.success) setIsAuthenticated(true);
-            }}
-          >
-            <Text className="text-white font-bold">Desbloquear</Text>
-          </TouchableOpacity>
-        </View>
-      </PageContainer>
-    );
-  }
-
   return (
     <PageContainer>
-      <ScrollView contentContainerClassName="p-5 pb-24">
-        <View className="bg-primaryDark rounded-2xl p-6 flex-row justify-between items-center mb-6 shadow-lg shadow-blue-900/20">
-          <View>
-            <Text className="text-white/80 text-sm font-regular mb-1">
-              Saldo Estimado
-            </Text>
-            <Text className="text-white text-3xl font-bold">
-              R$ {totalBalance.toFixed(2)}
-            </Text>
-          </View>
-          <View className="bg-white/10 p-3 rounded-2xl">
-            <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
-          </View>
-        </View>
+      <FlatList
+        data={transactions}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="p-5 pb-32"
+        ListHeaderComponent={
+          <>
+            <View className="bg-primaryDark rounded-2xl p-6 flex-row justify-between items-center mb-6 shadow-lg shadow-blue-900/20">
+              <View>
+                <Text className="text-white/80 text-sm font-regular mb-1">
+                  Saldo Estimado
+                </Text>
+                <Text className="text-white text-3xl font-bold">
+                  R$ {totalBalance.toFixed(2)}
+                </Text>
+              </View>
+              <View className="bg-white/10 p-3 rounded-2xl">
+                <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
+              </View>
+            </View>
 
-        {chartData.length > 0 ? (
-          <View className="bg-white rounded-2xl p-4 mb-6 items-center shadow-sm border border-gray-100">
-            <Text className="text-lg font-bold text-slate-800 self-start mb-4">
-              Alocação
-            </Text>
-            <PieChart
-              data={chartData}
-              width={screenWidth - 60}
-              height={200}
-              chartConfig={{
-                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              }}
-              accessor={"population"}
-              backgroundColor={"transparent"}
-              paddingLeft={"0"}
-              center={[10, 0]}
-              absolute
-              hasLegend={true}
-            />
-          </View>
-        ) : (
-          <View className="items-center justify-center p-10 bg-gray-50 rounded-2xl mb-6 border border-dashed border-gray-300">
-            <Ionicons
-              name="pie-chart-outline"
-              size={48}
-              color={colors.inactive}
-            />
-            <Text className="text-gray-400 mt-3 text-center">
-              Adicione ativos para visualizar sua alocação.
-            </Text>
-          </View>
-        )}
+            {chartData.length > 0 ? (
+              <View className="bg-white rounded-2xl p-4 mb-6 items-center shadow-sm border border-gray-100">
+                <Text className="text-lg font-bold text-slate-800 self-start mb-4">
+                  Alocação
+                </Text>
+                <PieChart
+                  data={chartData}
+                  width={screenWidth - 60}
+                  height={200}
+                  chartConfig={{
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  }}
+                  accessor={"population"}
+                  backgroundColor={"transparent"}
+                  paddingLeft={"0"}
+                  center={[10, 0]}
+                  absolute
+                  hasLegend={true}
+                />
+              </View>
+            ) : (
+              <View className="items-center justify-center p-10 bg-gray-50 rounded-2xl mb-6 border border-dashed border-gray-300">
+                <Ionicons
+                  name="pie-chart-outline"
+                  size={48}
+                  color={colors.inactive}
+                />
+                <Text className="text-gray-400 mt-3 text-center">
+                  Adicione ativos para visualizar sua alocação.
+                </Text>
+              </View>
+            )}
 
-        <Text className="text-lg font-bold text-slate-800 mb-4">
-          Histórico de Transações
-        </Text>
-        <FlatList
-          data={transactions}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          scrollEnabled={false}
-          ListEmptyComponent={
-            <Text className="text-gray-400 text-center mt-5 italic">
-              Nenhuma transação registrada.
+            <Text className="text-lg font-bold text-slate-800 mb-4">
+              Histórico de Transações
             </Text>
-          }
-        />
-      </ScrollView>
+          </>
+        }
+        ListEmptyComponent={
+          <Text className="text-gray-400 text-center mt-5 italic">
+            Nenhuma transação registrada.
+          </Text>
+        }
+      />
 
       <TouchableOpacity
-        className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-primary justify-center items-center shadow-lg shadow-blue-500/30"
+        style={{
+          position: "absolute",
+          bottom: insets.bottom > 0 ? insets.bottom : 24,
+          right: 24,
+          zIndex: 40,
+          elevation: 5,
+          backgroundColor: colors.primary,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          justifyContent: "center",
+          alignItems: "center",
+          shadowColor: "#00AEEF",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+        }}
         onPress={() => setModalVisible(true)}
         activeOpacity={0.9}
       >
         <Ionicons name="add" size={30} color="#FFF" />
       </TouchableOpacity>
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View
-          className="absolute inset-0"
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}
-        >
-          <TouchableOpacity
-            className="flex-1"
-            activeOpacity={1}
-            onPress={() => setModalVisible(false)}
-          />
-        </View>
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1 justify-end"
-          pointerEvents="box-none"
-        >
-          <View className="bg-white rounded-t-3xl p-6 pb-10 shadow-2xl">
-            <View className="w-12 h-1.5 bg-gray-300 rounded-full self-center mb-6" />
-
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-xl font-bold text-slate-800">
-                Nova Transação
-              </Text>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                className="bg-gray-100 p-2 rounded-full"
-              >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text className="text-sm font-bold text-gray-500 mb-2">
-              Ativo (Código)
+      <CustomModal visible={modalVisible} onClose={() => setModalVisible(false)}>
+        <View className="p-6" style={{ paddingBottom: insets.bottom + 24 }}>
+          <View className="flex-row justify-between items-center mb-6">
+            <Text className="text-xl font-bold text-slate-800">
+              Nova Transação
             </Text>
-            <TextInput
-              className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
-              placeholder="Ex: PETR4, USD"
-              value={code}
-              onChangeText={setCode}
-              autoCapitalize="characters"
-            />
-
-            <View className="flex-row gap-4 mb-6">
-              <View className="flex-1">
-                <Text className="text-sm font-bold text-gray-500 mb-2">
-                  Quantidade
-                </Text>
-                <TextInput
-                  className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 border border-gray-200"
-                  placeholder="0.00"
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View className="flex-1">
-                <Text className="text-sm font-bold text-gray-500 mb-2">
-                  Preço (R$)
-                </Text>
-                <TextInput
-                  className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 border border-gray-200"
-                  placeholder="0.00"
-                  value={price}
-                  onChangeText={setPrice}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              className="bg-primary rounded-xl py-4 items-center shadow-md shadow-blue-500/20 active:bg-primaryDark"
-              onPress={handleAdd}
-            >
-              <Text className="text-white text-base font-bold">
-                Salvar Investimento
-              </Text>
+            <TouchableOpacity onPress={() => setModalVisible(false)} className="p-2 -mr-2">
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <Text className="text-sm font-bold text-gray-500 mb-2">
+            Ativo (Código)
+          </Text>
+          <TextInput
+            className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
+            placeholder="Ex: PETR4, USD"
+            value={code}
+            onChangeText={setCode}
+            autoCapitalize="characters"
+          />
+          <Text className="text-sm font-bold text-gray-500 mb-2">
+            Quantidade
+          </Text>
+          <TextInput
+            className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
+            placeholder="0.00"
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+          />
+          <Text className="text-sm font-bold text-gray-500 mb-2">
+            Preço Pago (Unitário em R$)
+          </Text>
+          <TextInput
+            className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
+            placeholder="0.00"
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="numeric"
+          />
+          <TouchableOpacity
+            className="bg-primary rounded-xl py-4 items-center mt-2 shadow-md shadow-blue-500/20 active:bg-primaryDark"
+            onPress={handleAdd}
+          >
+            <Text className="text-white text-base font-bold">
+              Salvar Investimento
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </CustomModal>
     </PageContainer>
   );
 }

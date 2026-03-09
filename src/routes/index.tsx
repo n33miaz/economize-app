@@ -1,152 +1,40 @@
-import React, { useState } from "react";
+import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import {
-  createDrawerNavigator,
-  DrawerContentScrollView,
-  DrawerItemList,
-  DrawerContentComponentProps,
-} from "@react-navigation/drawer";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { NavigationContainer } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { View, Text, TouchableOpacity, Platform, Image } from "react-native";
+import { Platform, View, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "../theme/colors";
-
 import { useAuthStore } from "../store/authStore";
+import ScreenHeader from "../components/ScreenHeader";
+
+// Telas
 import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
-
 import Home from "../screens/Home";
 import Currencies from "../screens/Currencies";
 import Indexes from "../screens/Indexes";
 import News from "../screens/News";
 import About from "../screens/About";
-import Favorites from "../screens/Favorites";
 import Wallet from "../screens/Wallet";
 import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
 
-import ScreenHeader from "../components/ScreenHeader";
+const Stack = createNativeStackNavigator();
+const BottomTab = createBottomTabNavigator();
+const TopTab = createMaterialTopTabNavigator();
 
-const Tab = createMaterialTopTabNavigator();
-const Drawer = createDrawerNavigator();
-const FinancesTab = createMaterialTopTabNavigator();
-
-function MainTabScreen() {
-  const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState("Dashboard");
-
-  let headerTitle = "Olá, Investidor"; // TODO: nome de usuário
-  let headerSubtitle = "Resumo do Mercado";
-
-  if (activeTab === "Moedas") {
-    headerTitle = "Cotações";
-    headerSubtitle = "Moedas Globais";
-  } else if (activeTab === "Índices") {
-    headerTitle = "Indicadores";
-    headerSubtitle = "Bolsas e Taxas";
-  }
-
+// Moedas e Índices
+function IndicatorsTabs() {
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title={headerTitle} subtitle={headerSubtitle} />
-
-      <Tab.Navigator
-        initialRouteName="Dashboard"
-        tabBarPosition="bottom"
+      <ScreenHeader title="Indicadores" subtitle="Moedas e Índices Globais" />
+      <TopTab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.inactive,
-          tabBarIndicatorStyle: {
-            backgroundColor: colors.primary,
-            height: 3,
-            top: 0,
-          },
-          tabBarStyle: {
-            backgroundColor: "white",
-            height: 70 + (Platform.OS === "ios" ? insets.bottom : 0),
-            paddingBottom: Platform.OS === "ios" ? insets.bottom : 10,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-          },
-          tabBarLabelStyle: {
-            fontFamily: "Roboto_700Bold",
-            fontSize: 11,
-            textTransform: "capitalize",
-          },
-        }}
-      >
-        <Tab.Screen
-          name="Moedas"
-          component={Currencies}
-          listeners={{ focus: () => setActiveTab("Moedas") }}
-          options={{
-            tabBarIcon: ({ focused, color }) => (
-              <Ionicons
-                name={focused ? "cash" : "cash-outline"}
-                size={26}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Dashboard"
-          component={Home}
-          listeners={{ focus: () => setActiveTab("Dashboard") }}
-          options={{
-            tabBarLabel: "Início",
-            tabBarIcon: ({ focused, color }) => (
-              <Ionicons
-                name={focused ? "grid" : "grid-outline"}
-                size={26}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Índices"
-          component={Indexes}
-          listeners={{ focus: () => setActiveTab("Índices") }}
-          options={{
-            tabBarIcon: ({ focused, color }) => (
-              <Ionicons
-                name={focused ? "stats-chart" : "stats-chart-outline"}
-                size={26}
-                color={color}
-              />
-            ),
-          }}
-        />
-      </Tab.Navigator>
-    </View>
-  );
-}
-
-function FinancesScreen({ navigation }: any) {
-  return (
-    <View className="flex-1 bg-background">
-      <ScreenHeader
-        title="Minhas Finanças"
-        subtitle="Carteira e Conta Corrente"
-        rightAction={
-          <TouchableOpacity
-            onPress={() => navigation.navigate("IA Assist")}
-            className="bg-white/20 px-3 py-2 rounded-xl flex-row items-center shadow-sm"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="sparkles" size={16} color="#FFF" />
-            <Text className="text-white font-bold text-xs ml-2">
-              Assistente IA
-            </Text>
-          </TouchableOpacity>
-        }
-      />
-      <FinancesTab.Navigator
-        screenOptions={{
+          tabBarPressColor: "transparent",
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.inactive,
           tabBarIndicatorStyle: { backgroundColor: colors.primary, height: 3 },
@@ -157,176 +45,160 @@ function FinancesScreen({ navigation }: any) {
           },
           tabBarLabelStyle: {
             fontFamily: "Roboto_700Bold",
-            fontSize: 13,
+            fontSize: 12,
             textTransform: "capitalize",
           },
         }}
       >
-        <FinancesTab.Screen name="Carteira" component={Wallet} />
-        <FinancesTab.Screen name="Extrato" component={BankIntegration} />
-      </FinancesTab.Navigator>
+        <TopTab.Screen name="Moedas" component={Currencies} />
+        <TopTab.Screen name="Índices" component={Indexes} />
+      </TopTab.Navigator>
     </View>
   );
 }
 
-function CustomDrawerContent(props: DrawerContentComponentProps) {
+// Carteira e Extrato (Open Finance)
+function FinanceTabs() {
+  return (
+    <View className="flex-1 bg-background">
+      <ScreenHeader title="Finanças" subtitle="Gestão de Patrimônio" />
+      <TopTab.Navigator
+        screenOptions={{
+          tabBarPressColor: "transparent",
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.inactive,
+          tabBarIndicatorStyle: { backgroundColor: colors.primary, height: 3 },
+          tabBarStyle: {
+            backgroundColor: "white",
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+          tabBarLabelStyle: {
+            fontFamily: "Roboto_700Bold",
+            fontSize: 12,
+            textTransform: "capitalize",
+          },
+        }}
+      >
+        <TopTab.Screen name="Carteira" component={Wallet} />
+        <TopTab.Screen name="Extrato" component={BankIntegration} />
+      </TopTab.Navigator>
+    </View>
+  );
+}
+
+// --- NAVEGAÇÃO PRINCIPAL (BOTTOM TABS) ---
+function MainTabs() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
-      <TouchableOpacity
-        className="p-6 border-b border-gray-200 flex-row items-center bg-gray-50"
-        onPress={() => props.navigation.navigate("Sobre")}
-        activeOpacity={0.7}
-      >
-        <Image
-          source={require("../../assets/logo.png")}
-          className="w-12 h-12 rounded-xl mr-4 bg-gray-200"
-          resizeMode="contain"
-        />
-        <View>
-          <Text className="text-lg font-bold text-primary-dark">
-            Painel Econômico
-          </Text>
-          <Text className="text-xs text-gray-500 font-regular">
-            Construindo Sonhos
-          </Text>
-        </View>
-      </TouchableOpacity>
-
-      <DrawerContentScrollView {...props} contentContainerClassName="pt-2.5">
-        <DrawerItemList {...props} />
-      </DrawerContentScrollView>
-
-      <View
-        className="px-5 border-t border-gray-200 pt-4 bg-gray-50"
-        style={{ paddingBottom: 20 + insets.bottom }}
-      >
-        <TouchableOpacity
-          className="flex-row items-center py-2.5"
-          onPress={() => props.navigation.navigate("Sobre")}
-        >
-          <Ionicons
-            name="information-circle-outline"
-            size={24}
-            color={colors.textSecondary}
-          />
-          <Text className="ml-3 text-sm font-bold text-textSecondary">
-            Sobre o App
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function DrawerNavigator() {
-  return (
-    <Drawer.Navigator
-      initialRouteName="Início"
-      drawerContent={(props) => <CustomDrawerContent {...props} />}
+    <BottomTab.Navigator
+      initialRouteName="Principal"
       screenOptions={{
+        tabBarButton: (props) => (
+          <TouchableOpacity {...(props as any)} activeOpacity={1} />
+        ),
         headerShown: false,
-        drawerType: "front",
-        swipeEnabled: true,
-        swipeEdgeWidth: 100,
-        drawerActiveBackgroundColor: "rgba(0, 173, 239, 0.08)",
-        drawerActiveTintColor: colors.primaryDark,
-        drawerInactiveTintColor: colors.textSecondary,
-        drawerLabelStyle: {
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.inactive,
+        tabBarStyle: {
+          backgroundColor: "white",
+          height: 70 + (Platform.OS === "ios" ? insets.bottom : 0),
+          paddingBottom: Platform.OS === "ios" ? insets.bottom : 10,
+          paddingTop: 10,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          elevation: 10,
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+        },
+        tabBarLabelStyle: {
           fontFamily: "Roboto_700Bold",
-          marginLeft: 0,
+          fontSize: 11,
+          marginTop: 4,
         },
-        drawerItemStyle: {
-          borderRadius: 8,
-          marginHorizontal: 10,
-          marginVertical: 4,
-        },
-        drawerStyle: {
-          width: "78%",
-          backgroundColor: "#FFF",
-        },
-        overlayColor: "rgba(5, 61, 153, 0.4)",
       }}
     >
-      <Drawer.Screen
-        name="Início"
-        component={MainTabScreen}
+      <BottomTab.Screen
+        name="Indicadores"
+        component={IndicatorsTabs}
         options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="home-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "stats-chart" : "stats-chart-outline"}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
-      <Drawer.Screen
+      <BottomTab.Screen
+        name="Principal"
+        component={Home}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              className={`w-12 h-12 rounded-full justify-center items-center ${focused ? "bg-primary/10" : ""}`}
+            >
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={26}
+                color={color}
+              />
+            </View>
+          ),
+        }}
+      />
+      <BottomTab.Screen
         name="Finanças"
-        component={FinancesScreen}
+        component={FinanceTabs}
         options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="wallet-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "wallet" : "wallet-outline"}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
-      <Drawer.Screen
-        name="Open Finance"
-        component={BankIntegration}
-        options={{
-          drawerItemStyle: { display: "none" },
-        }}
-      />
-      <Drawer.Screen
-        name="IA Assist"
-        component={AiAssistant}
-        options={{
-          drawerItemStyle: { display: "none" },
-        }}
-      />
-      <Drawer.Screen
-        name="Favoritos"
-        component={Favorites}
-        options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="star-outline" size={22} color={color} />
-          ),
-        }}
-      />
-      <Drawer.Screen
-        name="Notícias"
-        component={News}
-        options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="newspaper-outline" size={22} color={color} />
-          ),
-        }}
-      />
-      <Drawer.Screen
-        name="Sobre"
-        component={About}
-        options={{
-          drawerItemStyle: { display: "none" },
-        }}
-      />
-    </Drawer.Navigator>
+    </BottomTab.Navigator>
   );
 }
 
-const Stack = createNativeStackNavigator();
-
+// --- ROTAS DE AUTENTICAÇÃO ---
 function AuthRoutes() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: "fade" }}>
       <Stack.Screen name="Login" component={Login} />
       <Stack.Screen name="Register" component={Register} />
     </Stack.Navigator>
   );
 }
 
+// --- ROOT NAVIGATOR ---
 export default function Routes() {
   const token = useAuthStore((state) => state.token);
 
   return (
     <NavigationContainer>
-      {token ? <DrawerNavigator /> : <AuthRoutes />}
+      {token ? (
+        <Stack.Navigator
+          screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+        >
+          <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen name="Notícias" component={News} />
+          <Stack.Screen name="IA Assist" component={AiAssistant} />
+          <Stack.Screen
+            name="Sobre"
+            component={About}
+            options={{ presentation: "modal", animation: "slide_from_bottom" }}
+          />
+        </Stack.Navigator>
+      ) : (
+        <AuthRoutes />
+      )}
     </NavigationContainer>
   );
 }

@@ -114,9 +114,9 @@ export default function AiAssistant() {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1, justifyContent: "space-between" }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 80}
       >
         <FlatList
           data={messages}

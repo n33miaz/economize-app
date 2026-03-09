@@ -6,10 +6,10 @@ import {
   LayoutAnimation,
   RefreshControl,
   ScrollView,
+  ActivityIndicator,
+  Keyboard,
 } from "react-native";
-import { ActivityIndicator } from "react-native";
 import * as Haptics from "expo-haptics";
-import { Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useDebounce } from "../hooks/useDebounce";
@@ -17,7 +17,6 @@ import { colors } from "../theme/colors";
 import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import IndicatorCard from "./IndicatorCard";
 import HighlightCard from "./HighlightCard";
-import DetailsModal from "./DetailsModal";
 import SearchBar from "./SearchBar";
 import Skeleton from "./Skeleton";
 import PageContainer from "./PageContainer";
@@ -25,6 +24,7 @@ import HistoricalChart from "./HistoricalChart";
 import ErrorState from "./ErrorState";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { useIndicatorStore } from "../store/indicatorStore";
+import CustomModal from "./CustomModal";
 
 interface AssetListScreenProps {
   data: Indicator[];
@@ -81,22 +81,6 @@ export default function AssetListScreen({
         item.id.toLowerCase().includes(lowerSearch),
     );
   }, [data, searchText]);
-
-  const displayData = useMemo(() => {
-    if (debouncedSearch.trim().length >= 2) {
-      const localFilter = data.filter(
-        (item) =>
-          item.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-          item.code.toLowerCase().includes(debouncedSearch.toLowerCase()),
-      );
-
-      const combined = [...localFilter, ...searchResults];
-      return Array.from(
-        new Map(combined.map((item) => [item.id, item])).values(),
-      );
-    }
-    return data;
-  }, [data, debouncedSearch, searchResults]);
 
   const onRefresh = useCallback(async () => {
     await fetchIndicators();
@@ -229,7 +213,7 @@ export default function AssetListScreen({
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerClassName="pb-32 pt-4 px-5"
-          ItemSeparatorComponent={() => <View style={{ height: 16 }} />} 
+          ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           ListHeaderComponent={renderHeader}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -262,15 +246,15 @@ export default function AssetListScreen({
       )}
 
       {selectedItem && (
-        <DetailsModal
-          visible={modalVisible}
-          onClose={handleCloseModal}
-          title={selectedItem.name}
-          currencyCode={
-            isCurrencyData(selectedItem) ? selectedItem.code : undefined
-          }
-        >
-          <View>
+        <CustomModal visible={modalVisible} onClose={handleCloseModal}>
+          <View className="p-6">
+            <View className="w-14 h-1.5 bg-slate-200 rounded-full self-center mb-6" />
+            <View className="items-center justify-center mb-6 border-b border-slate-100 pb-4">
+              <Text className="text-2xl font-bold text-slate-800 text-center">
+                {selectedItem.name}
+              </Text>
+            </View>
+
             {isCurrencyData(selectedItem) ? (
               <View className="flex-row justify-around items-center mb-8 bg-gray-50 p-5 rounded-2xl border border-gray-100">
                 <View className="items-center">
@@ -322,7 +306,7 @@ export default function AssetListScreen({
               <HistoricalChart currencyCode={selectedItem.code} />
             )}
           </View>
-        </DetailsModal>
+        </CustomModal>
       )}
     </PageContainer>
   );
