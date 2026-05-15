@@ -7,12 +7,16 @@ import {
   BackHandler,
   Modal,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
+
+import { darkTheme } from "../theme/colors";
+import { radius } from "../theme/ds";
 
 interface CustomModalProps {
   visible: boolean;
@@ -25,6 +29,7 @@ export default function CustomModal({
   onClose,
   children,
 }: CustomModalProps) {
+  const insets = useSafeAreaInsets();
   const [showModal, setShowModal] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(500);
@@ -97,9 +102,30 @@ export default function CustomModal({
         {/* Modal Content */}
         <View className="flex-1 justify-end" pointerEvents="box-none">
           <Animated.View
-            className="bg-white rounded-t-[32px] max-h-[90%]"
-            style={modalAnimatedStyle}
+            style={[
+              {
+                backgroundColor: darkTheme.background.surface,
+                borderTopLeftRadius: radius["3xl"],
+                borderTopRightRadius: radius["3xl"],
+                maxHeight: "90%",
+                paddingBottom: insets.bottom,
+                borderTopWidth: 1,
+                borderTopColor: darkTheme.border.subtle,
+              },
+              modalAnimatedStyle,
+            ]}
           >
+            <View
+              style={{
+                alignSelf: "center",
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: darkTheme.border.default,
+                marginTop: 12,
+                marginBottom: 4,
+              }}
+            />
             {children}
           </Animated.View>
         </View>
