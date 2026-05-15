@@ -15,6 +15,12 @@ import Animated, {
 import { colors } from "../theme/colors";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
+import {
+  ephemeralTransition,
+  fadeTransition,
+  modalLikeTransition,
+  slideRightTransition,
+} from "./transitions";
 
 // Telas
 import Login from "../screens/auth/Login";
@@ -233,7 +239,7 @@ function MainTabs() {
 // --- ROTAS DE AUTENTICAÇÃO ---
 function AuthRoutes() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: "fade" }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, ...fadeTransition }}>
       <Stack.Screen name="Login" component={Login} />
       <Stack.Screen name="Register" component={Register} />
     </Stack.Navigator>
@@ -248,15 +254,23 @@ export default function Routes() {
     <NavigationContainer>
       {token ? (
         <Stack.Navigator
-          screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+          screenOptions={{ headerShown: false, ...slideRightTransition }}
         >
           <Stack.Screen name="Main" component={MainTabs} />
-          <Stack.Screen name="Notícias" component={News} />
-          <Stack.Screen name="IA Assist" component={AiAssistant} />
+          <Stack.Screen
+            name="Notícias"
+            component={News}
+            options={ephemeralTransition}
+          />
+          <Stack.Screen
+            name="IA Assist"
+            component={AiAssistant}
+            options={modalLikeTransition}
+          />
           <Stack.Screen
             name="Sobre"
             component={About}
-            options={{ presentation: "modal", animation: "slide_from_bottom" }}
+            options={modalLikeTransition}
           />
         </Stack.Navigator>
       ) : (
