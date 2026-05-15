@@ -7,12 +7,14 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { colors, darkTheme } from "../theme/colors";
+import { ds } from "../theme/ds";
 
 interface IndicatorCardProps {
   name: string;
   id: string;
   value: number | null | undefined;
-  variation: number | null | undefined; 
+  variation: number | null | undefined;
   isFavorite: boolean;
   onPress: () => void;
   onToggleFavorite: (id: string) => void;
@@ -38,8 +40,10 @@ const IndicatorCard = React.memo(
     const variationInfo = useMemo(() => {
       const isPositive = safeVariation >= 0;
       return {
-        color: isPositive ? "text-green-600" : "text-red-500",
-        bgColor: isPositive ? "bg-green-100" : "bg-red-100",
+        color: isPositive ? colors.success : colors.danger,
+        bgColor: isPositive
+          ? darkTheme.semantic.successMuted
+          : darkTheme.semantic.dangerMuted,
         icon: isPositive ? "caret-up" : "caret-down",
         formatted: `${isPositive ? "+" : ""}${safeVariation.toFixed(2)}%`,
       };
@@ -68,21 +72,52 @@ const IndicatorCard = React.memo(
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           activeOpacity={0.8}
-          className="bg-white rounded-3xl p-5 shadow-md shadow-gray-200/50 border border-gray-100/80"
+          style={{
+            padding: ds.spacing[5],
+            borderRadius: ds.radius["3xl"],
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.cardBackground,
+            ...ds.shadow.md,
+          }}
         >
-          <View className="flex-row justify-between items-start mb-4">
-            <View className="flex-row items-center flex-1 mr-2">
-              <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center mr-3">
-                <Ionicons name="cash-outline" size={20} color="#00ADEF" />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: ds.spacing[4],
+            }}
+          >
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                marginRight: ds.spacing[2],
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  marginRight: ds.spacing[3],
+                  borderRadius: ds.radius.xl,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: darkTheme.accent.neonMuted,
+                }}
+              >
+                <Ionicons name="cash-outline" size={20} color={colors.primary} />
               </View>
-              <View className="flex-1">
+              <View style={{ flex: 1 }}>
                 <Text
-                  className="text-gray-900 font-bold text-base"
+                  style={[ds.typography.bodyLg, { color: colors.textPrimary }]}
                   numberOfLines={1}
                 >
                   {displayName}
                 </Text>
-                <Text className="text-gray-400 text-xs font-regular">
+                <Text style={[ds.typography.bodySm, { color: colors.textSecondary }]}>
                   {symbol} - BRL
                 </Text>
               </View>
@@ -93,39 +128,76 @@ const IndicatorCard = React.memo(
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onToggleFavorite(id);
               }}
-              className="p-2 -mr-2 -mt-2"
+              style={{
+                marginRight: -ds.spacing[2],
+                marginTop: -ds.spacing[2],
+                padding: ds.spacing[2],
+              }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons
                 name={isFavorite ? "star" : "star-outline"}
                 size={22}
-                color={isFavorite ? "#FBBA00" : "#CBD5E1"}
+                color={isFavorite ? colors.warning : colors.inactive}
               />
             </TouchableOpacity>
           </View>
 
-          <View className="h-[1px] bg-gray-50 w-full mb-4" />
+          <View
+            style={{
+              width: "100%",
+              height: 1,
+              marginBottom: ds.spacing[4],
+              backgroundColor: darkTheme.border.subtle,
+            }}
+          />
 
-          <View className="flex-row justify-between items-end">
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+            }}
+          >
             <View>
-              <Text className="text-gray-400 text-xs mb-1 font-medium">
+              <Text
+                style={[
+                  ds.typography.bodySm,
+                  { color: colors.textSecondary, marginBottom: ds.spacing[1] },
+                ]}
+              >
                 Cotação Atual
               </Text>
-              <Text className="text-2xl font-bold text-slate-800 tracking-tight">
+              <Text style={[ds.typography.numericLg, { color: colors.textPrimary }]}>
                 {symbol} {safeValue.toFixed(2)}
               </Text>
             </View>
 
             <View
-              className={`flex-row items-center px-2.5 py-1.5 rounded-lg ${variationInfo.bgColor}`}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: ds.spacing[2],
+                paddingVertical: ds.spacing[1],
+                borderRadius: ds.radius.lg,
+                backgroundColor: variationInfo.bgColor,
+              }}
             >
               <Ionicons
                 name={variationInfo.icon as any}
                 size={12}
-                color={safeVariation >= 0 ? "#16A34A" : "#EF4444"}
-                style={{ marginRight: 4 }}
+                color={variationInfo.color}
+                style={{ marginRight: ds.spacing[1] }}
               />
-              <Text className={`${variationInfo.color} font-bold text-xs`}>
+              <Text
+                style={[
+                  ds.typography.bodySm,
+                  {
+                    color: variationInfo.color,
+                    fontFamily: "Roboto_700Bold",
+                  },
+                ]}
+              >
                 {variationInfo.formatted}
               </Text>
             </View>

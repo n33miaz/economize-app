@@ -17,12 +17,8 @@ export default function PageContainer({ children, style }: PageContainerProps) {
   const translateY = useSharedValue(20);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 500 });
-    translateY.value = withSpring(0, {
-      damping: 20,
-      stiffness: 90,
-      mass: 1,
-    });
+    opacity.value = withTiming(1, { duration: 350 });
+    translateY.value = withTiming(0, { duration: 350 });
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({

@@ -1,11 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   BackHandler,
-  StyleSheet,
+  Modal,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -25,43 +25,29 @@ export default function CustomModal({
   onClose,
   children,
 }: CustomModalProps) {
+  const [showModal, setShowModal] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(500);
 
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
-
-  const modalAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: modalTranslateY.value }],
-  }));
-
-  const animateIn = () => {
-    backdropOpacity.value = withTiming(1, { duration: 300 });
-    modalTranslateY.value = withTiming(0, { duration: 300 });
-  };
-
-  const animateOut = (callback: () => void) => {
-    backdropOpacity.value = withTiming(0, { duration: 300 });
-    modalTranslateY.value = withTiming(500, { duration: 300 }, () => {
-      runOnJS(callback)();
-    });
-  };
-
   useEffect(() => {
     if (visible) {
-      animateIn();
+      setShowModal(true);
+      requestAnimationFrame(() => {
+        backdropOpacity.value = withTiming(1, { duration: 300 });
+        modalTranslateY.value = withTiming(0, { duration: 300 });
+      });
+    } else {
+      backdropOpacity.value = withTiming(0, { duration: 300 });
+      modalTranslateY.value = withTiming(500, { duration: 300 }, () => {
+        runOnJS(setShowModal)(false);
+      });
     }
   }, [visible]);
-
-  const handleClose = () => {
-    animateOut(onClose);
-  };
 
   useEffect(() => {
     const backAction = () => {
       if (visible) {
-        handleClose();
+        onClose();
         return true;
       }
       return false;
@@ -73,14 +59,25 @@ export default function CustomModal({
     );
 
     return () => backHandler.remove();
-  }, [visible]);
+  }, [visible, onClose]);
 
-  if (!visible) {
-    return null;
-  }
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  const modalAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: modalTranslateY.value }],
+  }));
+
+  if (!showModal) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} className="z-50">
+    <Modal
+      transparent
+      visible={showModal}
+      onRequestClose={onClose}
+      animationType="none"
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
@@ -90,7 +87,11 @@ export default function CustomModal({
           className="absolute inset-0 bg-slate-900/60"
           style={backdropAnimatedStyle}
         >
-          <TouchableOpacity className="flex-1" onPress={handleClose} />
+          <TouchableOpacity
+            className="flex-1"
+            onPress={onClose}
+            activeOpacity={1}
+          />
         </Animated.View>
 
         {/* Modal Content */}
@@ -103,6 +104,6 @@ export default function CustomModal({
           </Animated.View>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </Modal>
   );
 }

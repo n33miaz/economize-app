@@ -247,7 +247,11 @@ export default function AssetListScreen({
 
       {selectedItem && (
         <CustomModal visible={modalVisible} onClose={handleCloseModal}>
-          <View className="p-6">
+          <ScrollView
+            contentContainerClassName="p-6"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             <View className="w-14 h-1.5 bg-slate-200 rounded-full self-center mb-6" />
             <View className="items-center justify-center mb-6 border-b border-slate-100 pb-4">
               <Text className="text-2xl font-bold text-slate-800 text-center">
@@ -305,7 +309,7 @@ export default function AssetListScreen({
             {isCurrencyData(selectedItem) && (
               <HistoricalChart currencyCode={selectedItem.code} />
             )}
-          </View>
+          </ScrollView>
         </CustomModal>
       )}
     </PageContainer>

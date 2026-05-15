@@ -51,8 +51,10 @@ export default function DetailsModal({
       setShowModal(true);
       setConversionResult(null);
       setAmount("100");
-      translateY.value = withSpring(0, { damping: 20, stiffness: 90 });
-      opacity.value = withTiming(1, { duration: 300 });
+      requestAnimationFrame(() => {
+        translateY.value = withTiming(0, { duration: 350 });
+        opacity.value = withTiming(1, { duration: 350 });
+      });
     } else {
       translateY.value = withTiming(SCREEN_HEIGHT, { duration: 300 }, () => {
         runOnJS(setShowModal)(false);
