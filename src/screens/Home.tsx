@@ -84,7 +84,7 @@ export default function Home() {
       return indicators.filter((item) => favorites.includes(item.id));
     }
 
-    const defaultCodes = ["USD", "EUR", "GBP", "BTC", "IBOVESPA"];
+    const defaultCodes = ["USD", "CDI", "EUR", "BTC", "IBOVESPA"];
     const seen = new Set();
 
     return indicators.filter((item) => {
@@ -197,25 +197,25 @@ export default function Home() {
         {/* Quick Actions */}
         <View className="flex-row justify-between px-6 mb-8">
           <QuickAction
-            icon="wallet-outline"
-            label="Carteira"
+            icon="trending-up-outline"
+            label="Investimentos"
             onPress={() => navigation.navigate("Finanças" as never)}
           />
           <QuickAction
             icon="receipt-outline"
-            label="Extrato"
+            label="Extratos"
             onPress={() => navigation.navigate("Finanças" as never)}
+          />
+          <QuickAction
+            icon="document-text-outline"
+            label="Relatórios"
+            onPress={() => navigation.navigate("Relatórios" as never)}
           />
           <QuickAction
             icon="sparkles-outline"
             label="Assistente"
             onPress={() => navigation.navigate("IA Assist" as never)}
             isNew
-          />
-          <QuickAction
-            icon="swap-horizontal-outline"
-            label="Câmbio"
-            onPress={() => navigation.navigate("Indicadores" as never)}
           />
         </View>
 
