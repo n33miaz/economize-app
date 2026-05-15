@@ -25,6 +25,7 @@ import Skeleton from "../components/Skeleton";
 import ScreenHeader from "../components/ScreenHeader";
 import CustomModal from "../components/CustomModal";
 import HistoricalChart from "../components/HistoricalChart";
+import AssistantFAB from "../components/AssistantFAB";
 
 export default function Home() {
   const navigation = useNavigation();
@@ -361,6 +362,8 @@ export default function Home() {
           </ScrollView>
         </CustomModal>
       )}
+
+      <AssistantFAB />
     </View>
   );
 }
