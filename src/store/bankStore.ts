@@ -35,7 +35,14 @@ export const useBankStore = create<BankState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/x-ofx", "text/*"],
+        type: [
+          "application/x-ofx",
+          "text/csv",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/pdf",
+          "text/plain",
+          "application/octet-stream",
+        ],
         copyToCacheDirectory: true,
       });
 
@@ -45,8 +52,12 @@ export const useBankStore = create<BankState>((set, get) => ({
       }
 
       const file = result.assets[0];
-      if (!file.name.toLowerCase().endsWith(".ofx")) {
-        throw new Error("Formato inválido. Selecione um arquivo .OFX");
+      const supported = [".ofx", ".csv", ".xlsx", ".xls", ".pdf", ".txt"];
+      const lower = file.name.toLowerCase();
+      if (!supported.some((ext) => lower.endsWith(ext))) {
+        throw new Error(
+          "Formato não suportado. Use OFX, CSV, XLSX, PDF ou TXT.",
+        );
       }
 
       const response = await uploadBankStatement(file);
