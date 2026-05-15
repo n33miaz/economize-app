@@ -11,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 
-import { Indicator } from "../services/api";
+import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import { colors } from "../theme/colors";
 import useNewsData from "../hooks/useNewsData";
 import { useAuthStore } from "../store/authStore";
@@ -23,13 +23,13 @@ import { useFavoritesStore } from "../store/favoritesStore";
 import HighlightCard from "../components/HighlightCard";
 import Skeleton from "../components/Skeleton";
 import ScreenHeader from "../components/ScreenHeader";
-
-const HIGHLIGHT_ITEMS = ["USD", "EUR", "BTC", "IBOVESPA"];
+import CustomModal from "../components/CustomModal";
+import HistoricalChart from "../components/HistoricalChart";
 
 export default function Home() {
   const navigation = useNavigation();
   const [showBalance, setShowBalance] = useState(true);
-   const { userName } = useAuthStore(); 
+  const { userName } = useAuthStore();
 
   const {
     indicators,
@@ -73,16 +73,28 @@ export default function Home() {
 
   const totalNetWorth = bankBalance + walletBalance;
 
+  const [selectedIndicator, setSelectedIndicator] = useState<Indicator | null>(
+    null,
+  );
+
   // Lógica de Favoritos Dinâmicos
   const highlights: Indicator[] = useMemo(() => {
     if (favorites.length > 0) {
       return indicators.filter((item) => favorites.includes(item.id));
     }
-    return indicators.filter(
-      (item) =>
-        HIGHLIGHT_ITEMS.includes(item.code) ||
-        HIGHLIGHT_ITEMS.includes(item.name),
-    );
+
+    const defaultCodes = ["USD", "EUR", "GBP", "BTC", "IBOVESPA"];
+    const seen = new Set();
+
+    return indicators.filter((item) => {
+      const match =
+        defaultCodes.includes(item.code) || defaultCodes.includes(item.name);
+      if (match && !seen.has(item.code)) {
+        seen.add(item.code);
+        return true;
+      }
+      return false;
+    });
   }, [indicators, favorites]);
 
   const recentNews = useMemo(() => (news ? news.slice(0, 3) : []), [news]);
@@ -93,7 +105,7 @@ export default function Home() {
     setShowBalance(!showBalance);
   };
 
-  const firstName = userName ? userName.split(" ")[0] : "Investidor"; 
+  const firstName = userName ? userName.split(" ")[0] : "Investidor";
 
   return (
     <View className="flex-1 bg-background">
@@ -112,13 +124,33 @@ export default function Home() {
         }
       >
         {/* Patrimônio */}
-        <View 
+        <View
           className="mx-5 mb-8 bg-primaryDark rounded-3xl p-6 shadow-lg shadow-blue-900/20 overflow-hidden"
-          style={{ position: 'relative' }}
+          style={{ position: "relative" }}
         >
           {/* Elementos decorativos de fundo */}
-          <View style={{ position: 'absolute', right: -40, top: -40, width: 128, height: 128, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 64 }} />
-          <View style={{ position: 'absolute', left: -30, bottom: -30, width: 96, height: 96, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 48 }} />
+          <View
+            style={{
+              position: "absolute",
+              right: -40,
+              top: -40,
+              width: 128,
+              height: 128,
+              backgroundColor: "rgba(255,255,255,0.05)",
+              borderRadius: 64,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              left: -30,
+              bottom: -30,
+              width: 96,
+              height: 96,
+              backgroundColor: "rgba(255,255,255,0.05)",
+              borderRadius: 48,
+            }}
+          />
 
           <View className="flex-row justify-between items-center mb-4">
             <View className="flex-row items-center">
@@ -130,7 +162,10 @@ export default function Home() {
               </Text>
             </View>
             <View className="flex-row gap-4">
-              <TouchableOpacity onPress={toggleBalance} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity
+                onPress={toggleBalance}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons
                   name={showBalance ? "eye-outline" : "eye-off-outline"}
                   size={22}
@@ -139,7 +174,7 @@ export default function Home() {
               </TouchableOpacity>
             </View>
           </View>
-          
+
           <Text className="text-white text-4xl font-bold tracking-tight mb-3">
             {showBalance ? `R$ ${totalNetWorth.toFixed(2)}` : "R$ •••••••"}
           </Text>
@@ -148,9 +183,13 @@ export default function Home() {
             <View className="bg-green-500/20 px-2 py-1 rounded-md flex-row items-center">
               <Ionicons name="trending-up" size={14} color="#4ADE80" />
               {/* TODO: Adicionar lógica real */}
-              <Text className="text-green-400 text-xs font-bold ml-1">+2.4%</Text> 
+              <Text className="text-green-400 text-xs font-bold ml-1">
+                +2.4%
+              </Text>
             </View>
-            <Text className="text-white/60 text-xs ml-2">em relação ao mês passado</Text>
+            <Text className="text-white/60 text-xs ml-2">
+              em relação ao mês passado
+            </Text>
           </View>
         </View>
 
@@ -218,6 +257,7 @@ export default function Home() {
                           ? "stats-chart"
                           : "cash-outline"
                     }
+                    onPress={() => setSelectedIndicator(item)}
                   />
                 ))}
           </ScrollView>
@@ -265,6 +305,62 @@ export default function Home() {
           ))}
         </View>
       </ScrollView>
+
+      {/* Modal de Detalhes do Indicador na Home */}
+      {selectedIndicator && (
+        <CustomModal
+          visible={!!selectedIndicator}
+          onClose={() => setSelectedIndicator(null)}
+        >
+          <ScrollView
+            contentContainerClassName="p-6"
+            showsVerticalScrollIndicator={false}
+          >
+            <View className="w-14 h-1.5 bg-slate-200 rounded-full self-center mb-6" />
+            <View className="items-center justify-center mb-6 border-b border-slate-100 pb-4">
+              <Text className="text-2xl font-bold text-slate-800 text-center">
+                {selectedIndicator.name}
+              </Text>
+            </View>
+
+            {isCurrencyData(selectedIndicator) ? (
+              <View className="flex-row justify-around items-center mb-8 bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                <View className="items-center">
+                  <Text className="text-xs text-gray-500 mb-1 font-bold uppercase tracking-wider">
+                    Compra
+                  </Text>
+                  <Text className="text-2xl font-bold text-slate-800">
+                    R$ {selectedIndicator.buy.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View className="items-center mb-6">
+                <Text className="text-4xl font-bold text-slate-800 tracking-tighter">
+                  {(selectedIndicator.points || 0).toLocaleString("pt-BR")} pts
+                </Text>
+              </View>
+            )}
+
+            <View className="items-center mb-6">
+              <View
+                className={`px-4 py-2 rounded-full ${selectedIndicator.variation >= 0 ? "bg-green-100" : "bg-red-100"}`}
+              >
+                <Text
+                  className={`text-lg font-bold ${selectedIndicator.variation >= 0 ? "text-green-700" : "text-red-600"}`}
+                >
+                  {selectedIndicator.variation > 0 ? "▲" : "▼"}{" "}
+                  {Math.abs(selectedIndicator.variation).toFixed(2)}% (Hoje)
+                </Text>
+              </View>
+            </View>
+
+            {isCurrencyData(selectedIndicator) && (
+              <HistoricalChart currencyCode={selectedIndicator.code} />
+            )}
+          </ScrollView>
+        </CustomModal>
+      )}
     </View>
   );
 }
