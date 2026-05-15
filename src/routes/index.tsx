@@ -35,6 +35,7 @@ import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
 import Settings from "../screens/Settings";
+import Reports from "../screens/Reports";
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -282,6 +283,11 @@ export default function Routes() {
           <Stack.Screen
             name="Settings"
             component={Settings}
+            options={ephemeralTransition}
+          />
+          <Stack.Screen
+            name="Relatórios"
+            component={Reports}
             options={ephemeralTransition}
           />
         </Stack.Navigator>
