@@ -37,13 +37,7 @@ export default function AiAssistant() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [inputText, sendMessage]);
 
-  const renderMessage = ({
-    item,
-    index,
-  }: {
-    item: ChatMessage;
-    index: number;
-  }) => {
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.isUser;
 
     return (
@@ -64,7 +58,7 @@ export default function AiAssistant() {
             <View className="flex-row items-center mb-1">
               <Ionicons name="sparkles" size={14} color={colors.primary} />
               <Text className="text-primary font-bold text-xs ml-1">
-                Painel AI
+                Nino
               </Text>
             </View>
           )}
@@ -95,28 +89,57 @@ export default function AiAssistant() {
     );
   };
 
+  // Botão de limpar histórico 
+  const renderFooter = () => {
+    if (messages.length <= 1) return null;
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.selectionAsync();
+          clearHistory();
+        }}
+        className="items-center py-6"
+        activeOpacity={0.7}
+      >
+        <View className="bg-gray-100 px-4 py-2 rounded-full flex-row items-center border border-gray-200">
+          <Ionicons
+            name="trash-outline"
+            size={16}
+            color={colors.textSecondary}
+          />
+          <Text className="text-xs font-bold text-textSecondary ml-2">
+            Limpar histórico de conversa
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Indicador de carregamento logo acima do input
+  const renderHeader = () => {
+    if (!isLoading) return null;
+    return (
+      <View className="py-2 self-start flex-row items-center">
+        <View className="bg-white p-3 rounded-2xl rounded-tl-sm border border-gray-100 shadow-sm flex-row items-center">
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text className="text-gray-400 text-xs ml-2 italic">
+            Carregando...
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <PageContainer>
       <ScreenHeader
         title="Assistente IA"
-        subtitle="Análise financeira inteligente"
-        rightAction={
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.selectionAsync();
-              clearHistory();
-            }}
-            className="bg-white/20 p-2 rounded-lg"
-          >
-            <Ionicons name="trash-outline" size={20} color="#FFF" />
-          </TouchableOpacity>
-        }
+        subtitle="Análise Financeira Inteligente"
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1, justifyContent: "space-between" }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 80}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
       >
         <FlatList
           data={messages}
@@ -125,22 +148,16 @@ export default function AiAssistant() {
           inverted
           contentContainerClassName="px-5 py-4"
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={renderFooter}
+          ListHeaderComponent={renderHeader}
         />
-
-        {isLoading && (
-          <View className="px-5 py-2 self-start flex-row items-center">
-            <View className="bg-white p-3 rounded-2xl rounded-tl-sm border border-gray-100 shadow-sm flex-row items-center">
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text className="text-gray-400 text-xs ml-2 italic">
-                Analisando seus dados...
-              </Text>
-            </View>
-          </View>
-        )}
 
         <View
           className="px-5 py-3 bg-white border-t border-gray-100 flex-row items-end"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+          style={{
+            paddingBottom:
+              Platform.OS === "ios" ? Math.max(insets.bottom, 12) : 12,
+          }}
         >
           <TextInput
             className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-4 pt-3 pb-3 text-base text-slate-800 max-h-32 min-h-[48px]"
