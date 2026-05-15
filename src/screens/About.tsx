@@ -41,7 +41,7 @@ export default function About() {
 
   return (
     <PageContainer>
-      <ScreenHeader title="Sobre o App" subtitle="Informações do Projeto" />
+      <ScreenHeader title="Sobre o Economize!" subtitle="Informações do Projeto" />
 
       <ScrollView contentContainerClassName="p-5 pb-10 items-center">
         <Animated.View
@@ -57,7 +57,7 @@ export default function About() {
               />
             </View>
             <Text className="text-2xl font-bold text-primaryDark">
-              Painel Econômico
+              Economize!
             </Text>
             <Text className="text-sm text-gray-500 font-regular mt-1">
               v{Constants.expoConfig?.version || "1.0.0"}
@@ -119,7 +119,7 @@ export default function About() {
         </Animated.View>
 
         <Text className="mt-6 text-xs text-gray-400 text-center">
-          © 2026 Painel Econômico. Todos os direitos reservados.
+          © 2026 Economize! Todos os direitos reservados.
         </Text>
       </ScrollView>
     </PageContainer>

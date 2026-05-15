@@ -1,27 +1,27 @@
 {
   "expo": {
-    "name": "Painel Econômico",
-    "slug": "painel-economico-br",
-    "scheme": "painel-economico-br",
+    "name": "Economize!",
+    "slug": "economize",
+    "scheme": "economize",
     "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/logo-splash.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "jsEngine": "hermes",
     "splash": {
       "image": "./assets/logo-splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#0A0A0A"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.n33miaz.paineleconomicobr"
+      "bundleIdentifier": "com.n33miaz.economize"
     },
     "android": {
-      "package": "com.n33miaz.paineleconomicobr",
+      "package": "com.n33miaz.economize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo-splash.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#0A0A0A"
       }
     },
     "web": {

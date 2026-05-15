@@ -1,6 +1,6 @@
-# Painel Econômico - Mobile App
+# Economize! - Mobile App
 
-Aplicativo de monitoramento financeiro desenvolvido com **React Native** e **Expo**. O projeto simula um ambiente corporativo de fintech, oferecendo cotações em tempo real, gestão de carteira de investimentos e notícias do mercado, consumindo uma API BFF (Backend for Frontend) desenvolvida em Java Spring Boot.
+Aplicativo de finanças pessoais desenvolvido com **React Native** e **Expo**. O Economize! combina cotações em tempo real, carteira de investimentos, extratos bancários, assistente financeiro com IA e notícias de mercado, consumindo uma API BFF desenvolvida em Java Spring Boot.
 
 > **Projeto desenvolvido com foco em performance, arquitetura escalável e Clean Code.**
 
@@ -22,7 +22,7 @@ Este projeto utiliza uma stack moderna focada no ecossistema React Native:
 - **Gerenciamento de Estado:** Zustand (Persistência local e store global).
 - **Navegação:** React Navigation (Drawer, Bottom Tabs e Material Top Tabs).
 - **Requisições HTTP:** Axios (com tratamento de erros e timeouts).
-- **UI/UX:** Stylesheet nativo, Reanimated (animações fluidas), Vector Icons.
+- **UI/UX:** NativeWind, tokens tipados, Reanimated (animações fluidas), Vector Icons.
 - **Gráficos:** React Native Chart Kit (Visualização de dados históricos e alocação).
 - **Armazenamento Local:** Async Storage (Persistência de carteira e favoritos).
 

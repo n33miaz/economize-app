@@ -40,7 +40,7 @@ export default function Login({ navigation }: any) {
           />
         </View>
         <Text className="text-3xl font-bold text-primaryDark">
-          Painel Econômico
+          Economize!
         </Text>
         <Text className="text-gray-500 mt-2">
           Acesse sua conta para continuar
