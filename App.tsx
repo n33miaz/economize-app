@@ -37,8 +37,8 @@ export default function App() {
       try {
         if (Platform.OS === "android") {
           try {
-            await NavigationBar.setBackgroundColorAsync("#FFFFFF");
-            await NavigationBar.setButtonStyleAsync("dark");
+            await NavigationBar.setBackgroundColorAsync("#0A0A0A");
+            await NavigationBar.setButtonStyleAsync("light");
           } catch (e) {
             console.log("Erro ao configurar NavigationBar:", e);
           }
@@ -74,7 +74,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <StatusBar style="light" backgroundColor="#053D99" />
+        <StatusBar style="light" backgroundColor="#0A0A0A" />
         <Routes />
         <Toast />
       </GestureHandlerRootView>
