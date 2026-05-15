@@ -101,7 +101,7 @@ export default function ScreenHeader({
                 alignItems: "center",
                 justifyContent: "center",
               }}
-              onPress={() => navigation.navigate("Sobre" as never)}
+              onPress={() => navigation.navigate("Profile" as never)}
             >
               <Ionicons
                 name="person"

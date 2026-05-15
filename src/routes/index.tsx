@@ -33,6 +33,7 @@ import About from "../screens/About";
 import Wallet from "../screens/Wallet";
 import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
+import Profile from "../screens/Profile";
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -271,6 +272,11 @@ export default function Routes() {
             name="Sobre"
             component={About}
             options={modalLikeTransition}
+          />
+          <Stack.Screen
+            name="Profile"
+            component={Profile}
+            options={ephemeralTransition}
           />
         </Stack.Navigator>
       ) : (
