@@ -11,10 +11,10 @@ const getBaseUrl = () => {
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const ip = hostUri.split(":")[0];
-    return `http://${ip}:8080/api`;
+    return `http://${ip}:8080/api/v1`;
   }
 
-  return "https://level-belinda-neemias-8be5fba4.koyeb.app/api";
+  return "https://level-belinda-neemias-8be5fba4.koyeb.app/api/v1";
 };
 
 const api = axios.create({
