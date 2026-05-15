@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Routes from "./src/routes";
 import Toast from "./src/components/Toast";
+import BiometricGate from "./src/components/BiometricGate";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -75,7 +76,9 @@ export default function App() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
         <StatusBar style="light" backgroundColor="#0A0A0A" />
-        <Routes />
+        <BiometricGate>
+          <Routes />
+        </BiometricGate>
         <Toast />
       </GestureHandlerRootView>
     </SafeAreaProvider>
