@@ -6,6 +6,11 @@ import { NavigationContainer } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Platform, View, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 
 import { colors } from "../theme/colors";
 import { useAuthStore } from "../store/authStore";
@@ -87,6 +92,69 @@ function FinanceTabs() {
   );
 }
 
+function AnimatedTabIcon({ activeName, inactiveName, focused, size }: any) {
+  const progress = useSharedValue(focused ? 1 : 0);
+
+  React.useEffect(() => {
+    progress.value = withTiming(focused ? 1 : 0, { duration: 300 });
+  }, [focused]);
+
+  const activeStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    position: "absolute",
+  }));
+
+  const inactiveStyle = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+  }));
+
+  return (
+    <View className="justify-center items-center">
+      <Animated.View style={inactiveStyle}>
+        <Ionicons name={inactiveName} size={size} color={colors.inactive} />
+      </Animated.View>
+      <Animated.View style={activeStyle}>
+        <Ionicons name={activeName} size={size} color={colors.primary} />
+      </Animated.View>
+    </View>
+  );
+}
+
+function HomeTabIcon({ focused, size }: any) {
+  const progress = useSharedValue(focused ? 1 : 0);
+
+  React.useEffect(() => {
+    progress.value = withTiming(focused ? 1 : 0, { duration: 500 });
+  }, [focused]);
+
+  const bgStyle = useAnimatedStyle(() => ({
+    backgroundColor: `rgba(0, 174, 239, ${progress.value * 0.1})`,
+  }));
+
+  const activeStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    position: "absolute",
+  }));
+
+  const inactiveStyle = useAnimatedStyle(() => ({
+    opacity: 2 - progress.value,
+  }));
+
+  return (
+    <Animated.View
+      className="w-12 h-12 rounded-full justify-center items-center"
+      style={bgStyle}
+    >
+      <Animated.View style={inactiveStyle}>
+        <Ionicons name="home-outline" size={size} color={colors.inactive} />
+      </Animated.View>
+      <Animated.View style={activeStyle}>
+        <Ionicons name="home" size={size} color={colors.primary} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 // --- NAVEGAÇÃO PRINCIPAL (BOTTOM TABS) ---
 function MainTabs() {
   const insets = useSafeAreaInsets();
@@ -95,6 +163,7 @@ function MainTabs() {
     <BottomTab.Navigator
       initialRouteName="Principal"
       screenOptions={{
+        animation: "fade",
         tabBarButton: (props) => (
           <TouchableOpacity {...(props as any)} activeOpacity={1} />
         ),
@@ -124,11 +193,12 @@ function MainTabs() {
         name="Indicadores"
         component={IndicatorsTabs}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "stats-chart" : "stats-chart-outline"}
+          tabBarIcon: ({ focused }) => (
+            <AnimatedTabIcon
+              activeName="stats-chart"
+              inactiveName="stats-chart-outline"
+              focused={focused}
               size={24}
-              color={color}
             />
           ),
         }}
@@ -137,16 +207,8 @@ function MainTabs() {
         name="Principal"
         component={Home}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <View
-              className={`w-12 h-12 rounded-full justify-center items-center ${focused ? "bg-primary/10" : ""}`}
-            >
-              <Ionicons
-                name={focused ? "home" : "home-outline"}
-                size={26}
-                color={color}
-              />
-            </View>
+          tabBarIcon: ({ focused }) => (
+            <HomeTabIcon focused={focused} size={26} />
           ),
         }}
       />
@@ -154,11 +216,12 @@ function MainTabs() {
         name="Finanças"
         component={FinanceTabs}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "wallet" : "wallet-outline"}
+          tabBarIcon: ({ focused }) => (
+            <AnimatedTabIcon
+              activeName="wallet"
+              inactiveName="wallet-outline"
+              focused={focused}
               size={24}
-              color={color}
             />
           ),
         }}
