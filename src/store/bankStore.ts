@@ -5,6 +5,7 @@ import {
   uploadBankStatement,
 } from "../services/api";
 import * as DocumentPicker from "expo-document-picker";
+import { calculateBankMetrics } from "../utils/bankMetrics";
 
 interface BankState {
   transactions: BankTransaction[];
@@ -71,17 +72,5 @@ export const useBankStore = create<BankState>((set, get) => ({
     }
   },
 
-  calculateMetrics: () => {
-    const { transactions } = get();
-    return transactions.reduce(
-      (acc, curr) => {
-        const val = curr.amount;
-        if (curr.type === "CREDIT") acc.income += val;
-        else acc.expense += Math.abs(val);
-        acc.total += val;
-        return acc;
-      },
-      { income: 0, expense: 0, total: 0 },
-    );
-  },
+  calculateMetrics: () => calculateBankMetrics(get().transactions),
 }));

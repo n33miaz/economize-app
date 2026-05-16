@@ -28,7 +28,7 @@ describe("IndicatorCard Component", () => {
 
   it("deve exibir a variação com a cor correta (verde para positivo)", () => {
     const { getByText } = render(<IndicatorCard {...mockProps} />);
-    const variationText = getByText("1.50%");
+    const variationText = getByText("+1.50%");
 
     expect(variationText).toBeTruthy();
   });
