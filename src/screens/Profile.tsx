@@ -6,11 +6,22 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ChevronRight,
+  FileText,
+  Info,
+  LogOut,
+  ReceiptText,
+  Settings,
+  TrendingUp,
+} from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
+import Animated from "react-native-reanimated";
 
 import { darkTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { useAuthStore } from "../store/authStore";
 import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
@@ -21,11 +32,11 @@ import PageContainer from "../components/PageContainer";
 function StatCard({
   label,
   value,
-  icon,
+  Icon,
 }: {
   label: string;
   value: string | number;
-  icon: keyof typeof Ionicons.glyphMap;
+  Icon: LucideIcon;
 }) {
   return (
     <View
@@ -49,7 +60,7 @@ function StatCard({
           marginBottom: spacing[2],
         }}
       >
-        <Ionicons name={icon} size={16} color={darkTheme.accent.neon} />
+        <Icon size={16} color={darkTheme.accent.neon} />
       </View>
       <Text
         style={{
@@ -74,60 +85,64 @@ function StatCard({
 }
 
 function ActionRow({
-  icon,
+  Icon,
   label,
   onPress,
   destructive,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  Icon: LucideIcon;
   label: string;
   onPress: () => void;
   destructive?: boolean;
 }) {
+  const { pressStyle, onPressIn, onPressOut } = usePressScale();
   const color = destructive
     ? darkTheme.semantic.danger
     : darkTheme.text.primary;
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.7}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: darkTheme.background.elevated,
-        borderRadius: radius.xl,
-        paddingVertical: spacing[4],
-        paddingHorizontal: spacing[4],
-        marginBottom: spacing[2],
-        borderWidth: 1,
-        borderColor: darkTheme.border.subtle,
-      }}
-    >
-      <Ionicons name={icon} size={20} color={color} />
-      <Text
+    <Animated.View style={pressStyle}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        activeOpacity={0.7}
         style={{
-          color,
-          fontSize: 15,
-          fontWeight: "600",
-          marginLeft: spacing[3],
-          flex: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: darkTheme.background.elevated,
+          borderRadius: radius.xl,
+          paddingVertical: spacing[4],
+          paddingHorizontal: spacing[4],
+          marginBottom: spacing[2],
+          borderWidth: 1,
+          borderColor: darkTheme.border.subtle,
         }}
       >
-        {label}
-      </Text>
-      {!destructive && (
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={darkTheme.text.tertiary}
-        />
-      )}
-    </TouchableOpacity>
+        <Icon size={20} color={color} />
+        <Text
+          style={{
+            color,
+            fontSize: 15,
+            fontWeight: "600",
+            marginLeft: spacing[3],
+            flex: 1,
+          }}
+        >
+          {label}
+        </Text>
+        {!destructive && (
+          <ChevronRight size={18} color={darkTheme.text.tertiary} />
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 export default function Profile() {
   const navigation = useNavigation();
+  const { cardEntering, listItemEntering } = useMotionPresets();
   const { userName, logout } = useAuthStore();
   const { transactions: bankTxs } = useBankStore();
   const { transactions: walletTxs } = useWalletStore();
@@ -159,7 +174,8 @@ export default function Profile() {
         showProfileButton={false}
       />
       <ScrollView contentContainerStyle={{ padding: spacing[5] }}>
-        <View
+        <Animated.View
+          entering={cardEntering}
           style={{
             alignItems: "center",
             marginBottom: spacing[6],
@@ -206,9 +222,10 @@ export default function Profile() {
           >
             Membro do Economize!
           </Text>
-        </View>
+        </Animated.View>
 
-        <View
+        <Animated.View
+          entering={listItemEntering(1)}
           style={{
             flexDirection: "row",
             gap: spacing[3],
@@ -216,40 +233,34 @@ export default function Profile() {
           }}
         >
           <StatCard
-            icon="receipt-outline"
+            Icon={ReceiptText}
             label="Transações"
             value={bankTxs.length}
           />
-          <StatCard
-            icon="trending-up-outline"
-            label="Ativos"
-            value={walletTxs.length}
-          />
-          <StatCard
-            icon="document-text-outline"
-            label="Relatórios"
-            value={0}
-          />
-        </View>
+          <StatCard Icon={TrendingUp} label="Ativos" value={walletTxs.length} />
+          <StatCard Icon={FileText} label="Relatórios" value={0} />
+        </Animated.View>
 
-        <ActionRow
-          icon="settings-outline"
-          label="Preferências"
-          onPress={() => navigation.navigate("Settings" as never)}
-        />
-        <ActionRow
-          icon="information-circle-outline"
-          label="Sobre o Economize!"
-          onPress={() => navigation.navigate("Sobre" as never)}
-        />
-        <View style={{ marginTop: spacing[4] }}>
+        <Animated.View entering={listItemEntering(2)}>
           <ActionRow
-            icon="log-out-outline"
-            label="Sair"
-            destructive
-            onPress={handleLogout}
+            Icon={Settings}
+            label="Preferências"
+            onPress={() => navigation.navigate("Settings" as never)}
           />
-        </View>
+          <ActionRow
+            Icon={Info}
+            label="Sobre o Economize!"
+            onPress={() => navigation.navigate("Sobre" as never)}
+          />
+          <View style={{ marginTop: spacing[4] }}>
+            <ActionRow
+              Icon={LogOut}
+              label="Sair"
+              destructive
+              onPress={handleLogout}
+            />
+          </View>
+        </Animated.View>
       </ScrollView>
     </PageContainer>
   );

@@ -8,11 +8,23 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  Banknote,
+  Bell,
+  CircleAlert,
+  FileUp,
+  FingerprintPattern,
+  Globe,
+  Star,
+  Trash2,
+} from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 import * as LocalAuthentication from "expo-local-authentication";
+import Animated from "react-native-reanimated";
 
 import { darkTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import {
   Currency,
   Language,
@@ -43,48 +55,58 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 function Row({
-  icon,
+  Icon,
   label,
   description,
   right,
   onPress,
+  index = 0,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  Icon: LucideIcon;
   label: string;
   description?: string;
   right?: React.ReactNode;
   onPress?: () => void;
+  index?: number;
 }) {
+  // Cada linha conhece sua posição para entrar em cascata na tela
+  const { listItemEntering } = useMotionPresets();
+  const { pressStyle, onPressIn, onPressOut } = usePressScale();
   return (
-    <TouchableOpacity
-      activeOpacity={onPress ? 0.7 : 1}
-      onPress={onPress}
-      disabled={!onPress}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: darkTheme.background.elevated,
-        borderRadius: radius.lg,
-        paddingVertical: spacing[3],
-        paddingHorizontal: spacing[4],
-        marginBottom: spacing[2],
-        borderWidth: 1,
-        borderColor: darkTheme.border.subtle,
-      }}
-    >
-      <View
+    <Animated.View entering={listItemEntering(index)} style={pressStyle}>
+      <TouchableOpacity
+        activeOpacity={onPress ? 0.7 : 1}
+        onPress={onPress}
+        onPressIn={onPress ? onPressIn : undefined}
+        onPressOut={onPress ? onPressOut : undefined}
+        disabled={!onPress}
+        accessibilityLabel={description ? `${label}. ${description}` : label}
+        accessibilityRole={onPress ? "button" : undefined}
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: radius.full,
+          flexDirection: "row",
           alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: darkTheme.background.surface,
-          marginRight: spacing[3],
+          backgroundColor: darkTheme.background.elevated,
+          borderRadius: radius.lg,
+          paddingVertical: spacing[3],
+          paddingHorizontal: spacing[4],
+          marginBottom: spacing[2],
+          borderWidth: 1,
+          borderColor: darkTheme.border.subtle,
         }}
       >
-        <Ionicons name={icon} size={16} color={darkTheme.text.primary} />
-      </View>
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: radius.full,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: darkTheme.background.surface,
+            marginRight: spacing[3],
+          }}
+        >
+          <Icon size={16} color={darkTheme.text.primary} />
+        </View>
       <View style={{ flex: 1 }}>
         <Text
           style={{
@@ -106,9 +128,10 @@ function Row({
             {description}
           </Text>
         )}
-      </View>
-      {right}
-    </TouchableOpacity>
+        </View>
+        {right}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -137,6 +160,9 @@ function SegmentedControl<T extends string>({
           <TouchableOpacity
             key={opt.value}
             onPress={() => onChange(opt.value)}
+            accessibilityLabel={opt.label}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             activeOpacity={0.7}
             style={{
               flex: 1,
@@ -236,7 +262,8 @@ export default function Settings() {
 
         <SectionTitle>Segurança</SectionTitle>
         <Row
-          icon="finger-print-outline"
+          Icon={FingerprintPattern}
+          index={0}
           label="Bloqueio por biometria"
           description={
             biometricAvailable
@@ -259,7 +286,8 @@ export default function Settings() {
 
         <SectionTitle>Conta</SectionTitle>
         <Row
-          icon="cash-outline"
+          Icon={Banknote}
+          index={1}
           label="Moeda padrão"
           description={defaultCurrency}
           onPress={() => {
@@ -270,7 +298,8 @@ export default function Settings() {
           }}
         />
         <Row
-          icon="language-outline"
+          Icon={Globe}
+          index={2}
           label="Idioma"
           description={language === "pt-BR" ? "Português" : "English"}
           onPress={() => {
@@ -282,7 +311,8 @@ export default function Settings() {
 
         <SectionTitle>Notificações</SectionTitle>
         <Row
-          icon="notifications-outline"
+          Icon={Bell}
+          index={3}
           label="Resumo semanal"
           description="Receba um resumo do seu mês"
           right={
@@ -300,13 +330,15 @@ export default function Settings() {
 
         <SectionTitle>Dados</SectionTitle>
         <Row
-          icon="cloud-download-outline"
+          Icon={FileUp}
+          index={4}
           label="Exportar meus dados"
           description="Receberemos por e-mail (mock)"
           onPress={() => showToast("Enviaremos seu pacote por e-mail", "info")}
         />
         <Row
-          icon="trash-outline"
+          Icon={Trash2}
+          index={5}
           label="Apagar dados locais"
           description="Cache e preferências"
           onPress={handleClearLocal}
@@ -314,7 +346,8 @@ export default function Settings() {
 
         <SectionTitle>Suporte</SectionTitle>
         <Row
-          icon="alert-circle-outline"
+          Icon={CircleAlert}
+          index={6}
           label="Reportar um problema"
           onPress={() =>
             Linking.openURL(
@@ -323,7 +356,8 @@ export default function Settings() {
           }
         />
         <Row
-          icon="star-outline"
+          Icon={Star}
+          index={7}
           label="Avaliar o Economize!"
           onPress={() => showToast("Em breve na loja", "info")}
         />

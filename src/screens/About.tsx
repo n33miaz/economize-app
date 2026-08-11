@@ -8,10 +8,14 @@ import {
   View,
 } from "react-native";
 import Constants from "expo-constants";
-import { Ionicons } from "@expo/vector-icons";
+// Lucide não traz logos de marcas: Code representa o repositório e Globe o
+// perfil na web, mantendo a família única de ícones do app
+import { Code, Globe } from "lucide-react-native";
+import Animated from "react-native-reanimated";
 
 import { darkTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 
@@ -48,6 +52,8 @@ function InfoBlock({ title, children }: { title: string; children: string }) {
 }
 
 export default function About() {
+  const { cardEntering, listItemEntering } = useMotionPresets();
+  const repoPress = usePressScale();
   const open = (url: string) => Linking.openURL(url);
 
   return (
@@ -58,7 +64,10 @@ export default function About() {
         showProfileButton={false}
       />
       <ScrollView contentContainerStyle={{ padding: spacing[5] }}>
-        <View style={{ alignItems: "center", marginBottom: spacing[6] }}>
+        <Animated.View
+          entering={cardEntering}
+          style={{ alignItems: "center", marginBottom: spacing[6] }}
+        >
           <Image
             source={require("../../assets/logo.png")}
             style={{ width: 88, height: 88, borderRadius: radius["2xl"] }}
@@ -83,9 +92,10 @@ export default function About() {
           >
             v{Constants.expoConfig?.version || "1.0.0"}
           </Text>
-        </View>
+        </Animated.View>
 
-        <View
+        <Animated.View
+          entering={listItemEntering(1)}
           style={{
             backgroundColor: darkTheme.background.elevated,
             borderRadius: radius.xl,
@@ -108,36 +118,45 @@ export default function About() {
             Seus dados ficam armazenados em servidores que você controla. Nada
             é compartilhado com terceiros sem permissão explícita.
           </InfoBlock>
-        </View>
+        </Animated.View>
 
-        <TouchableOpacity
-          onPress={() => open(PROJECT_URL)}
-          activeOpacity={0.85}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: darkTheme.accent.neonMuted,
-            borderColor: darkTheme.accent.neon,
-            borderWidth: 1,
-            paddingVertical: spacing[3],
-            borderRadius: radius.full,
-            marginBottom: spacing[6],
-          }}
+        <Animated.View
+          entering={listItemEntering(2)}
+          style={[{ marginBottom: spacing[6] }, repoPress.pressStyle]}
         >
-          <Ionicons name="logo-github" size={18} color={darkTheme.accent.neon} />
-          <Text
+          <TouchableOpacity
+            onPress={() => open(PROJECT_URL)}
+            onPressIn={repoPress.onPressIn}
+            onPressOut={repoPress.onPressOut}
+            accessibilityLabel="Ver código do projeto"
+            accessibilityRole="button"
+            activeOpacity={0.85}
             style={{
-              color: darkTheme.accent.neon,
-              fontWeight: "700",
-              marginLeft: spacing[2],
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: darkTheme.accent.neonMuted,
+              borderColor: darkTheme.accent.neon,
+              borderWidth: 1,
+              paddingVertical: spacing[3],
+              borderRadius: radius.full,
             }}
           >
-            Ver código do projeto
-          </Text>
-        </TouchableOpacity>
+            <Code size={18} color={darkTheme.accent.neon} />
+            <Text
+              style={{
+                color: darkTheme.accent.neon,
+                fontWeight: "700",
+                marginLeft: spacing[2],
+              }}
+            >
+              Ver código do projeto
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
 
-        <View
+        <Animated.View
+          entering={listItemEntering(3)}
           style={{
             borderTopWidth: 1,
             borderTopColor: darkTheme.border.subtle,
@@ -183,19 +202,21 @@ export default function About() {
             </Text>
           </View>
           <View style={{ flexDirection: "row", gap: spacing[3] }}>
-            <TouchableOpacity onPress={() => open(LINKEDIN_URL)}>
-              <Ionicons
-                name="logo-linkedin"
-                size={22}
-                color={darkTheme.text.secondary}
-              />
+            <TouchableOpacity
+              onPress={() => open(LINKEDIN_URL)}
+              accessibilityLabel="Perfil no LinkedIn"
+              accessibilityRole="button"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Globe size={22} color={darkTheme.text.secondary} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => open(GITHUB_URL)}>
-              <Ionicons
-                name="logo-github"
-                size={22}
-                color={darkTheme.text.secondary}
-              />
+            <TouchableOpacity
+              onPress={() => open(GITHUB_URL)}
+              accessibilityLabel="Perfil no GitHub"
+              accessibilityRole="button"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Code size={22} color={darkTheme.text.secondary} />
             </TouchableOpacity>
           </View>
           <Text
@@ -207,7 +228,7 @@ export default function About() {
           >
             © 2026 Economize! Todos os direitos reservados.
           </Text>
-        </View>
+        </Animated.View>
       </ScrollView>
     </PageContainer>
   );
