@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/logo-splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0A0A"
+      "backgroundColor": "#0F0E0B"
     },
     "ios": {
       "supportsTablet": true,
@@ -21,7 +21,7 @@
       "package": "com.n33miaz.economize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo-splash.png",
-        "backgroundColor": "#0A0A0A"
+        "backgroundColor": "#0F0E0B"
       }
     },
     "web": {

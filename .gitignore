@@ -40,6 +40,4 @@ yarn-error.*
 /ios
 /android
 
-# API KEY
-apiConfig.ts
 .vercel
