@@ -37,7 +37,7 @@ export default function News() {
       {loading && !articles?.length ? (
         <View className="flex-1 justify-center items-center p-5">
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text className="mt-3 text-gray-500 font-regular">
+          <Text className="mt-3 text-textSecondary font-regular">
             Carregando notícias...
           </Text>
         </View>
@@ -61,7 +61,7 @@ export default function News() {
           contentContainerClassName="pt-3 pb-5"
           ListEmptyComponent={
             <View className="flex-1 justify-center items-center p-5 mt-10">
-              <Text className="text-gray-500 text-base font-regular mb-4">
+              <Text className="text-textSecondary text-base font-regular mb-4">
                 {error
                   ? "Não foi possível carregar as notícias."
                   : "Nenhuma notícia encontrada."}
@@ -69,8 +69,10 @@ export default function News() {
               <TouchableOpacity
                 className="bg-primary px-6 py-3 rounded-lg"
                 onPress={fetchNews}
+                accessibilityLabel="Atualizar notícias"
+                accessibilityRole="button"
               >
-                <Text className="text-white font-bold">Atualizar</Text>
+                <Text className="text-primaryDark font-bold">Atualizar</Text>
               </TouchableOpacity>
             </View>
           }

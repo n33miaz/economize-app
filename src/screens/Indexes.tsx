@@ -1,7 +1,5 @@
 import React from "react";
-import { View } from "react-native";
 import AssetListScreen from "../components/AssetListScreen";
-import ScreenHeader from "../components/ScreenHeader";
 import { useIndicatorStore } from "../store/indicatorStore";
 
 const DESIRED_INDEXES = ["IBOVESPA", "BTC", "ETH", "XRP", "LTC", "NASDAQ"];

@@ -7,18 +7,39 @@ import {
   Linking,
   RefreshControl,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ArrowDownRight,
+  ArrowLeftRight,
+  ArrowUpRight,
+  Banknote,
+  Bitcoin,
+  ChartPie,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Star,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import Animated from "react-native-reanimated";
 
-import { Indicator, isCurrencyData, isIndexData } from "../services/api";
+import { Indicator, isCurrencyData } from "../services/api";
 import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { radius } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import useNewsData from "../hooks/useNewsData";
 import { useAuthStore } from "../store/authStore";
 import { useIndicatorStore } from "../store/indicatorStore";
 import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
 import { useFavoritesStore } from "../store/favoritesStore";
+import { usePreferencesStore } from "../store/preferencesStore";
 
 import HighlightCard from "../components/HighlightCard";
 import Skeleton from "../components/Skeleton";
@@ -29,7 +50,13 @@ import AssistantFAB from "../components/AssistantFAB";
 
 export default function Home() {
   const navigation = useNavigation();
-  const [showBalance, setShowBalance] = useState(true);
+  const t = useTheme();
+  // Entrada em cascata sutil dos blocos da Home (máx. 4 seções animadas)
+  const { cardEntering, listItemEntering } = useMotionPresets();
+  // Preferência persistida: o "olhinho" sobrevive ao fechamento do app
+  const hideBalance = usePreferencesStore((s) => s.hideBalance);
+  const toggleHideBalance = usePreferencesStore((s) => s.toggleHideBalance);
+  const showBalance = !hideBalance;
   const { userName } = useAuthStore();
 
   const {
@@ -65,14 +92,29 @@ export default function Home() {
   const bankBalance = bankMetrics.income - bankMetrics.expense;
 
   const walletBalance = useMemo(() => {
-    return walletTxs.reduce((total, t) => {
-      const indicator = indicators.find((i) => i.code === t.assetCode);
-      const currentPrice = indicator ? indicator.buy : t.priceAtTransaction;
-      return total + t.quantity * currentPrice;
+    return walletTxs.reduce((total, tx) => {
+      const indicator = indicators.find((i) => i.code === tx.assetCode);
+      const currentPrice = indicator ? indicator.buy : tx.priceAtTransaction;
+      return total + tx.quantity * currentPrice;
     }, 0);
   }, [walletTxs, indicators]);
 
   const totalNetWorth = bankBalance + walletBalance;
+
+  // Rentabilidade real da carteira (valor atual vs custo de aquisição);
+  // null quando não há base de custo — o badge some em vez de inventar número
+  const walletPerformance = useMemo(() => {
+    let cost = 0;
+    let current = 0;
+    walletTxs.forEach((tx) => {
+      const indicator = indicators.find((i) => i.code === tx.assetCode);
+      const currentPrice = indicator ? indicator.buy : tx.priceAtTransaction;
+      cost += tx.quantity * tx.priceAtTransaction;
+      current += tx.quantity * currentPrice;
+    });
+    if (cost <= 0) return null;
+    return ((current - cost) / cost) * 100;
+  }, [walletTxs, indicators]);
 
   const [selectedIndicator, setSelectedIndicator] = useState<Indicator | null>(
     null,
@@ -103,14 +145,35 @@ export default function Home() {
 
   const toggleBalance = () => {
     Haptics.selectionAsync();
-    setShowBalance(!showBalance);
+    toggleHideBalance();
   };
 
   const firstName = userName ? userName.split(" ")[0] : "Investidor";
 
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title={`Olá, ${firstName}`} subtitle="Resumo do Mercado" />
+      <ScreenHeader
+        title={`Olá, ${firstName}`}
+        subtitle="Resumo do Mercado"
+        rightActions={[
+          <TouchableOpacity
+            key="favorites"
+            className="bg-elevated active:bg-border"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: radius.full,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onPress={() => navigation.navigate("Favoritos" as never)}
+            accessibilityLabel="Favoritos"
+            accessibilityRole="button"
+          >
+            <Star size={18} color={t.text.primary} />
+          </TouchableOpacity>,
+        ]}
+      />
 
       <ScrollView
         className="flex-1"
@@ -125,102 +188,108 @@ export default function Home() {
         }
       >
         {/* Patrimônio */}
-        <View
-          className="mx-5 mb-8 bg-primaryDark rounded-3xl p-6 shadow-lg shadow-blue-900/20 overflow-hidden"
-          style={{ position: "relative" }}
+        <Animated.View
+          entering={cardEntering}
+          className="mx-5 mb-8 bg-surface border border-border rounded-3xl p-6 overflow-hidden relative"
         >
-          {/* Elementos decorativos de fundo */}
-          <View
-            style={{
-              position: "absolute",
-              right: -40,
-              top: -40,
-              width: 128,
-              height: 128,
-              backgroundColor: "rgba(255,255,255,0.05)",
-              borderRadius: 64,
-            }}
-          />
-          <View
-            style={{
-              position: "absolute",
-              left: -30,
-              bottom: -30,
-              width: 96,
-              height: 96,
-              backgroundColor: "rgba(255,255,255,0.05)",
-              borderRadius: 48,
-            }}
-          />
+          {/* Elementos decorativos de fundo (halo sutil da marca) */}
+          <View className="absolute -right-10 -top-10 w-32 h-32 rounded-full bg-accentMuted" />
+          <View className="absolute -left-8 -bottom-8 w-24 h-24 rounded-full bg-accentMuted" />
 
           <View className="flex-row justify-between items-center mb-4">
             <View className="flex-row items-center">
-              <View className="w-8 h-8 bg-white/10 rounded-full justify-center items-center mr-2">
-                <Ionicons name="wallet-outline" size={16} color="#FFF" />
+              <View className="w-8 h-8 bg-elevated rounded-full justify-center items-center mr-2">
+                <Wallet size={16} color={t.accent.neon} />
               </View>
-              <Text className="text-white/80 text-sm font-medium">
+              <Text className="text-textSecondary text-sm font-medium">
                 Patrimônio Total
               </Text>
             </View>
             <View className="flex-row gap-4">
               <TouchableOpacity
                 onPress={toggleBalance}
+                accessibilityLabel={
+                  showBalance ? "Ocultar saldo" : "Mostrar saldo"
+                }
+                accessibilityRole="button"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons
-                  name={showBalance ? "eye-outline" : "eye-off-outline"}
-                  size={22}
-                  color="#FFF"
-                />
+                {showBalance ? (
+                  <Eye size={20} color={t.text.primary} />
+                ) : (
+                  <EyeOff size={20} color={t.text.primary} />
+                )}
               </TouchableOpacity>
             </View>
           </View>
 
-          <Text className="text-white text-4xl font-bold tracking-tight mb-3">
+          <Text className="text-textPrimary text-4xl font-bold tracking-tight mb-3">
             {showBalance ? `R$ ${totalNetWorth.toFixed(2)}` : "R$ •••••••"}
           </Text>
 
-          <View className="flex-row items-center mt-1">
-            <View className="bg-green-500/20 px-2 py-1 rounded-md flex-row items-center">
-              <Ionicons name="trending-up" size={14} color="#4ADE80" />
-              {/* TODO: Adicionar lógica real */}
-              <Text className="text-green-400 text-xs font-bold ml-1">
-                +2.4%
+          {walletPerformance !== null && (
+            <View className="flex-row items-center mt-1">
+              <View
+                className={`px-2 py-1 rounded-full flex-row items-center ${
+                  walletPerformance >= 0 ? "bg-success/15" : "bg-danger/15"
+                }`}
+              >
+                {walletPerformance >= 0 ? (
+                  <TrendingUp size={14} color={t.semantic.success} />
+                ) : (
+                  <TrendingDown size={14} color={t.semantic.danger} />
+                )}
+                <Text
+                  className={`text-xs font-bold ml-1 ${
+                    walletPerformance >= 0 ? "text-success" : "text-danger"
+                  }`}
+                >
+                  {walletPerformance >= 0 ? "+" : ""}
+                  {walletPerformance.toFixed(2)}%
+                </Text>
+              </View>
+              <Text className="text-textTertiary text-xs ml-2">
+                rentabilidade da carteira
               </Text>
             </View>
-            <Text className="text-white/60 text-xs ml-2">
-              em relação ao mês passado
-            </Text>
-          </View>
-        </View>
+          )}
+        </Animated.View>
 
         {/* Quick Actions */}
-        <View className="flex-row justify-between px-6 mb-8">
+        <Animated.View
+          entering={listItemEntering(1)}
+          className="flex-row justify-between px-6 mb-8"
+        >
           <QuickAction
-            icon="trending-up-outline"
+            Icon={TrendingUp}
             label="Investimentos"
-            onPress={() => navigation.navigate("Finanças" as never)}
+            onPress={() =>
+              // Sem o destino da aba, o TopTab caía sempre em "Carteira"
+              (navigation as any).navigate("Finanças", { screen: "Carteira" })
+            }
           />
           <QuickAction
-            icon="receipt-outline"
+            Icon={ArrowLeftRight}
             label="Extratos"
-            onPress={() => navigation.navigate("Finanças" as never)}
+            onPress={() =>
+              (navigation as any).navigate("Finanças", { screen: "Extrato" })
+            }
           />
           <QuickAction
-            icon="document-text-outline"
+            Icon={ChartPie}
             label="Relatórios"
             onPress={() => navigation.navigate("Relatórios" as never)}
           />
           <QuickAction
-            icon="sparkles-outline"
+            Icon={Sparkles}
             label="Assistente"
             onPress={() => navigation.navigate("IA Assist" as never)}
             isNew
           />
-        </View>
+        </Animated.View>
 
         {/* Destaques do Mercado (Favoritos) */}
-        <View className="mb-8">
+        <Animated.View entering={listItemEntering(2)} className="mb-8">
           <Text className="px-5 text-lg font-bold text-textPrimary mb-4">
             {favorites.length > 0 ? "Favoritados" : "Mercado Agora"}
           </Text>
@@ -233,7 +302,7 @@ export default function Home() {
               ? [1, 2, 3].map((i) => (
                   <View
                     key={i}
-                    className="bg-white rounded-2xl p-5 mx-2 border border-border min-w-[150px]"
+                    className="bg-surface rounded-2xl p-5 mx-2 border border-border min-w-[150px]"
                   >
                     <Skeleton
                       width={36}
@@ -251,21 +320,21 @@ export default function Home() {
                     title={item.code || item.name}
                     value={item.buy || item.points || 0}
                     variation={item.variation}
-                    iconName={
+                    Icon={
                       item.type === "crypto"
-                        ? "logo-bitcoin"
+                        ? Bitcoin
                         : item.type === "index"
-                          ? "stats-chart"
-                          : "cash-outline"
+                          ? TrendingUp
+                          : Banknote
                     }
                     onPress={() => setSelectedIndicator(item)}
                   />
                 ))}
           </ScrollView>
-        </View>
+        </Animated.View>
 
         {/* Notícias */}
-        <View className="px-5">
+        <Animated.View entering={listItemEntering(3)} className="px-5">
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-lg font-bold text-textPrimary">
               Radar de Notícias
@@ -280,8 +349,10 @@ export default function Home() {
           {recentNews.map((article, index) => (
             <TouchableOpacity
               key={index}
-              className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-border shadow-sm"
+              className="bg-surface rounded-2xl p-4 mb-3 flex-row items-center border border-border"
               onPress={() => Linking.openURL(article.url)}
+              accessibilityLabel={`Abrir notícia: ${article.title}`}
+              accessibilityRole="button"
               activeOpacity={0.7}
             >
               <View className="flex-1 pr-4">
@@ -296,15 +367,11 @@ export default function Home() {
                 </Text>
               </View>
               <View className="w-10 h-10 bg-background rounded-full justify-center items-center">
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.textSecondary}
-                />
+                <ChevronRight size={18} color={colors.textSecondary} />
               </View>
             </TouchableOpacity>
           ))}
-        </View>
+        </Animated.View>
       </ScrollView>
 
       {/* Modal de Detalhes do Indicador na Home */}
@@ -317,27 +384,27 @@ export default function Home() {
             contentContainerClassName="p-6"
             showsVerticalScrollIndicator={false}
           >
-            <View className="w-14 h-1.5 bg-slate-200 rounded-full self-center mb-6" />
-            <View className="items-center justify-center mb-6 border-b border-slate-100 pb-4">
-              <Text className="text-2xl font-bold text-slate-800 text-center">
+            <View className="w-14 h-1.5 bg-border rounded-full self-center mb-6" />
+            <View className="items-center justify-center mb-6 border-b border-border pb-4">
+              <Text className="text-2xl font-bold text-textPrimary text-center">
                 {selectedIndicator.name}
               </Text>
             </View>
 
             {isCurrencyData(selectedIndicator) ? (
-              <View className="flex-row justify-around items-center mb-8 bg-gray-50 p-5 rounded-2xl border border-gray-100">
+              <View className="flex-row justify-around items-center mb-8 bg-elevated p-5 rounded-2xl border border-border">
                 <View className="items-center">
-                  <Text className="text-xs text-gray-500 mb-1 font-bold uppercase tracking-wider">
+                  <Text className="text-xs text-textSecondary mb-1 font-bold uppercase tracking-wider">
                     Compra
                   </Text>
-                  <Text className="text-2xl font-bold text-slate-800">
+                  <Text className="text-2xl font-bold text-textPrimary">
                     R$ {selectedIndicator.buy.toFixed(2)}
                   </Text>
                 </View>
               </View>
             ) : (
               <View className="items-center mb-6">
-                <Text className="text-4xl font-bold text-slate-800 tracking-tighter">
+                <Text className="text-4xl font-bold text-textPrimary tracking-tighter">
                   {(selectedIndicator.points || 0).toLocaleString("pt-BR")} pts
                 </Text>
               </View>
@@ -345,12 +412,16 @@ export default function Home() {
 
             <View className="items-center mb-6">
               <View
-                className={`px-4 py-2 rounded-full ${selectedIndicator.variation >= 0 ? "bg-green-100" : "bg-red-100"}`}
+                className={`px-4 py-2 rounded-full flex-row items-center ${selectedIndicator.variation >= 0 ? "bg-success/15" : "bg-danger/15"}`}
               >
+                {selectedIndicator.variation >= 0 ? (
+                  <ArrowUpRight size={18} color={t.semantic.success} />
+                ) : (
+                  <ArrowDownRight size={18} color={t.semantic.danger} />
+                )}
                 <Text
-                  className={`text-lg font-bold ${selectedIndicator.variation >= 0 ? "text-green-700" : "text-red-600"}`}
+                  className={`text-lg font-bold ml-1 ${selectedIndicator.variation >= 0 ? "text-success" : "text-danger"}`}
                 >
-                  {selectedIndicator.variation > 0 ? "▲" : "▼"}{" "}
                   {Math.abs(selectedIndicator.variation).toFixed(2)}% (Hoje)
                 </Text>
               </View>
@@ -369,31 +440,39 @@ export default function Home() {
 }
 
 function QuickAction({
-  icon,
+  Icon,
   label,
   onPress,
   isNew,
 }: {
-  icon: any;
+  Icon: LucideIcon;
   label: string;
   onPress: () => void;
   isNew?: boolean;
 }) {
+  const { pressStyle, onPressIn, onPressOut } = usePressScale();
+
   return (
-    <TouchableOpacity
-      className="items-center"
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View className="w-14 h-14 bg-white rounded-2xl justify-center items-center shadow-sm border border-border mb-2">
-        <Ionicons name={icon} size={24} color={colors.primaryDark} />
-        {isNew && (
-          <View className="absolute -top-2 -right-2 bg-secondary px-1.5 py-0.5 rounded-md border border-white">
-            <Text className="text-[8px] font-bold text-white">IA</Text>
-          </View>
-        )}
-      </View>
-      <Text className="text-xs font-medium text-textSecondary">{label}</Text>
-    </TouchableOpacity>
+    <Animated.View style={pressStyle}>
+      <TouchableOpacity
+        className="items-center"
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        activeOpacity={0.7}
+      >
+        <View className="w-14 h-14 bg-surface rounded-2xl justify-center items-center border border-border mb-2">
+          <Icon size={24} color={colors.primary} />
+          {isNew && (
+            <View className="absolute -top-2 -right-2 bg-secondary px-1.5 py-0.5 rounded-full border border-surface">
+              <Text className="text-[8px] font-bold text-primaryDark">IA</Text>
+            </View>
+          )}
+        </View>
+        <Text className="text-xs font-medium text-textSecondary">{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
