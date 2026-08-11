@@ -8,7 +8,7 @@ Aplicativo de finanças pessoais desenvolvido com **React Native** e **Expo**. O
 
 O aplicativo foi compilado para Android e pode ser testado em dispositivos físicos.
 
-- **Download do APK (Versão Mais Recente):** [Acessar Releases do GitHub](https://github.com/n33miaz/painel_economico-mobile/releases)
+- **Download do APK (Versão Mais Recente):** [Acessar Releases do GitHub](https://github.com/n33miaz/economize-app/releases)
 - **Build Log (Expo):** [Visualizar no Expo Dashboard](https://expo.dev/accounts/n33miaz/projects/painel-economico-br/builds/63c8b75c-2694-48b7-85da-e9da350cea46)
 
 ---
@@ -64,7 +64,7 @@ src/
 
 Este aplicativo não consome APIs públicas diretamente para todas as funções. Ele se comunica com um **Backend for Frontend (BFF)** intermediário, garantindo segurança de chaves de API, cacheamento de dados e tratamento de erros centralizado.
 
-- **Repositório da API (Java/Spring Boot):** [painel_economico-api](https://github.com/n33miaz/painel_economico-api)
+- **Repositório da API (Java/Spring Boot):** [economize-api](https://github.com/n33miaz/economize-api)
 
 ## ⚙️ Como rodar o projeto localmente
 
@@ -79,8 +79,8 @@ Este aplicativo não consome APIs públicas diretamente para todas as funções.
 1. Clone o repositório:
 
    ```bash
-   git clone https://github.com/n33miaz/painel_economico-mobile.git
-   cd painel_economico-mobile
+   git clone https://github.com/n33miaz/economize-app.git
+   cd economize-app
    ```
 
 2. Instale as dependências:
@@ -90,14 +90,14 @@ Este aplicativo não consome APIs públicas diretamente para todas as funções.
    ```
 
 3. Configure as variáveis de ambiente:
-   Crie um arquivo `.env` na raiz ou altere a URL base em `src/services/api.ts` caso não esteja rodando o backend localmente.
+   Copie `.env.example` para `.env` na raiz. Sem a variável, o app deriva a URL do host do Metro em dev e usa a URL de produção embutida nos builds.
 
    ```env
    # Exemplo para backend local
-   API_BASE_URL=http://SEU_IP_LOCAL:8080/api
+   EXPO_PUBLIC_API_BASE_URL=http://SEU_IP_LOCAL:8080/api/v1
 
-   # Exemplo para backend em produção (Koyeb/Render)
-   API_BASE_URL=https://sua-api-deploy.koyeb.app/api
+   # Exemplo para backend em produção
+   EXPO_PUBLIC_API_BASE_URL=https://sua-api-em-producao.example.com/api/v1
    ```
 
 4. Execute o projeto:
