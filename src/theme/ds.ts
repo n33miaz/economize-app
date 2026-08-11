@@ -17,14 +17,16 @@ export const spacing = {
   20: 80,
 } as const;
 
+// Raios um nível mais generosos que o padrão de mercado — parte da
+// identidade (geometria arredondada, moderna)
 export const radius = {
   none: 0,
   sm: 4,
   md: 8,
   lg: 12,
-  xl: 16,
-  "2xl": 24,
-  "3xl": 32,
+  xl: 18,
+  "2xl": 28,
+  "3xl": 36,
   full: 9999,
 } as const;
 
@@ -61,7 +63,7 @@ export const shadow = {
     default: {},
   }),
   glow: {
-    shadowColor: "#00FF88",
+    shadowColor: "#F2C14E",
     shadowOpacity: 0.4,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
@@ -79,6 +81,8 @@ export const motion = {
   easing: {
     standard: [0.2, 0.0, 0.0, 1.0] as const,
     emphasized: [0.3, 0.0, 0.8, 0.15] as const,
+    // desaceleração suave para entradas de card/lista — nunca linear
+    soft: [0.22, 0.61, 0.36, 1.0] as const,
   },
 } as const;
 

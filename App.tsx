@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import Routes from "./src/routes";
 import Toast from "./src/components/Toast";
 import BiometricGate from "./src/components/BiometricGate";
+import { darkTheme } from "./src/theme/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,7 +39,9 @@ export default function App() {
       try {
         if (Platform.OS === "android") {
           try {
-            await NavigationBar.setBackgroundColorAsync("#0A0A0A");
+            await NavigationBar.setBackgroundColorAsync(
+              darkTheme.background.base,
+            );
             await NavigationBar.setButtonStyleAsync("light");
           } catch (e) {
             console.log("Erro ao configurar NavigationBar:", e);
@@ -75,7 +78,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <StatusBar style="light" backgroundColor="#0A0A0A" />
+        <StatusBar style="light" backgroundColor={darkTheme.background.base} />
         <BiometricGate>
           <Routes />
         </BiometricGate>
