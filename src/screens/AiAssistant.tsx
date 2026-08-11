@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SendHorizontal, Sparkles, Trash2 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
@@ -20,6 +20,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { ChatMessage, useAiStore } from "../store/aiStore";
 import { darkTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 
@@ -30,7 +31,15 @@ const SUGGESTIONS = [
   "Como diversificar minha carteira?",
 ];
 
-function MessageBubble({ item }: { item: ChatMessage }) {
+function MessageBubble({
+  item,
+  onRetry,
+}: {
+  item: ChatMessage;
+  onRetry: (item: ChatMessage) => void;
+}) {
+  // A direção do fade é própria do chat, mas movimento reduzido vale aqui também
+  const { reducedMotion } = useMotionPresets();
   const isUser = item.isUser;
   const bubbleBg = item.isError
     ? darkTheme.semantic.dangerMuted
@@ -47,7 +56,11 @@ function MessageBubble({ item }: { item: ChatMessage }) {
   return (
     <Animated.View
       entering={
-        isUser ? FadeInUp.duration(280) : FadeInDown.duration(360).delay(80)
+        reducedMotion
+          ? undefined
+          : isUser
+            ? FadeInUp.duration(280)
+            : FadeInDown.duration(360).delay(80)
       }
       style={{
         marginBottom: spacing[3],
@@ -74,11 +87,7 @@ function MessageBubble({ item }: { item: ChatMessage }) {
               marginBottom: 4,
             }}
           >
-            <Ionicons
-              name="sparkles"
-              size={12}
-              color={darkTheme.accent.neon}
-            />
+            <Sparkles size={12} color={darkTheme.accent.neon} />
             <Text
               style={{
                 color: darkTheme.accent.neon,
@@ -95,16 +104,42 @@ function MessageBubble({ item }: { item: ChatMessage }) {
           {item.text}
         </Text>
         {item.isError && (
-          <Text
-            style={{
-              color: darkTheme.semantic.danger,
-              fontSize: 11,
-              marginTop: 4,
-              fontStyle: "italic",
-            }}
-          >
-            Falha ao enviar. Tente novamente.
-          </Text>
+          <View style={{ marginTop: spacing[1] }}>
+            <Text
+              style={{
+                color: darkTheme.semantic.danger,
+                fontSize: 11,
+                fontStyle: "italic",
+              }}
+            >
+              Falha ao enviar.
+            </Text>
+            <TouchableOpacity
+              onPress={() => onRetry(item)}
+              accessibilityLabel="Tentar enviar novamente"
+              accessibilityRole="button"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                alignSelf: "flex-start",
+                marginTop: spacing[1],
+                paddingHorizontal: spacing[2],
+                paddingVertical: spacing[1],
+                borderRadius: radius.full,
+                borderWidth: 1,
+                borderColor: darkTheme.semantic.danger,
+              }}
+            >
+              <Text
+                style={{
+                  color: darkTheme.semantic.danger,
+                  fontSize: 11,
+                  fontWeight: "700",
+                }}
+              >
+                Tentar de novo
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
       <Text
@@ -126,8 +161,10 @@ function MessageBubble({ item }: { item: ChatMessage }) {
 
 export default function AiAssistant() {
   const insets = useSafeAreaInsets();
+  const sendPress = usePressScale();
   const [inputText, setInputText] = useState("");
-  const { messages, isLoading, sendMessage, clearHistory } = useAiStore();
+  const { messages, isLoading, sendMessage, retryMessage, clearHistory } =
+    useAiStore();
 
   const handleSend = useCallback(
     async (text?: string) => {
@@ -136,10 +173,28 @@ export default function AiAssistant() {
       setInputText("");
       Keyboard.dismiss();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await sendMessage(payload);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Haptic acompanha o resultado real — vibrar "sucesso" em falha engana
+      const ok = await sendMessage(payload);
+      Haptics.notificationAsync(
+        ok
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Error,
+      );
     },
     [inputText, sendMessage],
+  );
+
+  const handleRetry = useCallback(
+    async (item: ChatMessage) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const ok = await retryMessage(item.id);
+      Haptics.notificationAsync(
+        ok
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Error,
+      );
+    },
+    [retryMessage],
   );
 
   const askClear = () => {
@@ -171,6 +226,7 @@ export default function AiAssistant() {
             key="clear"
             onPress={askClear}
             accessibilityLabel="Limpar histórico"
+            accessibilityRole="button"
             style={{
               width: 36,
               height: 36,
@@ -180,8 +236,7 @@ export default function AiAssistant() {
               backgroundColor: darkTheme.background.elevated,
             }}
           >
-            <Ionicons
-              name="trash-outline"
+            <Trash2
               size={18}
               color={
                 messages.length > 1
@@ -200,7 +255,9 @@ export default function AiAssistant() {
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <MessageBubble item={item} />}
+          renderItem={({ item }) => (
+            <MessageBubble item={item} onRetry={handleRetry} />
+          )}
           inverted
           contentContainerStyle={{
             paddingHorizontal: spacing[5],
@@ -257,6 +314,8 @@ export default function AiAssistant() {
               <TouchableOpacity
                 key={suggestion}
                 onPress={() => handleSend(suggestion)}
+                accessibilityLabel={suggestion}
+                accessibilityRole="button"
                 activeOpacity={0.8}
                 style={{
                   borderWidth: 1,
@@ -316,34 +375,42 @@ export default function AiAssistant() {
             onChangeText={setInputText}
             multiline
             maxLength={500}
+            accessibilityLabel="Mensagem para o Nino"
           />
-          <TouchableOpacity
-            onPress={() => handleSend()}
-            disabled={!inputText.trim() || isLoading}
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: radius.full,
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: spacing[3],
-              backgroundColor:
-                inputText.trim() && !isLoading
-                  ? darkTheme.accent.neon
-                  : darkTheme.background.elevated,
-            }}
+          {/* Margem no wrapper para a escala de toque não deslocar o input */}
+          <Animated.View
+            style={[{ marginLeft: spacing[3] }, sendPress.pressStyle]}
           >
-            <Ionicons
-              name="send"
-              size={18}
-              color={
-                inputText.trim() && !isLoading
-                  ? darkTheme.text.inverse
-                  : darkTheme.text.tertiary
-              }
-              style={{ marginLeft: 2 }}
-            />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSend()}
+              onPressIn={sendPress.onPressIn}
+              onPressOut={sendPress.onPressOut}
+              disabled={!inputText.trim() || isLoading}
+              accessibilityLabel="Enviar mensagem"
+              accessibilityRole="button"
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: radius.full,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor:
+                  inputText.trim() && !isLoading
+                    ? darkTheme.accent.neon
+                    : darkTheme.background.elevated,
+              }}
+            >
+              <SendHorizontal
+                size={18}
+                color={
+                  inputText.trim() && !isLoading
+                    ? darkTheme.text.inverse
+                    : darkTheme.text.tertiary
+                }
+                style={{ marginLeft: 2 }}
+              />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
     </PageContainer>

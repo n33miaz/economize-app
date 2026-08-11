@@ -9,28 +9,34 @@ import {
   Dimensions,
   LayoutAnimation,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ChartPie,
+  Plus,
+  Trash2,
+  Wallet as WalletIcon,
+  X,
+} from "lucide-react-native";
 import { PieChart } from "react-native-chart-kit";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated from "react-native-reanimated";
 
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { radius, shadow, spacing } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { useWalletStore, Transaction } from "../store/walletStore";
 import { useIndicatorStore } from "../store/indicatorStore";
 import PageContainer from "../components/PageContainer";
 import CustomModal from "../components/CustomModal";
 
 const screenWidth = Dimensions.get("window").width;
-const CHART_COLORS = [
-  "#00ADEF",
-  "#053D99",
-  "#FBBA00",
-  "#00C853",
-  "#6200EA",
-  "#FF3B30",
-];
 
 export default function Wallet() {
+  const t = useTheme();
+  const { cardEntering, listItemEntering, fabEntering } = useMotionPresets();
+  // Instâncias separadas: FAB e botão de salvar têm ciclos de toque próprios
+  const fabPress = usePressScale();
+  const savePress = usePressScale();
   const { transactions, addTransaction, removeTransaction, fetchTransactions } =
     useWalletStore();
   const { indicators } = useIndicatorStore();
@@ -67,16 +73,21 @@ export default function Wallet() {
       }
     });
 
+    // Ordem fixa da paleta categórica do tema; da 7ª categoria em diante
+    // agrupa visualmente em "Outros" com o tom neutro (regra do design system)
     const data = Object.keys(allocation).map((key, index) => ({
       name: key,
       population: parseFloat(allocation[key].toFixed(2)),
-      color: CHART_COLORS[index % CHART_COLORS.length],
-      legendFontColor: colors.textSecondary,
+      color:
+        index < t.chart.categorical.length
+          ? t.chart.categorical[index]
+          : t.chart.neutral,
+      legendFontColor: t.text.secondary,
       legendFontSize: 12,
     }));
 
     return { totalBalance: total, chartData: data };
-  }, [transactions, indicators]);
+  }, [transactions, indicators, t]);
 
   const handleAdd = () => {
     if (!amount || !price || !code) {
@@ -116,7 +127,13 @@ export default function Wallet() {
     ]);
   };
 
-  const renderItem = ({ item }: { item: Transaction }) => {
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: Transaction;
+    index: number;
+  }) => {
     const currentPrice = getCurrentPrice(item.assetCode);
     const totalInvested = item.quantity * item.priceAtTransaction;
     const currentValue = item.quantity * currentPrice;
@@ -124,34 +141,43 @@ export default function Wallet() {
     const isProfit = profit >= 0;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-3 flex-row items-center shadow-sm border border-gray-100">
-        <View className="w-10 h-10 rounded-full bg-blue-50 justify-center items-center mr-3">
-          <Text className="text-primaryDark font-bold text-xs">
+      <Animated.View
+        entering={listItemEntering(index)}
+        className="bg-surface rounded-xl p-4 mb-3 flex-row items-center border border-border"
+      >
+        <View className="w-10 h-10 rounded-full bg-accentMuted justify-center items-center mr-3">
+          <Text className="text-accent font-bold text-xs">
             {item.assetCode}
           </Text>
         </View>
         <View className="flex-1">
-          <Text className="text-base font-bold text-slate-800">
+          <Text className="text-base font-bold text-textPrimary">
             {item.quantity} {item.assetCode}
           </Text>
-          <Text className="text-xs text-gray-500">
+          <Text className="text-xs text-textSecondary">
             Pago: R$ {item.priceAtTransaction.toFixed(2)}
           </Text>
         </View>
         <View className="items-end mr-3">
-          <Text className="text-sm font-bold text-slate-800">
+          <Text className="text-sm font-bold text-textPrimary">
             R$ {currentValue.toFixed(2)}
           </Text>
           <Text
-            className={`text-xs font-bold ${isProfit ? "text-green-600" : "text-red-500"}`}
+            className={`text-xs font-bold ${isProfit ? "text-success" : "text-danger"}`}
           >
             {isProfit ? "+" : ""}R$ {profit.toFixed(2)}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-2">
-          <Ionicons name="trash-outline" size={18} color={colors.inactive} />
+        <TouchableOpacity
+          className="p-2"
+          onPress={() => handleDelete(item.id)}
+          accessibilityLabel={`Excluir transação de ${item.assetCode}`}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Trash2 size={18} color={t.text.tertiary} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -165,23 +191,26 @@ export default function Wallet() {
         contentContainerClassName="p-5 pb-32"
         ListHeaderComponent={
           <>
-            <View className="bg-primaryDark rounded-2xl p-6 flex-row justify-between items-center mb-6 shadow-lg shadow-blue-900/20">
+            <Animated.View
+              entering={cardEntering}
+              className="bg-surface border border-border rounded-2xl p-6 flex-row justify-between items-center mb-6"
+            >
               <View>
-                <Text className="text-white/80 text-sm font-regular mb-1">
+                <Text className="text-textSecondary text-sm font-regular mb-1">
                   Saldo Estimado
                 </Text>
-                <Text className="text-white text-3xl font-bold">
+                <Text className="text-textPrimary text-3xl font-bold">
                   R$ {totalBalance.toFixed(2)}
                 </Text>
               </View>
-              <View className="bg-white/10 p-3 rounded-2xl">
-                <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
+              <View className="bg-accentMuted p-3 rounded-2xl">
+                <WalletIcon size={24} color={t.accent.neon} />
               </View>
-            </View>
+            </Animated.View>
 
             {chartData.length > 0 ? (
-              <View className="bg-white rounded-2xl p-4 mb-6 items-center shadow-sm border border-gray-100">
-                <Text className="text-lg font-bold text-slate-800 self-start mb-4">
+              <View className="bg-surface rounded-2xl p-4 mb-6 items-center border border-border">
+                <Text className="text-lg font-bold text-textPrimary self-start mb-4">
                   Alocação
                 </Text>
                 <PieChart
@@ -189,7 +218,7 @@ export default function Wallet() {
                   width={screenWidth - 60}
                   height={200}
                   chartConfig={{
-                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    color: () => t.text.primary,
                   }}
                   accessor={"population"}
                   backgroundColor={"transparent"}
@@ -200,102 +229,128 @@ export default function Wallet() {
                 />
               </View>
             ) : (
-              <View className="items-center justify-center p-10 bg-gray-50 rounded-2xl mb-6 border border-dashed border-gray-300">
-                <Ionicons
-                  name="pie-chart-outline"
-                  size={48}
-                  color={colors.inactive}
-                />
-                <Text className="text-gray-400 mt-3 text-center">
+              <View className="items-center justify-center p-10 bg-surface rounded-2xl mb-6 border border-dashed border-border">
+                <ChartPie size={48} color={t.text.tertiary} />
+                <Text className="text-textSecondary mt-3 text-center">
                   Adicione ativos para visualizar sua alocação.
                 </Text>
               </View>
             )}
 
-            <Text className="text-lg font-bold text-slate-800 mb-4">
+            <Text className="text-lg font-bold text-textPrimary mb-4">
               Histórico de Transações
             </Text>
           </>
         }
         ListEmptyComponent={
-          <Text className="text-gray-400 text-center mt-5 italic">
+          <Text className="text-textTertiary text-center mt-5 italic">
             Nenhuma transação registrada.
           </Text>
         }
       />
 
-      <TouchableOpacity
-        style={{
-          position: "absolute",
-          bottom: insets.bottom > 0 ? insets.bottom : 24,
-          right: 24,
-          zIndex: 40,
-          elevation: 5,
-          backgroundColor: colors.primary,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          justifyContent: "center",
-          alignItems: "center",
-          shadowColor: "#00AEEF",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-        }}
-        onPress={() => setModalVisible(true)}
-        activeOpacity={0.9}
+      {/* Estilo animado no wrapper, handlers no Touchable (padrão do preset) */}
+      <Animated.View
+        entering={fabEntering}
+        style={[
+          {
+            position: "absolute",
+            bottom: insets.bottom > 0 ? insets.bottom : spacing[6],
+            right: spacing[6],
+            zIndex: 40,
+          },
+          fabPress.pressStyle,
+        ]}
       >
-        <Ionicons name="add" size={30} color="#FFF" />
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={{
+            backgroundColor: t.accent.neon,
+            width: 56,
+            height: 56,
+            borderRadius: radius.full,
+            justifyContent: "center",
+            alignItems: "center",
+            ...shadow.glow,
+          }}
+          onPress={() => setModalVisible(true)}
+          onPressIn={fabPress.onPressIn}
+          onPressOut={fabPress.onPressOut}
+          accessibilityLabel="Adicionar transação"
+          accessibilityRole="button"
+          activeOpacity={0.9}
+        >
+          <Plus size={28} color={t.text.inverse} />
+        </TouchableOpacity>
+      </Animated.View>
 
       <CustomModal visible={modalVisible} onClose={() => setModalVisible(false)}>
-        <View className="p-6" style={{ paddingBottom: insets.bottom + 24 }}>
+        <View
+          className="p-6"
+          style={{ paddingBottom: insets.bottom + spacing[6] }}
+        >
           <View className="flex-row justify-between items-center mb-6">
-            <Text className="text-xl font-bold text-slate-800">
+            <Text className="text-xl font-bold text-textPrimary">
               Nova Transação
             </Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)} className="p-2 -mr-2">
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            <TouchableOpacity
+              className="p-2 -mr-2"
+              onPress={() => setModalVisible(false)}
+              accessibilityLabel="Fechar"
+              accessibilityRole="button"
+            >
+              <X size={24} color={t.text.secondary} />
             </TouchableOpacity>
           </View>
-          <Text className="text-sm font-bold text-gray-500 mb-2">
+          <Text className="text-sm font-bold text-textSecondary mb-2">
             Ativo (Código)
           </Text>
           <TextInput
-            className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
+            className="bg-elevated rounded-xl p-4 text-base text-textPrimary mb-4 border border-border"
             placeholder="Ex: PETR4, USD"
+            placeholderTextColor={t.text.tertiary}
             value={code}
             onChangeText={setCode}
             autoCapitalize="characters"
+            accessibilityLabel="Ativo (código)"
           />
-          <Text className="text-sm font-bold text-gray-500 mb-2">
+          <Text className="text-sm font-bold text-textSecondary mb-2">
             Quantidade
           </Text>
           <TextInput
-            className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
+            className="bg-elevated rounded-xl p-4 text-base text-textPrimary mb-4 border border-border"
             placeholder="0.00"
+            placeholderTextColor={t.text.tertiary}
             value={amount}
             onChangeText={setAmount}
             keyboardType="numeric"
+            accessibilityLabel="Quantidade"
           />
-          <Text className="text-sm font-bold text-gray-500 mb-2">
+          <Text className="text-sm font-bold text-textSecondary mb-2">
             Preço Pago (Unitário em R$)
           </Text>
           <TextInput
-            className="bg-gray-50 rounded-xl p-4 text-base text-slate-800 mb-4 border border-gray-200"
+            className="bg-elevated rounded-xl p-4 text-base text-textPrimary mb-4 border border-border"
             placeholder="0.00"
+            placeholderTextColor={t.text.tertiary}
             value={price}
             onChangeText={setPrice}
             keyboardType="numeric"
+            accessibilityLabel="Preço pago unitário em reais"
           />
-          <TouchableOpacity
-            className="bg-primary rounded-xl py-4 items-center mt-2 shadow-md shadow-blue-500/20 active:bg-primaryDark"
-            onPress={handleAdd}
-          >
-            <Text className="text-white text-base font-bold">
-              Salvar Investimento
-            </Text>
-          </TouchableOpacity>
+          <Animated.View style={savePress.pressStyle}>
+            <TouchableOpacity
+              className="bg-primary rounded-xl py-4 items-center mt-2 active:bg-accentPressed"
+              onPress={handleAdd}
+              onPressIn={savePress.onPressIn}
+              onPressOut={savePress.onPressOut}
+              accessibilityLabel="Salvar investimento"
+              accessibilityRole="button"
+            >
+              <Text className="text-primaryDark text-base font-bold">
+                Salvar Investimento
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </CustomModal>
     </PageContainer>

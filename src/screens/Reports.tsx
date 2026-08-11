@@ -8,12 +8,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FileText, Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import Animated from "react-native-reanimated";
 
 import { darkTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import {
   Report,
   ReportPeriod,
@@ -44,11 +46,14 @@ function formatDate(iso: string) {
   });
 }
 
-function ReportCard({ item }: { item: Report }) {
+function ReportCard({ item, index }: { item: Report; index: number }) {
+  // Entrada em cascata acompanha a posição do card na lista
+  const { listItemEntering } = useMotionPresets();
   const saldo = item.totalIncome - item.totalExpense;
   const positivo = saldo >= 0;
   return (
-    <View
+    <Animated.View
+      entering={listItemEntering(index)}
       style={{
         backgroundColor: darkTheme.background.elevated,
         borderRadius: radius.xl,
@@ -116,8 +121,9 @@ function ReportCard({ item }: { item: Report }) {
           </Text>
           <Text
             style={{
+              // Delta financeiro usa o verde semântico, nunca o accent da marca
               color: positivo
-                ? darkTheme.accent.neon
+                ? darkTheme.semantic.success
                 : darkTheme.semantic.danger,
               fontWeight: "700",
               fontSize: 14,
@@ -162,12 +168,13 @@ function ReportCard({ item }: { item: Report }) {
           {item.summary}
         </Text>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 export default function Reports() {
   const insets = useSafeAreaInsets();
+  const generatePress = usePressScale();
   const { items, isLoading, isGenerating, fetch, generate } = useReportsStore();
   const [tab, setTab] = useState<ReportPeriod>("MONTHLY");
 
@@ -202,6 +209,51 @@ export default function Reports() {
         title="Relatórios"
         subtitle="Consolidado por período"
         showProfileButton={false}
+        rightActions={[
+          // Gerar como action do header: o rodapé fica livre para o
+          // AssistantFAB, sem cálculo mágico de largura para desviar dele
+          <Animated.View key="generate" style={generatePress.pressStyle}>
+            <TouchableOpacity
+              onPress={handleGenerate}
+              onPressIn={generatePress.onPressIn}
+              onPressOut={generatePress.onPressOut}
+              disabled={isGenerating}
+              accessibilityLabel="Gerar relatório"
+              accessibilityRole="button"
+              activeOpacity={0.85}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: darkTheme.accent.neon,
+                paddingHorizontal: spacing[3],
+                height: 36,
+                borderRadius: radius.full,
+                opacity: isGenerating ? 0.7 : 1,
+              }}
+            >
+              {isGenerating ? (
+                <ActivityIndicator
+                  size="small"
+                  color={darkTheme.text.inverse}
+                />
+              ) : (
+                <>
+                  <Plus size={16} color={darkTheme.text.inverse} />
+                  <Text
+                    style={{
+                      color: darkTheme.text.inverse,
+                      fontWeight: "700",
+                      fontSize: 12,
+                      marginLeft: spacing[1],
+                    }}
+                  >
+                    Gerar
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </Animated.View>,
+        ]}
       />
 
       <View
@@ -256,7 +308,9 @@ export default function Reports() {
           padding: spacing[5],
           paddingBottom: insets.bottom + 120,
         }}
-        renderItem={({ item }) => <ReportCard item={item} />}
+        renderItem={({ item, index }) => (
+          <ReportCard item={item} index={index} />
+        )}
         refreshControl={
           <RefreshControl
             refreshing={isLoading}
@@ -275,11 +329,7 @@ export default function Reports() {
             </View>
           ) : (
             <View style={{ alignItems: "center", marginTop: spacing[10] }}>
-              <Ionicons
-                name="document-text-outline"
-                size={48}
-                color={darkTheme.text.tertiary}
-              />
+              <FileText size={48} color={darkTheme.text.tertiary} />
               <Text
                 style={{
                   color: darkTheme.text.secondary,
@@ -295,41 +345,6 @@ export default function Reports() {
           )
         }
       />
-
-      <TouchableOpacity
-        onPress={handleGenerate}
-        disabled={isGenerating}
-        activeOpacity={0.85}
-        style={{
-          position: "absolute",
-          left: spacing[5],
-          right: spacing[5] + 180,
-          bottom: insets.bottom + spacing[5],
-          backgroundColor: darkTheme.accent.neon,
-          paddingVertical: spacing[3],
-          borderRadius: radius.full,
-          alignItems: "center",
-          flexDirection: "row",
-          justifyContent: "center",
-        }}
-      >
-        {isGenerating ? (
-          <ActivityIndicator color={darkTheme.text.inverse} />
-        ) : (
-          <>
-            <Ionicons name="add" size={18} color={darkTheme.text.inverse} />
-            <Text
-              style={{
-                color: darkTheme.text.inverse,
-                fontWeight: "700",
-                marginLeft: 4,
-              }}
-            >
-              Gerar
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
 
       <AssistantFAB />
     </PageContainer>

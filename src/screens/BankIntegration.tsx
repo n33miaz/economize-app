@@ -9,19 +9,44 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  FileText,
+  Upload,
+} from "lucide-react-native";
 import { PieChart } from "react-native-chart-kit";
 import * as Haptics from "expo-haptics";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated from "react-native-reanimated";
 
 import { useBankStore } from "../store/bankStore";
 import { useToastStore } from "../store/toastStore";
 import PageContainer from "../components/PageContainer";
-import { colors } from "../theme/colors";
+import AssistantFAB from "../components/AssistantFAB";
+import { useTheme } from "../theme/ThemeProvider";
+import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 
 const screenWidth = Dimensions.get("window").width;
 
+// Cores de marca dos próprios bancos (dados, não tema) — únicas exceções
+// permitidas fora dos tokens, porque identificam produtos de terceiros
+const BANK_SHORTCUTS = [
+  { id: "inter", name: "Inter", url: "bancointer://", color: "#FF7A00" },
+  { id: "nubank", name: "Nubank", url: "nubank://", color: "#8A05BE" },
+  { id: "flash", name: "Flash", url: "flash://", color: "pink" },
+  { id: "santander", name: "Santander", url: "santander://", color: "red" },
+  { id: "bradesco", name: "Bradesco", url: "bradesco://", color: "red" },
+  { id: "itau", name: "Itaú", url: "itau://", color: "#EC7000" },
+  { id: "bb", name: "BB", url: "bb://", color: "#F8D117" },
+  { id: "c6", name: "C6 Bank", url: "c6bank://", color: "#242424" },
+];
+
 export default function BankIntegration() {
+  const t = useTheme();
+  const { cardEntering, listItemEntering } = useMotionPresets();
+  // Instâncias separadas: cada botão de importar tem seu próprio ciclo de toque
+  const importPress = usePressScale();
+  const emptyImportPress = usePressScale();
   const {
     transactions,
     isLoading,
@@ -31,19 +56,6 @@ export default function BankIntegration() {
   } = useBankStore();
   const { showToast } = useToastStore();
   const metrics = calculateMetrics();
-
-  const insets = useSafeAreaInsets();
-
-  const BANK_SHORTCUTS = [
-    { id: "inter", name: "Inter", url: "bancointer://", color: "#FF7A00" },
-    { id: "nubank", name: "Nubank", url: "nubank://", color: "#8A05BE" },
-    { id: "flash", name: "Flash", url: "flash://", color: "pink" },
-    { id: "santander", name: "Santander", url: "santander://", color: "red" },
-    { id: "bradesco", name: "Bradesco", url: "bradesco://", color: "red" },
-    { id: "itau", name: "Itaú", url: "itau://", color: "#EC7000" },
-    { id: "bb", name: "BB", url: "bb://", color: "#F8D117" },
-    { id: "c6", name: "C6 Bank", url: "c6bank://", color: "#242424" },
-  ];
 
   useEffect(() => {
     fetchTransactions();
@@ -69,23 +81,24 @@ export default function BankIntegration() {
 
   const chartData = useMemo(() => {
     if (metrics.income === 0 && metrics.expense === 0) return [];
+    // Alta/baixa financeira usa sempre chart.up/chart.down, nunca o accent
     return [
       {
         name: "Entradas",
         population: metrics.income,
-        color: colors.success,
-        legendFontColor: colors.textSecondary,
+        color: t.chart.up,
+        legendFontColor: t.text.secondary,
         legendFontSize: 12,
       },
       {
         name: "Saídas",
         population: metrics.expense,
-        color: colors.danger,
-        legendFontColor: colors.textSecondary,
+        color: t.chart.down,
+        legendFontColor: t.text.secondary,
         legendFontSize: 12,
       },
     ];
-  }, [metrics]);
+  }, [metrics, t]);
 
   const openBankApp = async (url: string) => {
     try {
@@ -100,7 +113,7 @@ export default function BankIntegration() {
     }
   };
 
-  const renderItem = ({ item }: { item: any }) => {
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
     const isCredit = item.type === "CREDIT";
     const date = new Date(item.date).toLocaleDateString("pt-BR", {
       day: "2-digit",
@@ -108,33 +121,37 @@ export default function BankIntegration() {
     });
 
     return (
-      <View className="bg-white p-4 mb-3 rounded-2xl border border-gray-100 shadow-sm flex-row items-center justify-between">
+      <Animated.View
+        entering={listItemEntering(index)}
+        className="bg-surface p-4 mb-3 rounded-2xl border border-border flex-row items-center justify-between"
+      >
         <View className="flex-row items-center flex-1 mr-3">
           <View
-            className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${isCredit ? "bg-green-50" : "bg-red-50"}`}
+            className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${isCredit ? "bg-success/15" : "bg-danger/15"}`}
           >
-            <Ionicons
-              name={isCredit ? "arrow-down" : "arrow-up"}
-              size={20}
-              color={isCredit ? colors.success : colors.danger}
-            />
+            {/* Entrada aponta para dentro, saída para fora — convenção de extrato */}
+            {isCredit ? (
+              <ArrowDownLeft size={20} color={t.semantic.success} />
+            ) : (
+              <ArrowUpRight size={20} color={t.semantic.danger} />
+            )}
           </View>
           <View className="flex-1">
             <Text
-              className="font-bold text-slate-800 text-sm leading-5"
+              className="font-bold text-textPrimary text-sm leading-5"
               numberOfLines={2}
             >
               {item.description || "Transferência"}
             </Text>
-            <Text className="text-gray-400 text-xs mt-0.5">{date}</Text>
+            <Text className="text-textTertiary text-xs mt-0.5">{date}</Text>
           </View>
         </View>
         <Text
-          className={`font-bold text-base ${isCredit ? "text-green-600" : "text-slate-800"}`}
+          className={`font-bold text-base ${isCredit ? "text-success" : "text-textPrimary"}`}
         >
           {isCredit ? "+ " : "- "}R$ {Math.abs(item.amount).toFixed(2)}
         </Text>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -150,47 +167,42 @@ export default function BankIntegration() {
           <RefreshControl
             refreshing={isLoading}
             onRefresh={fetchTransactions}
-            colors={[colors.primary]}
+            colors={[t.accent.neon]}
           />
         }
         ListHeaderComponent={
           <View className="mb-6">
-            <View className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex-row justify-between mb-4">
-              <View className="items-center flex-1 border-r border-gray-100">
+            <Animated.View
+              entering={cardEntering}
+              className="bg-surface rounded-3xl p-5 border border-border flex-row justify-between mb-4"
+            >
+              <View className="items-center flex-1 border-r border-border">
                 <View className="flex-row items-center mb-1">
-                  <Ionicons
-                    name="arrow-down-circle"
-                    size={16}
-                    color={colors.success}
-                  />
-                  <Text className="text-gray-500 text-xs ml-1 font-medium">
+                  <ArrowDownLeft size={16} color={t.semantic.success} />
+                  <Text className="text-textSecondary text-xs ml-1 font-medium">
                     Receitas
                   </Text>
                 </View>
-                <Text className="text-green-600 font-bold text-xl">
+                <Text className="text-success font-bold text-xl">
                   R$ {metrics.income.toFixed(2)}
                 </Text>
               </View>
               <View className="items-center flex-1">
                 <View className="flex-row items-center mb-1">
-                  <Ionicons
-                    name="arrow-up-circle"
-                    size={16}
-                    color={colors.danger}
-                  />
-                  <Text className="text-gray-500 text-xs ml-1 font-medium">
+                  <ArrowUpRight size={16} color={t.semantic.danger} />
+                  <Text className="text-textSecondary text-xs ml-1 font-medium">
                     Despesas
                   </Text>
                 </View>
-                <Text className="text-red-500 font-bold text-xl">
+                <Text className="text-danger font-bold text-xl">
                   R$ {metrics.expense.toFixed(2)}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
 
             {chartData.length > 0 && (
-              <View className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 items-center">
-                <Text className="text-sm font-bold text-slate-800 self-start mb-2">
+              <View className="bg-surface rounded-3xl p-4 border border-border items-center">
+                <Text className="text-sm font-bold text-textPrimary self-start mb-2">
                   Análise de Fluxo
                 </Text>
                 <PieChart
@@ -198,7 +210,7 @@ export default function BankIntegration() {
                   width={screenWidth - 80}
                   height={140}
                   chartConfig={{
-                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    color: () => t.text.primary,
                   }}
                   accessor={"population"}
                   backgroundColor={"transparent"}
@@ -211,43 +223,26 @@ export default function BankIntegration() {
             )}
 
             {/* Atalhos dos Bancos */}
-            <View style={{ marginBottom: -12, marginTop: 16 }}>
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "bold",
-                  color: "#0F172A",
-                  marginBottom: 12,
-                }}
-              >
+            <View className="mt-4 -mb-3">
+              <Text className="text-base font-bold text-textPrimary mb-3">
                 Acesso Rápido
               </Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12 }}
+                contentContainerClassName="gap-3"
               >
                 {BANK_SHORTCUTS.map((bank) => (
                   <TouchableOpacity
                     key={bank.id}
+                    className="w-[72px] h-[72px] rounded-xl justify-center items-center"
+                    style={{ backgroundColor: bank.color }}
                     onPress={() => openBankApp(bank.url)}
-                    style={{
-                      backgroundColor: bank.color,
-                      width: 72,
-                      height: 72,
-                      borderRadius: 16,
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
+                    accessibilityLabel={`Abrir app do ${bank.name}`}
+                    accessibilityRole="button"
                     activeOpacity={0.8}
                   >
-                    <Text
-                      style={{
-                        color: "#FFF",
-                        fontWeight: "bold",
-                        fontSize: 12,
-                      }}
-                    >
+                    <Text className="text-white font-bold text-xs">
                       {bank.name}
                     </Text>
                   </TouchableOpacity>
@@ -256,53 +251,68 @@ export default function BankIntegration() {
             </View>
 
             {transactions.length > 0 && (
-              <Text className="text-lg font-bold text-slate-800 mt-2 mb-2">
-                Histórico de Transações
-              </Text>
+              <View className="flex-row items-center justify-between mt-5 mb-2">
+                <Text className="text-lg font-bold text-textPrimary">
+                  Histórico de Transações
+                </Text>
+                {/* Import vira ação inline: o canto inferior é do AssistantFAB */}
+                <Animated.View style={importPress.pressStyle}>
+                  <TouchableOpacity
+                    className="flex-row items-center bg-accentMuted border border-accent rounded-full px-3 py-1.5"
+                    onPress={handleImport}
+                    onPressIn={importPress.onPressIn}
+                    onPressOut={importPress.onPressOut}
+                    accessibilityLabel="Importar extrato"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.8}
+                  >
+                    <Upload size={14} color={t.accent.neon} />
+                    <Text className="text-accent text-xs font-bold ml-1">
+                      Importar
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
             )}
           </View>
         }
         ListEmptyComponent={
-          <View className="items-center justify-center mt-10 bg-gray-50 p-8 rounded-3xl border border-dashed border-gray-200">
-            <View className="w-20 h-20 bg-white rounded-full justify-center items-center shadow-sm mb-4">
-              <Ionicons name="document-text" size={40} color={colors.primary} />
+          <Animated.View
+            entering={cardEntering}
+            className="items-center justify-center mt-10 bg-surface p-8 rounded-3xl border border-dashed border-border"
+          >
+            <View className="w-20 h-20 bg-elevated rounded-full justify-center items-center mb-4">
+              <FileText size={40} color={t.accent.neon} />
             </View>
-            <Text className="text-slate-800 font-bold text-lg text-center mb-2">
+            <Text className="text-textPrimary font-bold text-lg text-center mb-2">
               Nenhum extrato importado
             </Text>
-            <Text className="text-gray-500 text-sm text-center leading-5">
+            <Text className="text-textSecondary text-sm text-center leading-5 mb-5">
               Exporte o arquivo de extrato em seu banco e importe aqui para gerar seus
               gráficos e relatórios.
             </Text>
-          </View>
+            <Animated.View style={emptyImportPress.pressStyle}>
+              <TouchableOpacity
+                className="flex-row items-center bg-primary rounded-full px-6 py-3 active:bg-accentPressed"
+                onPress={handleImport}
+                onPressIn={emptyImportPress.onPressIn}
+                onPressOut={emptyImportPress.onPressOut}
+                accessibilityLabel="Importar extrato"
+                accessibilityRole="button"
+                activeOpacity={0.85}
+              >
+                <Upload size={18} color={t.text.inverse} />
+                <Text className="text-primaryDark font-bold text-sm ml-2">
+                  Importar extrato
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
         }
       />
 
-      {/* Botão Flutuante Importar */}
-      <TouchableOpacity
-        style={{
-          position: "absolute",
-          bottom: 24, 
-          right: 24,
-          zIndex: 50,
-          elevation: 5,
-          backgroundColor: colors.primary,
-          height: 56,
-          paddingHorizontal: 24,
-          borderRadius: 28,
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          shadowColor: "#00AEEF",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-        }}
-        onPress={handleImport}
-        activeOpacity={0.9}
-      >
-        <Ionicons name="cloud-upload-outline" size={24} color="#FFF" />
-      </TouchableOpacity>
+      <AssistantFAB />
     </PageContainer>
   );
 }
