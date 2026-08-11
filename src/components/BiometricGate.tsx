@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FingerprintPattern } from "lucide-react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 
 import { darkTheme } from "../theme/colors";
@@ -19,8 +19,10 @@ export default function BiometricGate({ children }: Props) {
   const hasHydrated = usePreferencesStore((s) => s.hasHydrated);
   const setBiometric = usePreferencesStore((s) => s.setBiometric);
 
-  const gateRequired = Boolean(token && biometricLogin && hasHydrated);
-  const [authorized, setAuthorized] = useState(!gateRequired);
+  const gateRequired = Boolean(token && biometricLogin);
+  // Nasce bloqueado: liberar é sempre decisão do efeito abaixo, nunca do
+  // estado inicial (que rodava antes da hidratação e deixava passar direto)
+  const [authorized, setAuthorized] = useState(false);
   const [failures, setFailures] = useState(0);
 
   const runAuth = useCallback(async () => {
@@ -49,9 +51,21 @@ export default function BiometricGate({ children }: Props) {
   }, [setBiometric, logout]);
 
   useEffect(() => {
-    if (gateRequired) runAuth();
-    else setAuthorized(true);
-  }, [gateRequired, runAuth]);
+    // Só decide depois da hidratação — antes disso não sabemos se o gate vale
+    if (!hasHydrated) return;
+    if (!gateRequired) {
+      setAuthorized(true);
+      return;
+    }
+    if (!authorized) runAuth();
+  }, [hasHydrated, gateRequired, authorized, runAuth]);
+
+  // Splash neutro enquanto as preferências hidratam: nada de rotas aqui
+  if (!hasHydrated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: darkTheme.background.base }} />
+    );
+  }
 
   if (gateRequired && !authorized) {
     return (
@@ -77,11 +91,7 @@ export default function BiometricGate({ children }: Props) {
             borderColor: darkTheme.accent.neon,
           }}
         >
-          <Ionicons
-            name="finger-print"
-            size={40}
-            color={darkTheme.accent.neon}
-          />
+          <FingerprintPattern size={40} color={darkTheme.accent.neon} />
         </View>
         <Text
           style={{
