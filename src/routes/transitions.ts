@@ -17,6 +17,9 @@ export const modalLikeTransition: NativeStackNavigationOptions = {
   gestureEnabled: true,
 };
 
+// Padrão único das telas efêmeras abertas da Home (Profile, Settings,
+// Relatórios, Notícias, Favoritos): slide_from_right aqui + fade do conteúdo
+// no PageContainer. About e Assistente permanecem com o modalLike acima.
 export const ephemeralTransition: NativeStackNavigationOptions = {
   animation: "slide_from_right",
   animationDuration: 240,

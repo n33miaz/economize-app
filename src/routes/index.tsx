@@ -2,8 +2,9 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
-import { NavigationContainer } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
+import { DarkTheme, NavigationContainer } from "@react-navigation/native";
+import { ChartCandlestick, House, Wallet as WalletTabIcon } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { Platform, View, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -12,7 +13,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { colors } from "../theme/colors";
+import { colors, darkTheme } from "../theme/colors";
+import { motion, radius } from "../theme/ds";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import {
@@ -36,6 +38,7 @@ import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
 import Settings from "../screens/Settings";
 import Reports from "../screens/Reports";
+import Favorites from "../screens/Favorites";
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -53,7 +56,7 @@ function IndicatorsTabs() {
           tabBarInactiveTintColor: colors.inactive,
           tabBarIndicatorStyle: { backgroundColor: colors.primary, height: 3 },
           tabBarStyle: {
-            backgroundColor: "white",
+            backgroundColor: colors.cardBackground,
             elevation: 0,
             shadowOpacity: 0,
           },
@@ -83,7 +86,7 @@ function FinanceTabs() {
           tabBarInactiveTintColor: colors.inactive,
           tabBarIndicatorStyle: { backgroundColor: colors.primary, height: 3 },
           tabBarStyle: {
-            backgroundColor: "white",
+            backgroundColor: colors.cardBackground,
             elevation: 0,
             shadowOpacity: 0,
           },
@@ -101,12 +104,24 @@ function FinanceTabs() {
   );
 }
 
-function AnimatedTabIcon({ activeName, inactiveName, focused, size }: any) {
+// Lucide não tem variante preenchida: o estado ativo entra por cross-fade de
+// cor (camada inativa some enquanto a camada accent aparece)
+function AnimatedTabIcon({
+  Icon,
+  focused,
+  size,
+}: {
+  Icon: LucideIcon;
+  focused: boolean;
+  size: number;
+}) {
   const progress = useSharedValue(focused ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withTiming(focused ? 1 : 0, { duration: 300 });
-  }, [focused]);
+    progress.value = withTiming(focused ? 1 : 0, {
+      duration: motion.duration.base,
+    });
+  }, [focused, progress]);
 
   const activeStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
@@ -120,24 +135,28 @@ function AnimatedTabIcon({ activeName, inactiveName, focused, size }: any) {
   return (
     <View className="justify-center items-center">
       <Animated.View style={inactiveStyle}>
-        <Ionicons name={inactiveName} size={size} color={colors.inactive} />
+        <Icon size={size} color={colors.inactive} />
       </Animated.View>
       <Animated.View style={activeStyle}>
-        <Ionicons name={activeName} size={size} color={colors.primary} />
+        <Icon size={size} color={colors.primary} />
       </Animated.View>
     </View>
   );
 }
 
-function HomeTabIcon({ focused, size }: any) {
+function HomeTabIcon({ focused, size }: { focused: boolean; size: number }) {
   const progress = useSharedValue(focused ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withTiming(focused ? 1 : 0, { duration: 500 });
-  }, [focused]);
+    progress.value = withTiming(focused ? 1 : 0, {
+      duration: motion.duration.base,
+    });
+  }, [focused, progress]);
 
+  // Halo em camada própria animando só a opacidade: evita interpolar cor
+  // no worklet e mantém o token accentMuted como única fonte do tom
   const bgStyle = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(0, 174, 239, ${progress.value * 0.1})`,
+    opacity: progress.value,
   }));
 
   const activeStyle = useAnimatedStyle(() => ({
@@ -146,21 +165,22 @@ function HomeTabIcon({ focused, size }: any) {
   }));
 
   const inactiveStyle = useAnimatedStyle(() => ({
-    opacity: 2 - progress.value,
+    opacity: 1 - progress.value,
   }));
 
   return (
-    <Animated.View
-      className="w-12 h-12 rounded-full justify-center items-center"
-      style={bgStyle}
-    >
+    <View className="w-12 h-12 rounded-full justify-center items-center">
+      <Animated.View
+        className="absolute inset-0 rounded-full bg-accentMuted"
+        style={bgStyle}
+      />
       <Animated.View style={inactiveStyle}>
-        <Ionicons name="home-outline" size={size} color={colors.inactive} />
+        <House size={size} color={colors.inactive} />
       </Animated.View>
       <Animated.View style={activeStyle}>
-        <Ionicons name="home" size={size} color={colors.primary} />
+        <House size={size} color={colors.primary} />
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -180,16 +200,20 @@ function MainTabs() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.inactive,
         tabBarStyle: {
-          backgroundColor: "white",
+          backgroundColor: colors.cardBackground,
           height: 70 + (Platform.OS === "ios" ? insets.bottom : 0),
           paddingBottom: Platform.OS === "ios" ? insets.bottom : 10,
           paddingTop: 10,
+          // No dark, sombra é invisível — a borda superior faz a separação
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          elevation: 10,
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
+          // Cantos superiores arredondados: o fundo do navigator (base) fica
+          // visível atrás e a barra ganha a mesma geometria dos cards
+          borderTopLeftRadius: radius["2xl"],
+          borderTopRightRadius: radius["2xl"],
+          overflow: "hidden",
+          elevation: 0,
+          shadowOpacity: 0,
         },
         tabBarLabelStyle: {
           fontFamily: "Roboto_700Bold",
@@ -204,10 +228,9 @@ function MainTabs() {
         options={{
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
-              activeName="stats-chart"
-              inactiveName="stats-chart-outline"
+              Icon={ChartCandlestick}
               focused={focused}
-              size={24}
+              size={22}
             />
           ),
         }}
@@ -217,7 +240,7 @@ function MainTabs() {
         component={Home}
         options={{
           tabBarIcon: ({ focused }) => (
-            <HomeTabIcon focused={focused} size={26} />
+            <HomeTabIcon focused={focused} size={24} />
           ),
         }}
       />
@@ -226,12 +249,7 @@ function MainTabs() {
         component={FinanceTabs}
         options={{
           tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon
-              activeName="wallet"
-              inactiveName="wallet-outline"
-              focused={focused}
-              size={24}
-            />
+            <AnimatedTabIcon Icon={WalletTabIcon} focused={focused} size={22} />
           ),
         }}
       />
@@ -249,12 +267,39 @@ function AuthRoutes() {
   );
 }
 
+// Tema do container alinhado aos tokens: evita flashes brancos nas transições
+// e pinta o fundo atrás dos cantos arredondados da tab bar
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: darkTheme.accent.neon,
+    background: darkTheme.background.base,
+    card: darkTheme.background.surface,
+    text: darkTheme.text.primary,
+    border: darkTheme.border.default,
+    notification: darkTheme.accent.neon,
+  },
+};
+
 // --- ROOT NAVIGATOR ---
 export default function Routes() {
   const token = useAuthStore((state) => state.token);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+
+  // Sem esperar a hidratação, o token persistido ainda não existe e o
+  // cold start piscava a tela de Login antes de cair na Home
+  if (!hasHydrated) {
+    return (
+      <View
+        className="flex-1"
+        style={{ backgroundColor: darkTheme.background.base }}
+      />
+    );
+  }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       {token ? (
         <Stack.Navigator
           screenOptions={{ headerShown: false, ...slideRightTransition }}
@@ -288,6 +333,11 @@ export default function Routes() {
           <Stack.Screen
             name="Relatórios"
             component={Reports}
+            options={ephemeralTransition}
+          />
+          <Stack.Screen
+            name="Favoritos"
+            component={Favorites}
             options={ephemeralTransition}
           />
         </Stack.Navigator>
