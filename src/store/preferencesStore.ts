@@ -59,10 +59,10 @@ export const usePreferencesStore = create(
     {
       name: "@preferences_storage",
       storage: createJSONStorage(() => AsyncStorage),
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state.hasHydrated = true;
-        }
+      // setState (e não mutação direta do state) para notificar os subscribers —
+      // o BiometricGate depende desse re-render para armar o bloqueio
+      onRehydrateStorage: () => () => {
+        usePreferencesStore.setState({ hasHydrated: true });
       },
     },
   ),

@@ -8,6 +8,7 @@ interface AuthState {
   userName: string | null;
   isLoading: boolean;
   error: string | null;
+  hasHydrated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -21,6 +22,7 @@ export const useAuthStore = create(
       userName: null,
       isLoading: false,
       error: null,
+      hasHydrated: false,
 
       login: async (email, password) => {
         set({ isLoading: true, error: null });
@@ -77,6 +79,11 @@ export const useAuthStore = create(
     {
       name: "@auth_storage",
       storage: createJSONStorage(() => AsyncStorage),
+      // Sinaliza o fim da hidratação via setState para as rotas esperarem o
+      // token persistido — sem isso o cold start pisca a tela de Login
+      onRehydrateStorage: () => () => {
+        useAuthStore.setState({ hasHydrated: true });
+      },
     },
   ),
 );
