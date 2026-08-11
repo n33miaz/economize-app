@@ -8,10 +8,17 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { ArrowLeft } from "lucide-react-native";
+import Animated from "react-native-reanimated";
+
 import { useAuthStore } from "../../store/authStore";
-import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../theme/ThemeProvider";
+import { useMotionPresets, usePressScale } from "../../theme/motionPresets";
 
 export default function Register({ navigation }: any) {
+  const t = useTheme();
+  const { cardEntering, listItemEntering } = useMotionPresets();
+  const submitPress = usePressScale();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,54 +28,66 @@ export default function Register({ navigation }: any) {
     if (!name || !email || !password) return;
     try {
       await register(name, email, password);
-    } catch (e) {}
+    } catch (e) {
+      // Erro tratado no store
+    }
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-background-light justify-center px-6"
+      className="flex-1 bg-background justify-center px-6"
     >
       <TouchableOpacity
-        className="absolute top-14 left-6 w-10 h-10 bg-gray-100 rounded-full justify-center items-center"
+        className="absolute top-14 left-6 w-10 h-10 bg-elevated rounded-full justify-center items-center"
         onPress={() => navigation.goBack()}
+        accessibilityLabel="Voltar"
+        accessibilityRole="button"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="arrow-back" size={20} color="#333" />
+        <ArrowLeft size={20} color={t.text.primary} />
       </TouchableOpacity>
 
-      <View className="mb-10 mt-10">
-        <Text className="text-3xl font-bold text-primaryDark">Criar Conta</Text>
-        <Text className="text-gray-500 mt-2">
+      <Animated.View entering={cardEntering} className="mb-10 mt-10">
+        <Text className="text-3xl font-bold text-textPrimary">
+          Criar Conta
+        </Text>
+        <Text className="text-textSecondary mt-2">
           Comece a gerenciar seus investimentos
         </Text>
-      </View>
+      </Animated.View>
 
       {error && (
-        <View className="bg-red-100 p-3 rounded-xl mb-4 border border-red-200">
-          <Text className="text-red-600 text-center text-sm">{error}</Text>
+        <View className="bg-danger/15 p-3 rounded-xl mb-4 border border-danger/40">
+          <Text className="text-danger text-center text-sm">{error}</Text>
         </View>
       )}
 
-      <View className="mb-4">
-        <Text className="text-sm font-bold text-gray-600 mb-2">
+      <Animated.View entering={listItemEntering(1)} className="mb-4">
+        <Text className="text-sm font-bold text-textSecondary mb-2">
           Nome Completo
         </Text>
         <TextInput
-          className="bg-gray-50 border border-gray-200 rounded-xl px-4 h-14 text-slate-800"
+          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
           placeholder="João Silva"
+          placeholderTextColor={t.text.tertiary}
           value={name}
           onChangeText={(text) => {
             setName(text);
             clearError();
           }}
+          accessibilityLabel="Nome completo"
         />
-      </View>
+      </Animated.View>
 
-      <View className="mb-4">
-        <Text className="text-sm font-bold text-gray-600 mb-2">E-mail</Text>
+      <Animated.View entering={listItemEntering(2)} className="mb-4">
+        <Text className="text-sm font-bold text-textSecondary mb-2">
+          E-mail
+        </Text>
         <TextInput
-          className="bg-gray-50 border border-gray-200 rounded-xl px-4 h-14 text-slate-800"
+          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
           placeholder="seu@email.com"
+          placeholderTextColor={t.text.tertiary}
           value={email}
           onChangeText={(text) => {
             setEmail(text);
@@ -76,34 +95,48 @@ export default function Register({ navigation }: any) {
           }}
           autoCapitalize="none"
           keyboardType="email-address"
+          accessibilityLabel="E-mail"
         />
-      </View>
+      </Animated.View>
 
-      <View className="mb-8">
-        <Text className="text-sm font-bold text-gray-600 mb-2">Senha</Text>
+      <Animated.View entering={listItemEntering(3)} className="mb-8">
+        <Text className="text-sm font-bold text-textSecondary mb-2">Senha</Text>
         <TextInput
-          className="bg-gray-50 border border-gray-200 rounded-xl px-4 h-14 text-slate-800"
+          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
           placeholder="••••••••"
+          placeholderTextColor={t.text.tertiary}
           value={password}
           onChangeText={(text) => {
             setPassword(text);
             clearError();
           }}
           secureTextEntry
+          accessibilityLabel="Senha"
         />
-      </View>
+      </Animated.View>
 
-      <TouchableOpacity
-        className="bg-primary h-14 rounded-xl justify-center items-center shadow-lg shadow-blue-500/30 active:bg-primaryDark"
-        onPress={handleRegister}
-        disabled={isLoading}
+      <Animated.View
+        entering={listItemEntering(4)}
+        style={submitPress.pressStyle}
       >
-        {isLoading ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text className="text-white font-bold text-lg">Cadastrar</Text>
-        )}
-      </TouchableOpacity>
+        <TouchableOpacity
+          className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"
+          onPress={handleRegister}
+          onPressIn={submitPress.onPressIn}
+          onPressOut={submitPress.onPressOut}
+          disabled={isLoading}
+          accessibilityLabel="Cadastrar"
+          accessibilityRole="button"
+        >
+          {isLoading ? (
+            <ActivityIndicator color={t.text.inverse} />
+          ) : (
+            <Text className="text-primaryDark font-bold text-lg">
+              Cadastrar
+            </Text>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }
