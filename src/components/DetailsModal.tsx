@@ -14,11 +14,14 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   withSpring,
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { motion } from "../theme/ds";
+import { sheetSpring } from "../theme/motionPresets";
 import { convertCurrency } from "../services/api";
 
 interface DetailsModalProps {
@@ -38,6 +41,8 @@ export default function DetailsModal({
   currencyCode,
   children,
 }: DetailsModalProps) {
+  const t = useTheme();
+  const reducedMotion = useReducedMotion();
   const [amount, setAmount] = useState("100");
   const [conversionResult, setConversionResult] = useState<number | null>(null);
   const [loadingConversion, setLoadingConversion] = useState(false);
@@ -52,16 +57,24 @@ export default function DetailsModal({
       setConversionResult(null);
       setAmount("100");
       requestAnimationFrame(() => {
-        translateY.value = withTiming(0, { duration: 350 });
-        opacity.value = withTiming(1, { duration: 350 });
+        // Sheet em spring de damping alto (assenta sem quicar); com movimento
+        // reduzido entra só no fade, sem deslocamento
+        translateY.value = reducedMotion
+          ? withTiming(0, { duration: 0 })
+          : withSpring(0, sheetSpring);
+        opacity.value = withTiming(1, { duration: motion.duration.base });
       });
     } else {
-      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 300 }, () => {
-        runOnJS(setShowModal)(false);
-      });
-      opacity.value = withTiming(0, { duration: 300 });
+      translateY.value = withTiming(
+        reducedMotion ? 0 : SCREEN_HEIGHT,
+        { duration: motion.duration.base },
+        () => {
+          runOnJS(setShowModal)(false);
+        },
+      );
+      opacity.value = withTiming(0, { duration: motion.duration.base });
     }
-  }, [visible]);
+  }, [visible, reducedMotion]);
 
   const handleConvert = async () => {
     if (!currencyCode || !amount) return;
@@ -98,8 +111,8 @@ export default function DetailsModal({
       animationType="none"
     >
       <Animated.View
-        className="absolute inset-0 bg-slate-900/60"
-        style={backdropStyle}
+        className="absolute inset-0"
+        style={[{ backgroundColor: t.background.overlay }, backdropStyle]}
       >
         <TouchableOpacity
           className="flex-1"
@@ -114,12 +127,12 @@ export default function DetailsModal({
         pointerEvents="box-none"
       >
         <Animated.View
-          className="bg-white rounded-t-[32px] px-6 pt-3 pb-10 max-h-[90%]"
+          className="bg-surface border-t border-border rounded-t-3xl px-6 pt-3 pb-10 max-h-[90%]"
           style={modalStyle}
         >
-          <View className="w-14 h-1.5 bg-slate-200 rounded-full self-center mb-6 mt-2" />
-          <View className="items-center justify-center mb-6 border-b border-slate-100 pb-4">
-            <Text className="text-2xl font-bold text-slate-800 text-center">
+          <View className="w-14 h-1.5 bg-border rounded-full self-center mb-6 mt-2" />
+          <View className="items-center justify-center mb-6 border-b border-border pb-4">
+            <Text className="text-2xl font-bold text-textPrimary text-center">
               {title}
             </Text>
           </View>
@@ -130,42 +143,45 @@ export default function DetailsModal({
           >
             {children}
             {currencyCode && (
-              <View className="mt-6 bg-slate-50 p-5 rounded-3xl border border-slate-200">
-                <Text className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-widest">
+              <View className="mt-6 bg-elevated p-5 rounded-3xl border border-border">
+                <Text className="text-xs font-bold text-textSecondary mb-4 uppercase tracking-widest">
                   Simulador de Conversão
                 </Text>
-                <View className="flex-row items-center bg-white rounded-2xl border border-slate-200 px-4 h-16 mb-4">
-                  <Text className="text-base font-bold text-slate-400 mr-3 pr-3 border-r border-slate-100">
+                <View className="flex-row items-center bg-surface rounded-2xl border border-border px-4 h-16 mb-4">
+                  <Text className="text-base font-bold text-textTertiary mr-3 pr-3 border-r border-border">
                     BRL
                   </Text>
                   <TextInput
-                    className="flex-1 text-xl text-slate-800 font-bold h-full"
+                    className="flex-1 text-xl text-textPrimary font-bold h-full"
                     value={amount}
                     onChangeText={setAmount}
                     keyboardType="numeric"
                     placeholder="0.00"
-                    placeholderTextColor={colors.inactive}
+                    placeholderTextColor={t.text.tertiary}
+                    accessibilityLabel="Valor em reais para converter"
                   />
                 </View>
                 <TouchableOpacity
-                  className="bg-primary rounded-2xl h-16 justify-center items-center active:bg-primaryDark"
+                  className="bg-primary rounded-2xl h-16 justify-center items-center active:bg-accentPressed"
                   onPress={handleConvert}
                   disabled={loadingConversion}
+                  accessibilityLabel="Converter agora"
+                  accessibilityRole="button"
                 >
                   {loadingConversion ? (
-                    <ActivityIndicator color="#FFF" />
+                    <ActivityIndicator color={t.text.inverse} />
                   ) : (
-                    <Text className="text-white text-lg font-bold">
+                    <Text className="text-primaryDark text-lg font-bold">
                       Converter Agora
                     </Text>
                   )}
                 </TouchableOpacity>
                 {conversionResult !== null && (
-                  <View className="mt-5 items-center p-5 bg-green-50 rounded-2xl border border-green-100">
-                    <Text className="text-xs text-green-600 mb-1 font-medium uppercase tracking-widest">
+                  <View className="mt-5 items-center p-5 bg-success/15 rounded-2xl border border-success/30">
+                    <Text className="text-xs text-success mb-1 font-medium uppercase tracking-widest">
                       Valor Aproximado
                     </Text>
-                    <Text className="text-3xl font-bold text-green-700">
+                    <Text className="text-3xl font-bold text-success">
                       $ {conversionResult.toFixed(2)}
                     </Text>
                   </View>

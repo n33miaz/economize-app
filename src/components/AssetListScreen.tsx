@@ -10,10 +10,19 @@ import {
   Keyboard,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Bitcoin,
+  Search,
+  TrendingUp,
+} from "lucide-react-native";
+import Animated from "react-native-reanimated";
 
 import { useDebounce } from "../hooks/useDebounce";
 import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { useMotionPresets } from "../theme/motionPresets";
 import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import IndicatorCard from "./IndicatorCard";
 import HighlightCard from "./HighlightCard";
@@ -40,6 +49,8 @@ export default function AssetListScreen({
   symbol,
   featuredItems = [],
 }: AssetListScreenProps) {
+  const t = useTheme();
+  const { listItemEntering } = useMotionPresets();
   const { loading, error, fetchIndicators } = useIndicatorStore();
   const { favorites, toggleFavorite } = useFavoritesStore();
 
@@ -123,10 +134,10 @@ export default function AssetListScreen({
                   title={item.code || item.name}
                   value={item.points || item.buy}
                   variation={item.variation}
-                  iconName={
+                  Icon={
                     item.code === "BTC" || item.id.includes("BTC")
-                      ? "logo-bitcoin"
-                      : "stats-chart"
+                      ? Bitcoin
+                      : TrendingUp
                   }
                 />
               ))}
@@ -138,7 +149,7 @@ export default function AssetListScreen({
   }, [searchText, featuredItems]);
 
   const renderItem = useCallback(
-    ({ item }: { item: Indicator }) => {
+    ({ item, index }: { item: Indicator; index: number }) => {
       let displaySymbol = symbol;
       if (!displaySymbol) {
         displaySymbol =
@@ -147,24 +158,26 @@ export default function AssetListScreen({
       const displayValue = item.points !== undefined ? item.points : item.buy;
 
       return (
-        <IndicatorCard
-          name={item.name}
-          id={item.id}
-          value={displayValue}
-          variation={item.variation}
-          isFavorite={favorites.includes(item.id)}
-          onPress={() => handleOpenModal(item)}
-          onToggleFavorite={handleToggleFavorite}
-          symbol={displaySymbol}
-        />
+        <Animated.View entering={listItemEntering(index)}>
+          <IndicatorCard
+            name={item.name}
+            id={item.id}
+            value={displayValue}
+            variation={item.variation}
+            isFavorite={favorites.includes(item.id)}
+            onPress={() => handleOpenModal(item)}
+            onToggleFavorite={handleToggleFavorite}
+            symbol={displaySymbol}
+          />
+        </Animated.View>
       );
     },
-    [favorites, handleToggleFavorite, handleOpenModal, symbol],
+    [favorites, handleToggleFavorite, handleOpenModal, symbol, listItemEntering],
   );
 
   return (
     <PageContainer>
-      <View className="px-5 pt-4 bg-background z-10 shadow-sm shadow-gray-200/50">
+      <View className="px-5 pt-4 bg-background z-10">
         <SearchBar
           placeholder="Buscar ativo (ex: USD, PETR4)..."
           value={searchText}
@@ -177,7 +190,7 @@ export default function AssetListScreen({
         {isSearching && (
           <View className="flex-row items-center justify-center py-2">
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text className="ml-2 text-gray-500 text-xs font-medium">
+            <Text className="ml-2 text-textSecondary text-xs font-medium">
               Filtrando mercado...
             </Text>
           </View>
@@ -191,7 +204,7 @@ export default function AssetListScreen({
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <View
               key={i}
-              className="bg-white rounded-2xl p-5 mb-3 border border-gray-100"
+              className="bg-surface rounded-2xl p-5 mb-3 border border-border"
             >
               <View className="flex-row items-center mb-4">
                 <Skeleton width={40} height={40} borderRadius={12} />
@@ -229,12 +242,8 @@ export default function AssetListScreen({
           ListEmptyComponent={
             !loading ? (
               <View className="mt-20 items-center px-10 opacity-60">
-                <Ionicons
-                  name="search-outline"
-                  size={48}
-                  color={colors.inactive}
-                />
-                <Text className="text-gray-500 text-base text-center mt-4 font-medium">
+                <Search size={48} color={colors.inactive} />
+                <Text className="text-textSecondary text-base text-center mt-4 font-medium">
                   {searchText
                     ? `Nenhum ativo encontrado para "${searchText}"`
                     : emptyMessage}
@@ -252,29 +261,29 @@ export default function AssetListScreen({
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            <View className="w-14 h-1.5 bg-slate-200 rounded-full self-center mb-6" />
-            <View className="items-center justify-center mb-6 border-b border-slate-100 pb-4">
-              <Text className="text-2xl font-bold text-slate-800 text-center">
+            <View className="w-14 h-1.5 bg-border rounded-full self-center mb-6" />
+            <View className="items-center justify-center mb-6 border-b border-border pb-4">
+              <Text className="text-2xl font-bold text-textPrimary text-center">
                 {selectedItem.name}
               </Text>
             </View>
 
             {isCurrencyData(selectedItem) ? (
-              <View className="flex-row justify-around items-center mb-8 bg-gray-50 p-5 rounded-2xl border border-gray-100">
+              <View className="flex-row justify-around items-center mb-8 bg-elevated p-5 rounded-2xl border border-border">
                 <View className="items-center">
-                  <Text className="text-xs text-gray-500 mb-1 font-bold uppercase tracking-wider">
+                  <Text className="text-xs text-textSecondary mb-1 font-bold uppercase tracking-wider">
                     Compra
                   </Text>
-                  <Text className="text-2xl font-bold text-slate-800">
+                  <Text className="text-2xl font-bold text-textPrimary">
                     R$ {selectedItem.buy.toFixed(2)}
                   </Text>
                 </View>
-                <View className="w-[1px] h-10 bg-gray-200" />
+                <View className="w-[1px] h-10 bg-border" />
                 <View className="items-center">
-                  <Text className="text-xs text-gray-500 mb-1 font-bold uppercase tracking-wider">
+                  <Text className="text-xs text-textSecondary mb-1 font-bold uppercase tracking-wider">
                     Venda
                   </Text>
-                  <Text className="text-2xl font-bold text-slate-800">
+                  <Text className="text-2xl font-bold text-textPrimary">
                     {selectedItem.sell
                       ? `R$ ${selectedItem.sell.toFixed(2)}`
                       : "-"}
@@ -283,7 +292,7 @@ export default function AssetListScreen({
               </View>
             ) : (
               <View className="items-center mb-6">
-                <Text className="text-4xl font-bold text-slate-800 tracking-tighter">
+                <Text className="text-4xl font-bold text-textPrimary tracking-tighter">
                   {(selectedItem.points || 0).toLocaleString("pt-BR")} pts
                 </Text>
               </View>
@@ -291,16 +300,18 @@ export default function AssetListScreen({
 
             <View className="items-center mb-6">
               <View
-                className={`px-4 py-2 rounded-full ${selectedItem.variation >= 0 ? "bg-green-100" : "bg-red-100"}`}
+                className={`px-4 py-2 rounded-full flex-row items-center ${selectedItem.variation >= 0 ? "bg-success/15" : "bg-danger/15"}`}
               >
+                {selectedItem.variation >= 0 ? (
+                  <ArrowUpRight size={18} color={t.semantic.success} />
+                ) : (
+                  <ArrowDownRight size={18} color={t.semantic.danger} />
+                )}
                 <Text
-                  className={`text-lg font-bold ${
-                    selectedItem.variation >= 0
-                      ? "text-green-700"
-                      : "text-red-600"
+                  className={`text-lg font-bold ml-1 ${
+                    selectedItem.variation >= 0 ? "text-success" : "text-danger"
                   }`}
                 >
-                  {selectedItem.variation > 0 ? "▲" : "▼"}{" "}
                   {Math.abs(selectedItem.variation).toFixed(2)}% (Hoje)
                 </Text>
               </View>

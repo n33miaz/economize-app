@@ -8,6 +8,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { radius } from "../theme/ds";
+
 interface SkeletonProps {
   width?: DimensionValue;
   height?: number | DimensionValue;
@@ -18,7 +20,8 @@ interface SkeletonProps {
 export default function Skeleton({
   width = "100%",
   height = 20,
-  borderRadius = 8,
+  // Piso de raio dos contêineres visíveis (12): o skeleton imita o conteúdo
+  borderRadius = radius.lg,
   className = "",
 }: SkeletonProps) {
   const opacity = useSharedValue(0.3);
@@ -40,7 +43,7 @@ export default function Skeleton({
 
   return (
     <Animated.View
-      className={`bg-gray-300 dark:bg-gray-700 ${className}`}
+      className={`bg-border ${className}`}
       style={[{ width, height, borderRadius }, animatedStyle]}
     />
   );

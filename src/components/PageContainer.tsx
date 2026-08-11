@@ -1,25 +1,68 @@
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { View, ViewStyle, StyleProp } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   withTiming,
-  withSpring,
 } from "react-native-reanimated";
+
+import { motion } from "../theme/ds";
+import { softEasing } from "../theme/motionPresets";
 
 interface PageContainerProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Refaz um fade curto quando a tela volta ao foco — usado nas abas
+   * superiores (Carteira/Extrato, Moedas/Índices), que ficam montadas e
+   * por isso não repetem a animação de entrada sozinhas.
+   */
+  refadeOnFocus?: boolean;
 }
 
-export default function PageContainer({ children, style }: PageContainerProps) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(20);
+export default function PageContainer({
+  children,
+  style,
+  refadeOnFocus = false,
+}: PageContainerProps) {
+  // Com movimento reduzido a tela nasce pronta: sem fade nem deslocamento
+  const reducedMotion = useReducedMotion();
+  const opacity = useSharedValue(reducedMotion ? 1 : 0);
+  const translateY = useSharedValue(reducedMotion ? 0 : 12);
+  const hasFocusedOnce = useRef(false);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 350 });
-    translateY.value = withTiming(0, { duration: 350 });
+    if (reducedMotion) return;
+    opacity.value = withTiming(1, {
+      duration: motion.duration.base,
+      easing: softEasing,
+    });
+    translateY.value = withTiming(0, {
+      duration: motion.duration.base,
+      easing: softEasing,
+    });
+    // roda uma única vez, na montagem
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!refadeOnFocus) return;
+      // o primeiro foco coincide com a montagem, que já animou acima
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
+      if (reducedMotion) return;
+      opacity.value = 0.4;
+      opacity.value = withTiming(1, {
+        duration: motion.duration.fast,
+        easing: softEasing,
+      });
+    }, [refadeOnFocus, reducedMotion, opacity]),
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -27,9 +70,10 @@ export default function PageContainer({ children, style }: PageContainerProps) {
   }));
 
   return (
-    <View className="flex-1 bg-background-light overflow-hidden">
+    // Corpo da tela é sempre o base do tema; cards em surface criam o contraste
+    <View className="flex-1 bg-background overflow-hidden">
       <Animated.View
-        className="flex-1 bg-background-light"
+        className="flex-1 bg-background"
         style={[style, animatedStyle]}
       >
         {children}

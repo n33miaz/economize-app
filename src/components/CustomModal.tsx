@@ -11,12 +11,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
+  withSpring,
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
 
 import { darkTheme } from "../theme/colors";
-import { radius } from "../theme/ds";
+import { motion, radius } from "../theme/ds";
+import { sheetSpring } from "../theme/motionPresets";
 
 interface CustomModalProps {
   visible: boolean;
@@ -30,6 +33,7 @@ export default function CustomModal({
   children,
 }: CustomModalProps) {
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const [showModal, setShowModal] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(500);
@@ -38,16 +42,26 @@ export default function CustomModal({
     if (visible) {
       setShowModal(true);
       requestAnimationFrame(() => {
-        backdropOpacity.value = withTiming(1, { duration: 300 });
-        modalTranslateY.value = withTiming(0, { duration: 300 });
+        backdropOpacity.value = withTiming(1, {
+          duration: motion.duration.base,
+        });
+        // Sheet sobe em spring de damping alto: assenta sem quicar. Com
+        // movimento reduzido, entra só no fade do backdrop, sem deslocamento
+        modalTranslateY.value = reducedMotion
+          ? withTiming(0, { duration: 0 })
+          : withSpring(0, sheetSpring);
       });
     } else {
-      backdropOpacity.value = withTiming(0, { duration: 300 });
-      modalTranslateY.value = withTiming(500, { duration: 300 }, () => {
-        runOnJS(setShowModal)(false);
-      });
+      backdropOpacity.value = withTiming(0, { duration: motion.duration.base });
+      modalTranslateY.value = withTiming(
+        reducedMotion ? 0 : 500,
+        { duration: motion.duration.base },
+        () => {
+          runOnJS(setShowModal)(false);
+        },
+      );
     }
-  }, [visible]);
+  }, [visible, reducedMotion]);
 
   useEffect(() => {
     const backAction = () => {
@@ -89,8 +103,11 @@ export default function CustomModal({
       >
         {/* Backdrop */}
         <Animated.View
-          className="absolute inset-0 bg-slate-900/60"
-          style={backdropAnimatedStyle}
+          className="absolute inset-0"
+          style={[
+            { backgroundColor: darkTheme.background.overlay },
+            backdropAnimatedStyle,
+          ]}
         >
           <TouchableOpacity
             className="flex-1"
@@ -120,7 +137,7 @@ export default function CustomModal({
                 alignSelf: "center",
                 width: 40,
                 height: 4,
-                borderRadius: 2,
+                borderRadius: radius.full,
                 backgroundColor: darkTheme.border.default,
                 marginTop: 12,
                 marginBottom: 4,

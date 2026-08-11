@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
 import { View, Text, ActivityIndicator, Dimensions } from "react-native";
 import { LineChart } from "react-native-gifted-charts";
-import { colors } from "../theme/colors";
+
+import { useTheme } from "../theme/ThemeProvider";
 import { useHistoricalChartData } from "../hooks/useHistoricalChartData";
 
 interface HistoricalChartProps {
@@ -13,6 +14,7 @@ const screenWidth = Dimensions.get("window").width;
 export default function HistoricalChart({
   currencyCode,
 }: HistoricalChartProps) {
+  const t = useTheme();
   const { data, loading, error } = useHistoricalChartData(currencyCode);
 
   const chartData = useMemo(() => {
@@ -25,16 +27,16 @@ export default function HistoricalChart({
 
   if (loading) {
     return (
-      <View className="h-56 justify-center items-center bg-gray-50 dark:bg-slate-800 rounded-2xl mt-5">
-        <ActivityIndicator color={colors.primary} />
+      <View className="h-56 justify-center items-center bg-elevated border border-border rounded-2xl mt-5">
+        <ActivityIndicator color={t.accent.neon} />
       </View>
     );
   }
 
   if (error || chartData.length === 0) {
     return (
-      <View className="h-56 justify-center items-center bg-gray-50 dark:bg-slate-800 rounded-2xl mt-5">
-        <Text className="text-red-500 font-regular">
+      <View className="h-56 justify-center items-center bg-elevated border border-border rounded-2xl mt-5">
+        <Text className="text-danger font-regular">
           {error || "Dados indisponíveis"}
         </Text>
       </View>
@@ -43,29 +45,30 @@ export default function HistoricalChart({
 
   return (
     <View className="mt-5 w-full items-center">
-      <Text className="text-sm text-gray-500 dark:text-gray-400 text-center mb-4 font-bold">
+      <Text className="text-sm text-textSecondary text-center mb-4 font-bold">
         Variação (Últimos 7 dias)
       </Text>
 
-      <View className="w-full items-center bg-white dark:bg-slate-900 rounded-2xl py-4 shadow-sm border border-gray-100 dark:border-gray-800">
+      <View className="w-full items-center bg-surface rounded-2xl py-4 border border-border">
         <LineChart
           data={chartData}
           width={screenWidth * 0.7}
           height={160}
-          color={colors.primary}
+          // Série única de histórico usa o token chart.line (a marca)
+          color={t.chart.line}
           thickness={3}
-          dataPointsColor={colors.primaryDark}
+          dataPointsColor={t.chart.line}
           dataPointsRadius={4}
           hideRules
           hideYAxisText
-          xAxisLabelTextStyle={{ color: colors.inactive, fontSize: 10 }}
+          xAxisLabelTextStyle={{ color: t.text.tertiary, fontSize: 10 }}
           yAxisThickness={0}
           xAxisThickness={0}
           curved
           pointerConfig={{
-            pointerStripColor: colors.primary,
+            pointerStripColor: t.chart.line,
             pointerStripWidth: 2,
-            pointerColor: colors.primaryDark,
+            pointerColor: t.chart.line,
             radius: 6,
             pointerLabelWidth: 100,
             pointerLabelHeight: 90,
@@ -73,11 +76,11 @@ export default function HistoricalChart({
             autoAdjustPointerLabelPosition: true,
             pointerLabelComponent: (items: any) => {
               return (
-                <View className="bg-slate-800 p-3 rounded-xl shadow-lg items-center justify-center -ml-12">
-                  <Text className="text-white font-bold text-base">
+                <View className="bg-elevated border border-border p-3 rounded-xl items-center justify-center -ml-12">
+                  <Text className="text-textPrimary font-bold text-base">
                     R$ {items[0].value.toFixed(2)}
                   </Text>
-                  <Text className="text-gray-300 text-xs mt-1">
+                  <Text className="text-textSecondary text-xs mt-1">
                     {items[0].label}
                   </Text>
                 </View>

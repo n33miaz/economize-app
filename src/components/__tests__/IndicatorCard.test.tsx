@@ -2,10 +2,6 @@ import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import IndicatorCard from "../IndicatorCard";
 
-jest.mock("@expo/vector-icons", () => ({
-  Ionicons: "Ionicons",
-}));
-
 describe("IndicatorCard Component", () => {
   const mockProps = {
     name: "Dólar Americano/Real Brasileiro",
@@ -42,9 +38,14 @@ describe("IndicatorCard Component", () => {
   });
 
   it("deve chamar onToggleFavorite ao clicar na estrela", () => {
-    const { getAllByTestId } = render(<IndicatorCard {...mockProps} />);
+    // O botão da estrela é localizado pelo rótulo de acessibilidade real,
+    // garantindo que o toque no componente dispara o callback com o id certo
+    const { getByLabelText } = render(<IndicatorCard {...mockProps} />);
+    const starButton = getByLabelText(
+      "Adicionar Dólar Americano aos favoritos",
+    );
 
-    mockProps.onToggleFavorite("currency_USD");
+    fireEvent.press(starButton);
     expect(mockProps.onToggleFavorite).toHaveBeenCalledWith("currency_USD");
   });
 });

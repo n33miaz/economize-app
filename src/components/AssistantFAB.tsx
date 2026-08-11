@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Sparkles } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -8,6 +8,7 @@ import LinearGradient from "react-native-linear-gradient";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   withRepeat,
   withTiming,
   Easing,
@@ -16,6 +17,7 @@ import Animated, {
 
 import { darkTheme } from "../theme/colors";
 import { radius, shadow, spacing } from "../theme/ds";
+import { useMotionPresets } from "../theme/motionPresets";
 
 interface AssistantFABProps {
   label?: string;
@@ -30,15 +32,19 @@ export default function AssistantFAB({
 }: AssistantFABProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
+  const { fabEntering } = useMotionPresets();
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    // Halo girando é puramente decorativo: com movimento reduzido, fica parado
+    if (reducedMotion) return;
     progress.value = withRepeat(
       withTiming(1, { duration: 2400, easing: Easing.linear }),
       -1,
       false,
     );
-  }, [progress]);
+  }, [progress, reducedMotion]);
 
   const gradientStyle = useAnimatedStyle(() => ({
     transform: [
@@ -52,7 +58,8 @@ export default function AssistantFAB({
   };
 
   return (
-    <View
+    <Animated.View
+      entering={fabEntering}
       pointerEvents="box-none"
       style={{
         position: "absolute",
@@ -100,11 +107,7 @@ export default function AssistantFAB({
               gap: spacing[2],
             }}
           >
-            <Ionicons
-              name="sparkles"
-              size={18}
-              color={darkTheme.accent.neon}
-            />
+            <Sparkles size={18} color={darkTheme.accent.neon} />
             <Text
               style={{
                 color: darkTheme.text.primary,
@@ -117,6 +120,6 @@ export default function AssistantFAB({
           </View>
         </AnimatedLinearGradient>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }

@@ -5,8 +5,10 @@ import {
   TouchableOpacity,
   TextInputProps,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme/colors";
+import { Search, X } from "lucide-react-native";
+
+import { useTheme } from "../theme/ThemeProvider";
+import { spacing } from "../theme/ds";
 
 interface SearchBarProps extends TextInputProps {
   onClear?: () => void;
@@ -18,22 +20,31 @@ export default function SearchBar({
   onClear,
   ...rest
 }: SearchBarProps) {
+  const t = useTheme();
+
   return (
-    <View className="flex-row items-center bg-white rounded-xl px-3 h-12 border border-gray-200 mb-4 shadow-sm">
-      <Ionicons name="search" size={20} color="#6B7280" className="mr-2" />
+    <View className="flex-row items-center bg-surface rounded-xl px-3 h-12 border border-border mb-4">
+      <Search
+        size={20}
+        color={t.text.tertiary}
+        style={{ marginRight: spacing[2] }}
+      />
       <TextInput
-        className="flex-1 h-full text-base text-text-primary font-regular"
+        className="flex-1 h-full text-base text-textPrimary font-regular"
         value={value}
         onChangeText={onChangeText}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={t.text.tertiary}
+        accessibilityLabel="Buscar ativo"
         {...rest}
       />
       {value ? (
         <TouchableOpacity
           onPress={onClear}
+          accessibilityLabel="Limpar busca"
+          accessibilityRole="button"
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="close-circle" size={18} color="#94A3B8" />
+          <X size={18} color={t.text.tertiary} />
         </TouchableOpacity>
       ) : null}
     </View>

@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StatusBar } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Info, User } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 
@@ -72,6 +72,7 @@ export default function ScreenHeader({
           {showInfoButton && (
             <TouchableOpacity
               accessibilityLabel="Sobre o app"
+              accessibilityRole="button"
               className="bg-elevated active:bg-border"
               style={{
                 width: 36,
@@ -82,17 +83,14 @@ export default function ScreenHeader({
               }}
               onPress={() => navigation.navigate("Sobre" as never)}
             >
-              <Ionicons
-                name="information"
-                size={18}
-                color={darkTheme.text.primary}
-              />
+              <Info size={18} color={darkTheme.text.primary} />
             </TouchableOpacity>
           )}
 
           {showProfileButton && (
             <TouchableOpacity
               accessibilityLabel="Perfil"
+              accessibilityRole="button"
               className="bg-elevated active:bg-border"
               style={{
                 width: 36,
@@ -103,11 +101,7 @@ export default function ScreenHeader({
               }}
               onPress={() => navigation.navigate("Profile" as never)}
             >
-              <Ionicons
-                name="person"
-                size={16}
-                color={darkTheme.text.primary}
-              />
+              <User size={18} color={darkTheme.text.primary} />
             </TouchableOpacity>
           )}
         </View>

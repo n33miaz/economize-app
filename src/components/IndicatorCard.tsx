@@ -1,14 +1,11 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from "react-native-reanimated";
+import { ArrowDownRight, ArrowUpRight, Banknote, Star } from "lucide-react-native";
+import Animated from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, darkTheme } from "../theme/colors";
 import { ds } from "../theme/ds";
+import { usePressScale } from "../theme/motionPresets";
 
 interface IndicatorCardProps {
   name: string;
@@ -32,7 +29,7 @@ const IndicatorCard = React.memo(
     onToggleFavorite,
     symbol = "R$",
   }: IndicatorCardProps) => {
-    const scale = useSharedValue(1);
+    const { pressStyle, onPressIn, onPressOut } = usePressScale();
 
     const safeValue = Number(value) || 0;
     const safeVariation = Number(variation) || 0;
@@ -44,7 +41,7 @@ const IndicatorCard = React.memo(
         bgColor: isPositive
           ? darkTheme.semantic.successMuted
           : darkTheme.semantic.dangerMuted,
-        icon: isPositive ? "caret-up" : "caret-down",
+        Icon: isPositive ? ArrowUpRight : ArrowDownRight,
         formatted: `${isPositive ? "+" : ""}${safeVariation.toFixed(2)}%`,
       };
     }, [safeVariation]);
@@ -53,24 +50,14 @@ const IndicatorCard = React.memo(
       return name?.split("/")[0].replace("Comercial", "").trim() || "Ativo";
     }, [name]);
 
-    const animatedStyle = useAnimatedStyle(() => ({
-      transform: [{ scale: scale.value }],
-    }));
-
-    const handlePressIn = () => {
-      scale.value = withSpring(0.97);
-    };
-
-    const handlePressOut = () => {
-      scale.value = withSpring(1);
-    };
+    const VariationIcon = variationInfo.Icon;
 
     return (
-      <Animated.View style={animatedStyle}>
+      <Animated.View style={pressStyle}>
         <TouchableOpacity
           onPress={onPress}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
           activeOpacity={0.8}
           style={{
             padding: ds.spacing[5],
@@ -108,7 +95,7 @@ const IndicatorCard = React.memo(
                   backgroundColor: darkTheme.accent.neonMuted,
                 }}
               >
-                <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                <Banknote size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text
@@ -133,12 +120,19 @@ const IndicatorCard = React.memo(
                 marginTop: -ds.spacing[2],
                 padding: ds.spacing[2],
               }}
+              accessibilityLabel={
+                isFavorite
+                  ? `Remover ${displayName} dos favoritos`
+                  : `Adicionar ${displayName} aos favoritos`
+              }
+              accessibilityRole="button"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons
-                name={isFavorite ? "star" : "star-outline"}
-                size={22}
-                color={isFavorite ? colors.warning : colors.inactive}
+              {/* Favorito ativo preenche a estrela com o accent da marca */}
+              <Star
+                size={20}
+                color={isFavorite ? colors.primary : colors.inactive}
+                fill={isFavorite ? colors.primary : "none"}
               />
             </TouchableOpacity>
           </View>
@@ -183,9 +177,8 @@ const IndicatorCard = React.memo(
                 backgroundColor: variationInfo.bgColor,
               }}
             >
-              <Ionicons
-                name={variationInfo.icon as any}
-                size={12}
+              <VariationIcon
+                size={14}
                 color={variationInfo.color}
                 style={{ marginRight: ds.spacing[1] }}
               />
@@ -207,5 +200,7 @@ const IndicatorCard = React.memo(
     );
   },
 );
+
+IndicatorCard.displayName = "IndicatorCard";
 
 export default IndicatorCard;
