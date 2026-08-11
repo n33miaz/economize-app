@@ -3,10 +3,14 @@ import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
 import { useToastStore } from "../store/toastStore";
 
+// URL de produção usada quando não há env nem servidor Metro (builds EAS)
+const PROD_BASE_URL = "https://level-belinda-neemias-8be5fba4.koyeb.app/api/v1";
+
 const getBaseUrl = () => {
-  const envUrl = (process.env as Record<string, string | undefined>)
-    .API_BASE_URL;
-  if (envUrl) return envUrl;
+  // Só variáveis EXPO_PUBLIC_* são embutidas no bundle pelo Metro —
+  // API_BASE_URL sem o prefixo nunca chegava ao runtime
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (envUrl) return envUrl.replace(/\/+$/, "");
 
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
@@ -14,7 +18,7 @@ const getBaseUrl = () => {
     return `http://${ip}:8080/api/v1`;
   }
 
-  return "https://level-belinda-neemias-8be5fba4.koyeb.app/api/v1";
+  return PROD_BASE_URL;
 };
 
 const api = axios.create({
@@ -54,16 +58,14 @@ api.interceptors.response.use(
     const isNetworkOrServerError =
       !error.response || error.response.status >= 500;
 
+    // error.config pode vir undefined (falha antes do request montar);
+    // sem essa guarda o TypeError aqui mascarava o erro original
     if (
       isNetworkOrServerError &&
       originalRequest &&
-      !originalRequest._retryCount
+      (originalRequest._retryCount ?? 0) < 2
     ) {
-      originalRequest._retryCount = 0;
-    }
-
-    if (isNetworkOrServerError && originalRequest._retryCount < 2) {
-      originalRequest._retryCount += 1;
+      originalRequest._retryCount = (originalRequest._retryCount ?? 0) + 1;
 
       const backoffTime = originalRequest._retryCount * 1000;
       console.warn(
