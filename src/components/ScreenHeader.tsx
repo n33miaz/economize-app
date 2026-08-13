@@ -13,6 +13,12 @@ interface ScreenHeaderProps {
   rightActions?: React.ReactNode[];
   showInfoButton?: boolean;
   showProfileButton?: boolean;
+  /**
+   * Telas apresentadas como modal já nascem abaixo da status bar; somar o
+   * statusBarHeight nelas cria uma faixa morta no topo (iOS). Passe false
+   * nesses casos para usar só o respiro padrão.
+   */
+  topInset?: boolean;
 }
 
 export default function ScreenHeader({
@@ -21,9 +27,12 @@ export default function ScreenHeader({
   rightActions,
   showInfoButton = true,
   showProfileButton = true,
+  topInset = true,
 }: ScreenHeaderProps) {
   const navigation = useNavigation();
-  const paddingTop = Constants.statusBarHeight + spacing[5];
+  const paddingTop = topInset
+    ? Constants.statusBarHeight + spacing[5]
+    : spacing[5];
 
   return (
     <View

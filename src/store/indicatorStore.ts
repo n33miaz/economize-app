@@ -1,6 +1,16 @@
 import { create } from "zustand";
 import api, { Indicator, isCurrencyData, isIndexData } from "../services/api";
 
+// A API repete o mesmo ativo com ids distintos — fica só a primeira ocorrência
+const dedupeByCode = (items: Indicator[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.code)) return false;
+    seen.add(item.code);
+    return true;
+  });
+};
+
 interface IndicatorState {
   indicators: Indicator[];
   loading: boolean;
@@ -59,12 +69,14 @@ export const useIndicatorStore = create<IndicatorState>((set, get) => ({
   },
 
   getCurrencies: () => {
-    return get()
-      .indicators.filter(isCurrencyData)
-      .filter((item) => !item.name.includes("Turismo"));
+    return dedupeByCode(
+      get()
+        .indicators.filter(isCurrencyData)
+        .filter((item) => !item.name.toLowerCase().includes("turismo")),
+    );
   },
   getIndexes: () => {
-    return get().indicators.filter(isIndexData);
+    return dedupeByCode(get().indicators.filter(isIndexData));
   },
 
   getGlobalCurrencies: (targetCodes: string[]) => {

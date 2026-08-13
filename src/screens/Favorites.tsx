@@ -12,10 +12,9 @@ import { Star } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 import { colors } from "../theme/colors";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
-import { Indicator, isCurrencyData, isIndexData } from "../services/api";
+import { Indicator, isIndexData } from "../services/api";
 import IndicatorCard from "../components/IndicatorCard";
-import HistoricalChart from "../components/HistoricalChart";
-import DetailsModal from "../components/DetailsModal";
+import IndicatorDetailSheet from "../components/IndicatorDetailSheet";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { useIndicatorStore } from "../store/indicatorStore";
 import ScreenHeader from "../components/ScreenHeader";
@@ -69,12 +68,14 @@ export default function Favorites({ navigation }: any) {
           <IndicatorCard
             name={item.name}
             id={item.id}
+            code={item.code}
+            type={item.type}
             value={displayValue}
             variation={item.variation}
             isFavorite={true}
             onPress={() => handleOpenModal(item)}
             onToggleFavorite={handleToggleFavorite}
-            symbol={isIndex && item.name === "IBOVESPA" ? "pts" : "R$"}
+            symbol={isIndex ? "pts" : "R$"}
           />
         </Animated.View>
       );
@@ -147,35 +148,12 @@ export default function Favorites({ navigation }: any) {
         />
       )}
 
-      {selectedItem && (
-        <DetailsModal
-          visible={modalVisible}
-          onClose={handleCloseModal}
-          title={selectedItem.name}
-          currencyCode={
-            isCurrencyData(selectedItem) ? selectedItem.code : undefined
-          }
-        >
-          <View>
-            {isIndexData(selectedItem) && (
-              <Text className="mb-4 text-center text-base text-textSecondary font-regular">
-                Pontos: {(selectedItem.points || 0).toFixed(2)}
-              </Text>
-            )}
-            {isCurrencyData(selectedItem) && (
-              <Text className="mb-4 text-center text-base text-textSecondary font-regular">
-                Compra: R$ {selectedItem.buy.toFixed(2)}
-              </Text>
-            )}
-            <Text className="mb-4 text-center text-base text-textSecondary font-regular">
-              Variação: {selectedItem.variation.toFixed(2)}%
-            </Text>
-            {isCurrencyData(selectedItem) && (
-              <HistoricalChart currencyCode={selectedItem.code} />
-            )}
-          </View>
-        </DetailsModal>
-      )}
+      {/* Detalhes do indicador: mesmo sheet da Home e das listas de mercado */}
+      <IndicatorDetailSheet
+        indicator={selectedItem}
+        visible={modalVisible}
+        onClose={handleCloseModal}
+      />
     </PageContainer>
   );
 }

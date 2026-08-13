@@ -10,30 +10,22 @@ import {
   Keyboard,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Bitcoin,
-  Search,
-  TrendingUp,
-} from "lucide-react-native";
+import { Bitcoin, Search, TrendingUp } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 
 import { useDebounce } from "../hooks/useDebounce";
 import { colors } from "../theme/colors";
-import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets } from "../theme/motionPresets";
-import { Indicator, isCurrencyData, isIndexData } from "../services/api";
+import { Indicator, isIndexData } from "../services/api";
 import IndicatorCard from "./IndicatorCard";
 import HighlightCard from "./HighlightCard";
 import SearchBar from "./SearchBar";
 import Skeleton from "./Skeleton";
 import PageContainer from "./PageContainer";
-import HistoricalChart from "./HistoricalChart";
 import ErrorState from "./ErrorState";
+import IndicatorDetailSheet from "./IndicatorDetailSheet";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { useIndicatorStore } from "../store/indicatorStore";
-import CustomModal from "./CustomModal";
 
 interface AssetListScreenProps {
   data: Indicator[];
@@ -49,7 +41,6 @@ export default function AssetListScreen({
   symbol,
   featuredItems = [],
 }: AssetListScreenProps) {
-  const t = useTheme();
   const { listItemEntering } = useMotionPresets();
   const { loading, error, fetchIndicators } = useIndicatorStore();
   const { favorites, toggleFavorite } = useFavoritesStore();
@@ -134,11 +125,14 @@ export default function AssetListScreen({
                   title={item.code || item.name}
                   value={item.points || item.buy}
                   variation={item.variation}
+                  type={item.type}
                   Icon={
                     item.code === "BTC" || item.id.includes("BTC")
                       ? Bitcoin
                       : TrendingUp
                   }
+                  // Cartão morto era só vitrine — agora abre o mesmo sheet
+                  onPress={() => handleOpenModal(item)}
                 />
               ))}
             </ScrollView>
@@ -146,14 +140,14 @@ export default function AssetListScreen({
         )}
       </View>
     );
-  }, [searchText, featuredItems]);
+  }, [searchText, featuredItems, handleOpenModal]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: Indicator; index: number }) => {
       let displaySymbol = symbol;
       if (!displaySymbol) {
-        displaySymbol =
-          isIndexData(item) && item.name === "IBOVESPA" ? "pts" : "R$";
+        // Todo índice é pontuado — não só o IBOVESPA
+        displaySymbol = isIndexData(item) ? "pts" : "R$";
       }
       const displayValue = item.points !== undefined ? item.points : item.buy;
 
@@ -162,6 +156,8 @@ export default function AssetListScreen({
           <IndicatorCard
             name={item.name}
             id={item.id}
+            code={item.code}
+            type={item.type}
             value={displayValue}
             variation={item.variation}
             isFavorite={favorites.includes(item.id)}
@@ -254,75 +250,12 @@ export default function AssetListScreen({
         />
       )}
 
-      {selectedItem && (
-        <CustomModal visible={modalVisible} onClose={handleCloseModal}>
-          <ScrollView
-            contentContainerClassName="p-6"
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-          >
-            <View className="w-14 h-1.5 bg-border rounded-full self-center mb-6" />
-            <View className="items-center justify-center mb-6 border-b border-border pb-4">
-              <Text className="text-2xl font-bold text-textPrimary text-center">
-                {selectedItem.name}
-              </Text>
-            </View>
-
-            {isCurrencyData(selectedItem) ? (
-              <View className="flex-row justify-around items-center mb-8 bg-elevated p-5 rounded-2xl border border-border">
-                <View className="items-center">
-                  <Text className="text-xs text-textSecondary mb-1 font-bold uppercase tracking-wider">
-                    Compra
-                  </Text>
-                  <Text className="text-2xl font-bold text-textPrimary">
-                    R$ {selectedItem.buy.toFixed(2)}
-                  </Text>
-                </View>
-                <View className="w-[1px] h-10 bg-border" />
-                <View className="items-center">
-                  <Text className="text-xs text-textSecondary mb-1 font-bold uppercase tracking-wider">
-                    Venda
-                  </Text>
-                  <Text className="text-2xl font-bold text-textPrimary">
-                    {selectedItem.sell
-                      ? `R$ ${selectedItem.sell.toFixed(2)}`
-                      : "-"}
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <View className="items-center mb-6">
-                <Text className="text-4xl font-bold text-textPrimary tracking-tighter">
-                  {(selectedItem.points || 0).toLocaleString("pt-BR")} pts
-                </Text>
-              </View>
-            )}
-
-            <View className="items-center mb-6">
-              <View
-                className={`px-4 py-2 rounded-full flex-row items-center ${selectedItem.variation >= 0 ? "bg-success/15" : "bg-danger/15"}`}
-              >
-                {selectedItem.variation >= 0 ? (
-                  <ArrowUpRight size={18} color={t.semantic.success} />
-                ) : (
-                  <ArrowDownRight size={18} color={t.semantic.danger} />
-                )}
-                <Text
-                  className={`text-lg font-bold ml-1 ${
-                    selectedItem.variation >= 0 ? "text-success" : "text-danger"
-                  }`}
-                >
-                  {Math.abs(selectedItem.variation).toFixed(2)}% (Hoje)
-                </Text>
-              </View>
-            </View>
-
-            {isCurrencyData(selectedItem) && (
-              <HistoricalChart currencyCode={selectedItem.code} />
-            )}
-          </ScrollView>
-        </CustomModal>
-      )}
+      {/* Detalhes do indicador: sheet canônico compartilhado com a Home */}
+      <IndicatorDetailSheet
+        indicator={selectedItem}
+        visible={modalVisible}
+        onClose={handleCloseModal}
+      />
     </PageContainer>
   );
 }

@@ -16,6 +16,8 @@ interface IndicatorCardProps {
   onPress: () => void;
   onToggleFavorite: (id: string) => void;
   symbol?: string;
+  code?: string;
+  type?: string;
 }
 
 const IndicatorCard = React.memo(
@@ -28,6 +30,8 @@ const IndicatorCard = React.memo(
     onPress,
     onToggleFavorite,
     symbol = "R$",
+    code,
+    type,
   }: IndicatorCardProps) => {
     const { pressStyle, onPressIn, onPressOut } = usePressScale();
 
@@ -49,6 +53,22 @@ const IndicatorCard = React.memo(
     const displayName = useMemo(() => {
       return name?.split("/")[0].replace("Comercial", "").trim() || "Ativo";
     }, [name]);
+
+    // "R$ - BRL" era o symbol vazando para o lugar do código do ativo
+    const subtitle = useMemo(() => {
+      if (type === "index" || symbol === "pts") return "pontos";
+      return code ? `${code} · BRL` : "BRL";
+    }, [type, symbol, code]);
+
+    const displayValue = useMemo(() => {
+      // Índices são pontuados (sem "R$"), no formato pt-BR
+      if (symbol === "pts") {
+        return `${safeValue.toLocaleString("pt-BR", {
+          maximumFractionDigits: 0,
+        })} pts`;
+      }
+      return `${symbol} ${safeValue.toFixed(2)}`;
+    }, [symbol, safeValue]);
 
     const VariationIcon = variationInfo.Icon;
 
@@ -105,7 +125,7 @@ const IndicatorCard = React.memo(
                   {displayName}
                 </Text>
                 <Text style={[ds.typography.bodySm, { color: colors.textSecondary }]}>
-                  {symbol} - BRL
+                  {subtitle}
                 </Text>
               </View>
             </View>
@@ -163,7 +183,7 @@ const IndicatorCard = React.memo(
                 Cotação Atual
               </Text>
               <Text style={[ds.typography.numericLg, { color: colors.textPrimary }]}>
-                {symbol} {safeValue.toFixed(2)}
+                {displayValue}
               </Text>
             </View>
 

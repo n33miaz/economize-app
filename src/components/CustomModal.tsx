@@ -17,7 +17,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { motion, radius } from "../theme/ds";
 import { sheetSpring } from "../theme/motionPresets";
 
@@ -32,6 +32,7 @@ export default function CustomModal({
   onClose,
   children,
 }: CustomModalProps) {
+  const t = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const [showModal, setShowModal] = useState(visible);
@@ -96,6 +97,8 @@ export default function CustomModal({
       visible={showModal}
       onRequestClose={onClose}
       animationType="none"
+      // Sem isso o backdrop para embaixo da status bar no Android
+      statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -105,7 +108,7 @@ export default function CustomModal({
         <Animated.View
           className="absolute inset-0"
           style={[
-            { backgroundColor: darkTheme.background.overlay },
+            { backgroundColor: t.background.overlay },
             backdropAnimatedStyle,
           ]}
         >
@@ -121,24 +124,25 @@ export default function CustomModal({
           <Animated.View
             style={[
               {
-                backgroundColor: darkTheme.background.surface,
+                backgroundColor: t.background.surface,
                 borderTopLeftRadius: radius["3xl"],
                 borderTopRightRadius: radius["3xl"],
                 maxHeight: "90%",
                 paddingBottom: insets.bottom,
                 borderTopWidth: 1,
-                borderTopColor: darkTheme.border.subtle,
+                borderTopColor: t.border.subtle,
               },
               modalAnimatedStyle,
             ]}
           >
+            {/* Grabber único do sheet — o conteúdo não deve desenhar outro */}
             <View
               style={{
                 alignSelf: "center",
                 width: 40,
                 height: 4,
                 borderRadius: radius.full,
-                backgroundColor: darkTheme.border.default,
+                backgroundColor: t.border.default,
                 marginTop: 12,
                 marginBottom: 4,
               }}

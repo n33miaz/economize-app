@@ -13,6 +13,8 @@ interface HighlightCardProps {
   variation: number;
   Icon: LucideIcon;
   onPress?: () => void;
+  /** Tipo do indicador — decide o formato do valor (moeda vs. pontos) */
+  type?: string;
 }
 
 export default function HighlightCard({
@@ -21,26 +23,33 @@ export default function HighlightCard({
   variation,
   Icon,
   onPress,
+  type,
 }: HighlightCardProps) {
   const { pressStyle, onPressIn, onPressOut } = usePressScale();
   const isPositive = variation >= 0;
   const semanticColor = isPositive ? colors.success : colors.danger;
   const DeltaIcon = isPositive ? ArrowUpRight : ArrowDownRight;
 
+  // Índice não é dinheiro: pontos em pt-BR; o resto é BRL formatado
+  const formattedValue =
+    type === "index"
+      ? `${value.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} pts`
+      : value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   return (
+    // flex:1 dentro de ScrollView horizontal colapsava o card — largura
+    // mínima fixa e o conteúdo dita o resto
     <Animated.View
-      style={[
-        { flex: 1, minWidth: 150, marginHorizontal: ds.spacing[2] },
-        pressStyle,
-      ]}
+      style={[{ minWidth: 150, marginHorizontal: ds.spacing[2] }, pressStyle]}
     >
       <TouchableOpacity
         onPress={onPress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={0.8}
+        accessibilityLabel={`Detalhes de ${title}`}
+        accessibilityRole="button"
         style={{
-          flex: 1,
           padding: ds.spacing[5],
           borderRadius: ds.radius["2xl"],
           borderWidth: 1,
@@ -77,7 +86,7 @@ export default function HighlightCard({
             { color: colors.textPrimary, marginBottom: ds.spacing[2] },
           ]}
         >
-          R$ {value.toFixed(2)}
+          {formattedValue}
         </Text>
 
         <View
