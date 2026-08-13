@@ -12,15 +12,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SendHorizontal, Sparkles, Trash2 } from "lucide-react-native";
+import { SendHorizontal, Sparkles, Trash2, X } from "lucide-react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 
 import { ChatMessage, useAiStore } from "../store/aiStore";
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
-import { useMotionPresets, usePressScale } from "../theme/motionPresets";
+import { usePressScale } from "../theme/motionPresets";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 
@@ -31,6 +32,8 @@ const SUGGESTIONS = [
   "Como diversificar minha carteira?",
 ];
 
+// Sem animação de entrada: numa lista invertida os presets FadeInUp/Down
+// apontam para a direção errada e causam flicker ao paginar o histórico
 function MessageBubble({
   item,
   onRetry,
@@ -38,30 +41,21 @@ function MessageBubble({
   item: ChatMessage;
   onRetry: (item: ChatMessage) => void;
 }) {
-  // A direção do fade é própria do chat, mas movimento reduzido vale aqui também
-  const { reducedMotion } = useMotionPresets();
+  const t = useTheme();
   const isUser = item.isUser;
   const bubbleBg = item.isError
-    ? darkTheme.semantic.dangerMuted
+    ? t.semantic.dangerMuted
     : isUser
-      ? darkTheme.accent.neonMuted
-      : darkTheme.background.elevated;
+      ? t.accent.neonMuted
+      : t.background.elevated;
   const borderColor = item.isError
-    ? darkTheme.semantic.danger
+    ? t.semantic.danger
     : isUser
-      ? darkTheme.accent.neon
-      : darkTheme.border.subtle;
-  const textColor = darkTheme.text.primary;
+      ? t.accent.neon
+      : t.border.subtle;
 
   return (
-    <Animated.View
-      entering={
-        reducedMotion
-          ? undefined
-          : isUser
-            ? FadeInUp.duration(280)
-            : FadeInDown.duration(360).delay(80)
-      }
+    <View
       style={{
         marginBottom: spacing[3],
         maxWidth: "86%",
@@ -87,10 +81,10 @@ function MessageBubble({
               marginBottom: 4,
             }}
           >
-            <Sparkles size={12} color={darkTheme.accent.neon} />
+            <Sparkles size={12} color={t.accent.neon} />
             <Text
               style={{
-                color: darkTheme.accent.neon,
+                color: t.accent.neon,
                 fontWeight: "700",
                 fontSize: 11,
                 marginLeft: 4,
@@ -100,14 +94,14 @@ function MessageBubble({
             </Text>
           </View>
         )}
-        <Text style={{ color: textColor, fontSize: 14, lineHeight: 20 }}>
+        <Text style={{ color: t.text.primary, fontSize: 14, lineHeight: 20 }}>
           {item.text}
         </Text>
         {item.isError && (
           <View style={{ marginTop: spacing[1] }}>
             <Text
               style={{
-                color: darkTheme.semantic.danger,
+                color: t.semantic.danger,
                 fontSize: 11,
                 fontStyle: "italic",
               }}
@@ -126,12 +120,12 @@ function MessageBubble({
                 paddingVertical: spacing[1],
                 borderRadius: radius.full,
                 borderWidth: 1,
-                borderColor: darkTheme.semantic.danger,
+                borderColor: t.semantic.danger,
               }}
             >
               <Text
                 style={{
-                  color: darkTheme.semantic.danger,
+                  color: t.semantic.danger,
                   fontSize: 11,
                   fontWeight: "700",
                 }}
@@ -144,7 +138,7 @@ function MessageBubble({
       </View>
       <Text
         style={{
-          color: darkTheme.text.tertiary,
+          color: t.text.tertiary,
           fontSize: 10,
           marginTop: 2,
           textAlign: isUser ? "right" : "left",
@@ -155,11 +149,13 @@ function MessageBubble({
           minute: "2-digit",
         })}
       </Text>
-    </Animated.View>
+    </View>
   );
 }
 
 export default function AiAssistant() {
+  const t = useTheme();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const sendPress = usePressScale();
   const [inputText, setInputText] = useState("");
@@ -216,16 +212,18 @@ export default function AiAssistant() {
 
   return (
     <PageContainer>
+      {/* Tela modal: já nasce abaixo da status bar, sem inset extra */}
       <ScreenHeader
         title="Nino"
         subtitle="Assistente financeiro"
         showInfoButton={false}
         showProfileButton={false}
+        topInset={false}
         rightActions={[
           <TouchableOpacity
-            key="clear"
-            onPress={askClear}
-            accessibilityLabel="Limpar histórico"
+            key="close"
+            onPress={() => navigation.goBack()}
+            accessibilityLabel="Fechar assistente"
             accessibilityRole="button"
             style={{
               width: 36,
@@ -233,23 +231,18 @@ export default function AiAssistant() {
               borderRadius: radius.full,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: darkTheme.background.elevated,
+              backgroundColor: t.background.elevated,
             }}
           >
-            <Trash2
-              size={18}
-              color={
-                messages.length > 1
-                  ? darkTheme.text.primary
-                  : darkTheme.text.tertiary
-              }
-            />
+            <X size={18} color={t.text.primary} />
           </TouchableOpacity>,
         ]}
       />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // Tela modal cobre a janela inteira: nenhum offset de header nativo
+        keyboardVerticalOffset={0}
         style={{ flex: 1 }}
       >
         <FlatList
@@ -264,6 +257,7 @@ export default function AiAssistant() {
             paddingVertical: spacing[4],
           }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             isLoading ? (
               <View style={{ paddingVertical: spacing[2] }}>
@@ -272,21 +266,18 @@ export default function AiAssistant() {
                     alignSelf: "flex-start",
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: darkTheme.background.elevated,
+                    backgroundColor: t.background.elevated,
                     paddingHorizontal: spacing[3],
                     paddingVertical: spacing[2],
                     borderRadius: radius.full,
                     borderWidth: 1,
-                    borderColor: darkTheme.border.subtle,
+                    borderColor: t.border.subtle,
                   }}
                 >
-                  <ActivityIndicator
-                    size="small"
-                    color={darkTheme.accent.neon}
-                  />
+                  <ActivityIndicator size="small" color={t.accent.neon} />
                   <Text
                     style={{
-                      color: darkTheme.text.secondary,
+                      color: t.text.secondary,
                       fontSize: 12,
                       marginLeft: spacing[2],
                       fontStyle: "italic",
@@ -298,12 +289,43 @@ export default function AiAssistant() {
               </View>
             ) : null
           }
+          // Na lista invertida o footer fica no topo visual — o "fim" do
+          // histórico é o lugar discreto para a ação destrutiva
+          ListFooterComponent={
+            messages.length > 1 ? (
+              <TouchableOpacity
+                onPress={askClear}
+                accessibilityLabel="Limpar conversa"
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  alignSelf: "center",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: spacing[3],
+                }}
+              >
+                <Trash2 size={13} color={t.text.tertiary} />
+                <Text
+                  style={{
+                    color: t.text.tertiary,
+                    fontSize: 12,
+                    fontWeight: "600",
+                    marginLeft: spacing[1],
+                  }}
+                >
+                  Limpar conversa
+                </Text>
+              </TouchableOpacity>
+            ) : null
+          }
         />
 
         {showSuggestions && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingHorizontal: spacing[5],
               paddingBottom: spacing[3],
@@ -319,8 +341,8 @@ export default function AiAssistant() {
                 activeOpacity={0.8}
                 style={{
                   borderWidth: 1,
-                  borderColor: darkTheme.accent.neon,
-                  backgroundColor: darkTheme.accent.neonMuted,
+                  borderColor: t.accent.neon,
+                  backgroundColor: t.accent.neonMuted,
                   paddingHorizontal: spacing[3],
                   paddingVertical: spacing[2],
                   borderRadius: radius.full,
@@ -328,7 +350,7 @@ export default function AiAssistant() {
               >
                 <Text
                   style={{
-                    color: darkTheme.accent.neon,
+                    color: t.accent.neon,
                     fontSize: 12,
                     fontWeight: "600",
                   }}
@@ -344,13 +366,11 @@ export default function AiAssistant() {
           style={{
             paddingHorizontal: spacing[5],
             paddingTop: spacing[2],
-            paddingBottom:
-              Platform.OS === "ios"
-                ? Math.max(insets.bottom, spacing[3])
-                : spacing[3],
-            backgroundColor: darkTheme.background.surface,
+            // Insets valem nas duas plataformas — Android com gesto também tem
+            paddingBottom: Math.max(insets.bottom, spacing[3]),
+            backgroundColor: t.background.surface,
             borderTopWidth: 1,
-            borderTopColor: darkTheme.border.subtle,
+            borderTopColor: t.border.subtle,
             flexDirection: "row",
             alignItems: "flex-end",
           }}
@@ -358,19 +378,19 @@ export default function AiAssistant() {
           <TextInput
             style={{
               flex: 1,
-              backgroundColor: darkTheme.background.elevated,
+              backgroundColor: t.background.elevated,
               borderWidth: 1,
-              borderColor: darkTheme.border.default,
+              borderColor: t.border.default,
               borderRadius: radius.xl,
               paddingHorizontal: spacing[4],
               paddingVertical: spacing[3],
-              color: darkTheme.text.primary,
+              color: t.text.primary,
               fontSize: 14,
               maxHeight: 128,
               minHeight: 48,
             }}
             placeholder="Pergunte sobre seus gastos..."
-            placeholderTextColor={darkTheme.text.tertiary}
+            placeholderTextColor={t.text.tertiary}
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -396,16 +416,16 @@ export default function AiAssistant() {
                 justifyContent: "center",
                 backgroundColor:
                   inputText.trim() && !isLoading
-                    ? darkTheme.accent.neon
-                    : darkTheme.background.elevated,
+                    ? t.accent.neon
+                    : t.background.elevated,
               }}
             >
               <SendHorizontal
                 size={18}
                 color={
                   inputText.trim() && !isLoading
-                    ? darkTheme.text.inverse
-                    : darkTheme.text.tertiary
+                    ? t.text.inverse
+                    : t.text.tertiary
                 }
                 style={{ marginLeft: 2 }}
               />
