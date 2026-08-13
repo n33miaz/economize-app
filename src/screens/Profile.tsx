@@ -8,11 +8,13 @@ import {
 } from "react-native";
 import {
   ChevronRight,
+  CircleUserRound,
   FileText,
   Info,
   LogOut,
   ReceiptText,
   Settings,
+  Tags,
   TrendingUp,
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
@@ -25,6 +27,7 @@ import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { useAuthStore } from "../store/authStore";
 import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
+import { useReportsStore } from "../store/reportsStore";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
@@ -146,6 +149,13 @@ export default function Profile() {
   const { userName, logout } = useAuthStore();
   const { transactions: bankTxs } = useBankStore();
   const { transactions: walletTxs } = useWalletStore();
+  const { items: reports, fetch: fetchReports } = useReportsStore();
+
+  React.useEffect(() => {
+    // o contador era fixo em 0 — carrega os relatórios reais ao abrir o perfil
+    fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const initials = (userName || "Usuário")
     .split(" ")
@@ -238,10 +248,20 @@ export default function Profile() {
             value={bankTxs.length}
           />
           <StatCard Icon={TrendingUp} label="Ativos" value={walletTxs.length} />
-          <StatCard Icon={FileText} label="Relatórios" value={0} />
+          <StatCard Icon={FileText} label="Relatórios" value={reports.length} />
         </Animated.View>
 
         <Animated.View entering={listItemEntering(2)}>
+          <ActionRow
+            Icon={CircleUserRound}
+            label="Informações da conta"
+            onPress={() => navigation.navigate("Conta" as never)}
+          />
+          <ActionRow
+            Icon={Tags}
+            label="Minhas categorias"
+            onPress={() => navigation.navigate("Categorias" as never)}
+          />
           <ActionRow
             Icon={Settings}
             label="Preferências"
