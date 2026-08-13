@@ -4,7 +4,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useToastStore } from "../store/toastStore";
 
 // URL de produção usada quando não há env nem servidor Metro (builds EAS)
-const PROD_BASE_URL = "https://level-belinda-neemias-8be5fba4.koyeb.app/api/v1";
+const PROD_BASE_URL = "https://economize-api.onrender.com/api/v1";
 
 const getBaseUrl = () => {
   // Só variáveis EXPO_PUBLIC_* são embutidas no bundle pelo Metro —
