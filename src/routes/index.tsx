@@ -39,6 +39,10 @@ import Profile from "../screens/Profile";
 import Settings from "../screens/Settings";
 import Reports from "../screens/Reports";
 import Favorites from "../screens/Favorites";
+import Analytics from "../screens/Analytics";
+import Categories from "../screens/Categories";
+import StatementReview from "../screens/StatementReview";
+import UserInfo from "../screens/UserInfo";
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -192,7 +196,9 @@ function MainTabs() {
     <BottomTab.Navigator
       initialRouteName="Principal"
       screenOptions={{
-        animation: "fade",
+        // "shift" desliza + esmaece na troca de tab — mesma família de movimento
+        // da entrada do assistente, no lugar do corte seco do fade
+        animation: "shift",
         tabBarButton: (props) => (
           <TouchableOpacity {...(props as any)} activeOpacity={1} />
         ),
@@ -338,6 +344,26 @@ export default function Routes() {
           <Stack.Screen
             name="Favoritos"
             component={Favorites}
+            options={ephemeralTransition}
+          />
+          <Stack.Screen
+            name="Análise"
+            component={Analytics}
+            options={ephemeralTransition}
+          />
+          <Stack.Screen
+            name="Categorias"
+            component={Categories}
+            options={ephemeralTransition}
+          />
+          <Stack.Screen
+            name="Revisão"
+            component={StatementReview}
+            options={modalLikeTransition}
+          />
+          <Stack.Screen
+            name="Conta"
+            component={UserInfo}
             options={ephemeralTransition}
           />
         </Stack.Navigator>
