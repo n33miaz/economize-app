@@ -124,6 +124,35 @@ export interface NewsArticle {
   content: string | null;
 }
 
+export type ReviewStatus = "SUGGESTED" | "UNCATEGORIZED" | "CONFIRMED";
+
+export type CategorizedBy =
+  | "USER_RULE"
+  | "LEARNED_RULE"
+  | "KEYWORD"
+  | "FALLBACK"
+  | "AI"
+  | "USER";
+
+export type CategoryFlow = "EXPENSE" | "INCOME" | "BOTH";
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  groupName: string | null;
+  flow: CategoryFlow;
+  color: string | null;
+  icon: string | null;
+  systemKey: string | null;
+  // null = categoria raiz. A hierarquia tem no máximo dois níveis.
+  parentId: string | null;
+  parentName: string | null;
+  parentSystemKey: string | null;
+  system: boolean;
+  archived: boolean;
+}
+
 export interface BankTransaction {
   id: string;
   transactionId: string;
@@ -131,6 +160,88 @@ export interface BankTransaction {
   amount: number;
   description: string;
   date: string;
+  categoryId: string | null;
+  reviewStatus: ReviewStatus;
+  categorizedBy: CategorizedBy | null;
+  confidence: number | null;
+  normalizedDescription: string | null;
+  uploadId: string | null;
+}
+
+export interface StatementUploadResult {
+  message: string;
+  uploadId: string;
+  transactionsImported: number;
+  suggested: number;
+  uncategorized: number;
+  // transações reconhecidas como já existentes vindas de outra fonte/formato
+  reconciled: number;
+  format: string;
+  duplicated: boolean;
+}
+
+export interface ReviewGroup {
+  normalizedDescription: string | null;
+  sampleDescription: string | null;
+  suggestedCategoryId: string | null;
+  categorizedBy: CategorizedBy | null;
+  confidence: number | null;
+  totalAmount: number;
+  transactions: BankTransaction[];
+}
+
+export interface ReviewApplyItem {
+  transactionIds: string[];
+  categoryId: string;
+  learnPattern?: boolean;
+}
+
+export interface ReviewOutcome {
+  confirmed: number;
+  rulesSaved: number;
+}
+
+export interface MonthTotals {
+  month: string;
+  totalIncome: number;
+  totalExpense: number;
+  net: number;
+}
+
+export interface CategorySlice {
+  categoryId: string | null;
+  name: string;
+  groupName: string | null;
+  color: string | null;
+  icon: string | null;
+  systemKey: string | null;
+  parentSystemKey: string | null;
+  system: boolean;
+  expenseTotal: number;
+  incomeTotal: number;
+  txCount: number;
+  previousExpenseTotal: number;
+  expenseDeltaPct: number | null;
+  // no nível raiz os totais já vêm somados; aqui vem a quebra por subcategoria
+  children: CategorySlice[];
+}
+
+export interface MonthlyAnalytics {
+  month: string;
+  totalIncome: number;
+  totalExpense: number;
+  net: number;
+  previous: MonthTotals;
+  categories: CategorySlice[];
+  pendingReviewCount: number;
+}
+
+export interface UserMe {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string | null;
+  lastLoginAt: string | null;
 }
 
 export interface HistoricalDataPoint {
@@ -211,4 +322,114 @@ export const getBankTransactions = async (): Promise<BankTransaction[]> => {
   } catch (error) {
     return [];
   }
+};
+
+// --- Categorias ---
+export const getCategories = async (): Promise<Category[]> => {
+  const response = await api.get<Category[]>("/categories");
+  return response.data;
+};
+
+export const createCategory = async (data: {
+  name: string;
+  groupName?: string | null;
+  flow?: CategoryFlow;
+  color?: string | null;
+  icon?: string | null;
+  parentId?: string | null;
+}): Promise<Category> => {
+  const response = await api.post<Category>("/categories", data);
+  return response.data;
+};
+
+export const updateCategory = async (
+  id: string,
+  data: Partial<{
+    name: string;
+    groupName: string | null;
+    flow: CategoryFlow;
+    color: string | null;
+    icon: string | null;
+    archived: boolean;
+    parentId: string | null;
+    // parentId sozinho não distingue "não mexer" de "promover para raiz"
+    clearParent: boolean;
+  }>,
+): Promise<Category> => {
+  const response = await api.patch<Category>(`/categories/${id}`, data);
+  return response.data;
+};
+
+export const deleteCategory = async (
+  id: string,
+): Promise<{ deleted: boolean; archived: boolean }> => {
+  const response = await api.delete(`/categories/${id}`);
+  return response.data;
+};
+
+// --- Revisão de categorização ---
+export const getReviewQueue = async (
+  uploadId?: string,
+): Promise<ReviewGroup[]> => {
+  const response = await api.get<ReviewGroup[]>("/transactions/review", {
+    params: uploadId ? { uploadId } : undefined,
+  });
+  return response.data;
+};
+
+export const applyReview = async (
+  items: ReviewApplyItem[],
+): Promise<ReviewOutcome> => {
+  const response = await api.patch<ReviewOutcome>("/transactions/review", {
+    items,
+  });
+  return response.data;
+};
+
+export const confirmAllReview = async (
+  uploadId?: string,
+): Promise<ReviewOutcome> => {
+  const response = await api.post<ReviewOutcome>(
+    "/transactions/review/confirm-all",
+    null,
+    { params: uploadId ? { uploadId } : undefined },
+  );
+  return response.data;
+};
+
+export const getTransactions = async (params?: {
+  month?: string;
+  status?: ReviewStatus;
+  categoryId?: string;
+}): Promise<BankTransaction[]> => {
+  const response = await api.get<BankTransaction[]>("/transactions", {
+    params,
+  });
+  return response.data;
+};
+
+// --- Análise mensal ---
+export const getMonthlyAnalytics = async (
+  month?: string,
+): Promise<MonthlyAnalytics> => {
+  const response = await api.get<MonthlyAnalytics>("/analytics/monthly", {
+    params: month ? { month } : undefined,
+  });
+  return response.data;
+};
+
+export const getAnalyticsMonths = async (): Promise<string[]> => {
+  const response = await api.get<string[]>("/analytics/months");
+  return response.data;
+};
+
+// --- Usuário ---
+export const getUserMe = async (): Promise<UserMe> => {
+  const response = await api.get<UserMe>("/users/me");
+  return response.data;
+};
+
+export const updateUserMe = async (name: string): Promise<UserMe> => {
+  const response = await api.patch<UserMe>("/users/me", { name });
+  return response.data;
 };

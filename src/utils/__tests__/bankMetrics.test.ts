@@ -12,6 +12,12 @@ const tx = (
   type,
   description,
   date: "2026-05-01T00:00:00Z",
+  categoryId: null,
+  reviewStatus: "CONFIRMED",
+  categorizedBy: null,
+  confidence: null,
+  normalizedDescription: null,
+  uploadId: null,
 });
 
 describe("calculateBankMetrics", () => {
