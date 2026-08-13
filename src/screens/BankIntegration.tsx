@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
+  ActivityIndicator,
   View,
   Text,
   FlatList,
@@ -12,18 +13,24 @@ import {
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  ChevronRight,
   FileText,
   Upload,
 } from "lucide-react-native";
 import { PieChart } from "react-native-chart-kit";
 import * as Haptics from "expo-haptics";
 import Animated from "react-native-reanimated";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import { useBankStore } from "../store/bankStore";
+import { useCategoriesStore } from "../store/categoriesStore";
 import { useToastStore } from "../store/toastStore";
 import PageContainer from "../components/PageContainer";
 import AssistantFAB from "../components/AssistantFAB";
+import CategoryIcon from "../components/CategoryIcon";
+import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
+import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 
 const screenWidth = Dimensions.get("window").width;
@@ -41,33 +48,103 @@ const BANK_SHORTCUTS = [
   { id: "c6", name: "C6 Bank", url: "c6bank://", color: "#242424" },
 ];
 
+function plural(n: number, one: string, many: string) {
+  return n === 1 ? one : many;
+}
+
 export default function BankIntegration() {
   const t = useTheme();
+  const navigation = useNavigation();
   const { cardEntering, listItemEntering } = useMotionPresets();
   // Instâncias separadas: cada botão de importar tem seu próprio ciclo de toque
   const importPress = usePressScale();
   const emptyImportPress = usePressScale();
+  const bannerPress = usePressScale();
   const {
     transactions,
     isLoading,
+    isImporting,
     fetchTransactions,
     importStatement,
     calculateMetrics,
   } = useBankStore();
+  const categoryItems = useCategoriesStore((s) => s.items);
+  const fetchCategories = useCategoriesStore((s) => s.fetch);
   const { showToast } = useToastStore();
   const metrics = calculateMetrics();
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+  // A revisão acontece em outra tela e muda o status das linhas: revalidar só
+  // na montagem deixaria a contagem pendente e os pontinhos de aviso velhos
+  useFocusEffect(
+    useCallback(() => {
+      fetchTransactions();
+      // categorias alimentam os chips das linhas do extrato
+      fetchCategories();
+    }, [fetchTransactions, fetchCategories]),
+  );
+
+  const catById = useMemo(
+    () => new Map(categoryItems.map((c) => [c.id, c])),
+    [categoryItems],
+  );
+
+  const pendingCount = useMemo(
+    () =>
+      transactions.filter(
+        (tx) => tx.reviewStatus && tx.reviewStatus !== "CONFIRMED",
+      ).length,
+    [transactions],
+  );
 
   const handleImport = async () => {
+    // Trava de reentrância: dois toques rápidos abriam dois seletores de
+    // arquivo. O store é a fonte da verdade porque muda antes do re-render
+    if (useBankStore.getState().isImporting) return;
     try {
       Haptics.selectionAsync();
-      const count = await importStatement();
-      if (count > 0) {
+      const result = await importStatement();
+      if (!result) return; // usuário cancelou o seletor de arquivo
+
+      const pending = result.suggested + result.uncategorized;
+      // Arquivo repetido vem com as contagens do upload original: mandar para
+      // a Revisão faria parecer que algo novo entrou agora
+      if (result.duplicated) {
+        showToast(
+          pending > 0
+            ? `Este arquivo já foi importado antes — ${pending} ${plural(pending, "transação continua", "transações continuam")} na revisão.`
+            : "Este arquivo já foi importado antes.",
+          "info",
+        );
+        return;
+      }
+
+      if (pending > 0) {
+        // o motor categorizou/sinalizou: a revisão é o próximo passo natural
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast(`${count} transações importadas com sucesso!`, "success");
+        if (result.reconciled > 0) {
+          // reconciliação parcial só aparece se for dita: o resto do arquivo
+          // já estava registrado por outra fonte
+          showToast(
+            `${result.reconciled} ${plural(result.reconciled, "transação já estava registrada", "transações já estavam registradas")}.`,
+            "info",
+          );
+        }
+        (navigation as any).navigate("Revisão", { uploadId: result.uploadId });
+      } else if (result.transactionsImported > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        const imported = `${result.transactionsImported} ${plural(result.transactionsImported, "transação importada", "transações importadas")}`;
+        showToast(
+          result.reconciled > 0
+            ? `${imported} — ${result.reconciled} ${plural(result.reconciled, "já estava registrada", "já estavam registradas")}.`
+            : `${imported} com sucesso!`,
+          "success",
+        );
+      } else if (result.reconciled > 0) {
+        // outra fonte (outro formato ou conector) já tinha essas transações
+        showToast(
+          `Nada novo — ${result.reconciled} ${plural(result.reconciled, "transação já estava registrada", "transações já estavam registradas")}.`,
+          "info",
+        );
       } else {
         showToast("Nenhuma transação nova encontrada no arquivo.", "info");
       }
@@ -119,6 +196,8 @@ export default function BankIntegration() {
       day: "2-digit",
       month: "short",
     });
+    const category = item.categoryId ? catById.get(item.categoryId) : undefined;
+    const isPending = item.reviewStatus && item.reviewStatus !== "CONFIRMED";
 
     return (
       <Animated.View
@@ -144,6 +223,40 @@ export default function BankIntegration() {
               {item.description || "Transferência"}
             </Text>
             <Text className="text-textTertiary text-xs mt-0.5">{date}</Text>
+            <View className="flex-row items-center mt-1.5">
+              <View
+                className="flex-row items-center bg-elevated border border-border rounded-full"
+                style={{
+                  paddingVertical: 2,
+                  paddingLeft: 2,
+                  paddingRight: spacing[2],
+                }}
+              >
+                {/* AppTheme tipa hexas literais do dark; temas são
+                    estruturalmente idênticos — cast da união é seguro */}
+                <CategoryIcon category={category} theme={t as AppTheme} size={28} />
+                <Text
+                  className="text-textSecondary text-xs font-medium ml-1.5"
+                  numberOfLines={1}
+                  style={{ maxWidth: 130 }}
+                >
+                  {category ? category.name : "Sem categoria"}
+                </Text>
+              </View>
+              {isPending && (
+                // Ponto warning discreto: categorização ainda não confirmada
+                <View
+                  accessibilityLabel="Aguardando revisão"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: radius.full,
+                    backgroundColor: t.semantic.warning,
+                    marginLeft: spacing[2],
+                  }}
+                />
+              )}
+            </View>
           </View>
         </View>
         <Text
@@ -251,29 +364,71 @@ export default function BankIntegration() {
             </View>
 
             {transactions.length > 0 && (
-              <View className="flex-row items-center justify-between mt-5 mb-2">
-                <Text className="text-lg font-bold text-textPrimary">
-                  Histórico de Transações
-                </Text>
-                {/* Import vira ação inline: o canto inferior é do AssistantFAB */}
-                <Animated.View style={importPress.pressStyle}>
-                  <TouchableOpacity
-                    className="flex-row items-center bg-accentMuted border border-accent rounded-full px-3 py-1.5"
-                    onPress={handleImport}
-                    onPressIn={importPress.onPressIn}
-                    onPressOut={importPress.onPressOut}
-                    accessibilityLabel="Importar extrato"
-                    accessibilityRole="button"
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    activeOpacity={0.8}
-                  >
-                    <Upload size={14} color={t.accent.neon} />
-                    <Text className="text-accent text-xs font-bold ml-1">
-                      Importar
-                    </Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              </View>
+              <>
+                <View className="flex-row items-center justify-between mt-5 mb-2">
+                  <Text className="text-lg font-bold text-textPrimary">
+                    Histórico de Transações
+                  </Text>
+                  {/* Import vira ação inline: o canto inferior é do AssistantFAB */}
+                  <Animated.View style={importPress.pressStyle}>
+                    <TouchableOpacity
+                      className="flex-row items-center bg-accentMuted border border-accent rounded-full px-3 py-1.5"
+                      onPress={handleImport}
+                      onPressIn={importPress.onPressIn}
+                      onPressOut={importPress.onPressOut}
+                      disabled={isImporting}
+                      accessibilityLabel={
+                        isImporting ? "Importando extrato" : "Importar extrato"
+                      }
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: isImporting }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      activeOpacity={0.8}
+                      style={{ opacity: isImporting ? 0.6 : 1 }}
+                    >
+                      {isImporting ? (
+                        <ActivityIndicator size="small" color={t.accent.neon} />
+                      ) : (
+                        <Upload size={14} color={t.accent.neon} />
+                      )}
+                      <Text className="text-accent text-xs font-bold ml-1">
+                        {isImporting ? "Importando" : "Importar"}
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                </View>
+                {pendingCount > 0 && (
+                  // Sem uploadId: a Revisão abre a fila global de pendências
+                  <Animated.View style={bannerPress.pressStyle}>
+                    <TouchableOpacity
+                      onPress={() => (navigation as any).navigate("Revisão")}
+                      onPressIn={bannerPress.onPressIn}
+                      onPressOut={bannerPress.onPressOut}
+                      accessibilityLabel={`${pendingCount} ${pendingCount === 1 ? "transação aguardando" : "transações aguardando"} revisão. Abrir revisão`}
+                      accessibilityRole="button"
+                      activeOpacity={0.85}
+                      className="flex-row items-center justify-between mb-3"
+                      style={{
+                        backgroundColor: t.semantic.warningMuted,
+                        borderRadius: radius.xl,
+                        paddingHorizontal: spacing[4],
+                        paddingVertical: spacing[3],
+                        minHeight: 44,
+                      }}
+                    >
+                      <Text
+                        className="text-xs font-bold flex-1 mr-2"
+                        style={{ color: t.semantic.warning }}
+                      >
+                        {pendingCount === 1
+                          ? "1 transação aguardando revisão"
+                          : `${pendingCount} transações aguardando revisão`}
+                      </Text>
+                      <ChevronRight size={16} color={t.semantic.warning} />
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+              </>
             )}
           </View>
         }
@@ -288,9 +443,12 @@ export default function BankIntegration() {
             <Text className="text-textPrimary font-bold text-lg text-center mb-2">
               Nenhum extrato importado
             </Text>
-            <Text className="text-textSecondary text-sm text-center leading-5 mb-5">
+            <Text className="text-textSecondary text-sm text-center leading-5 mb-2">
               Exporte o arquivo de extrato em seu banco e importe aqui para gerar seus
               gráficos e relatórios.
+            </Text>
+            <Text className="text-textTertiary text-xs text-center leading-4 mb-5">
+              Prefira OFX (ou CSV) — é o formato mais confiável dos bancos.
             </Text>
             <Animated.View style={emptyImportPress.pressStyle}>
               <TouchableOpacity
@@ -298,13 +456,22 @@ export default function BankIntegration() {
                 onPress={handleImport}
                 onPressIn={emptyImportPress.onPressIn}
                 onPressOut={emptyImportPress.onPressOut}
-                accessibilityLabel="Importar extrato"
+                disabled={isImporting}
+                accessibilityLabel={
+                  isImporting ? "Importando extrato" : "Importar extrato"
+                }
                 accessibilityRole="button"
+                accessibilityState={{ disabled: isImporting }}
                 activeOpacity={0.85}
+                style={{ opacity: isImporting ? 0.7 : 1 }}
               >
-                <Upload size={18} color={t.text.inverse} />
+                {isImporting ? (
+                  <ActivityIndicator size="small" color={t.text.inverse} />
+                ) : (
+                  <Upload size={18} color={t.text.inverse} />
+                )}
                 <Text className="text-primaryDark font-bold text-sm ml-2">
-                  Importar extrato
+                  {isImporting ? "Importando..." : "Importar extrato"}
                 </Text>
               </TouchableOpacity>
             </Animated.View>

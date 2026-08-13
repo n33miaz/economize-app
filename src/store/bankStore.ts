@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   BankTransaction,
+  StatementUploadResult,
   getBankTransactions,
   uploadBankStatement,
 } from "../services/api";
@@ -10,16 +11,20 @@ import { calculateBankMetrics } from "../utils/bankMetrics";
 interface BankState {
   transactions: BankTransaction[];
   isLoading: boolean;
+  // upload tem indicador próprio — compartilhar com o refresh fazia o
+  // RefreshControl girar durante a importação de arquivo
+  isImporting: boolean;
   error: string | null;
 
   fetchTransactions: () => Promise<void>;
-  importStatement: () => Promise<number>;
+  importStatement: () => Promise<StatementUploadResult | null>;
   calculateMetrics: () => { income: number; expense: number; total: number };
 }
 
 export const useBankStore = create<BankState>((set, get) => ({
   transactions: [],
   isLoading: false,
+  isImporting: false,
   error: null,
 
   fetchTransactions: async () => {
@@ -27,13 +32,13 @@ export const useBankStore = create<BankState>((set, get) => ({
     try {
       const data = await getBankTransactions();
       set({ transactions: data, isLoading: false });
-    } catch (e) {
+    } catch {
       set({ error: "Falha ao carregar extrato.", isLoading: false });
     }
   },
 
   importStatement: async () => {
-    set({ isLoading: true, error: null });
+    set({ isImporting: true, error: null });
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -48,26 +53,23 @@ export const useBankStore = create<BankState>((set, get) => ({
       });
 
       if (result.canceled) {
-        set({ isLoading: false });
-        return 0;
+        set({ isImporting: false });
+        return null;
       }
 
-      const file = result.assets[0];
-      const supported = [".ofx", ".csv", ".xlsx", ".xls", ".pdf", ".txt"];
-      const lower = file.name.toLowerCase();
-      if (!supported.some((ext) => lower.endsWith(ext))) {
-        throw new Error(
-          "Formato não suportado. Use OFX, CSV, XLSX, PDF ou TXT.",
-        );
-      }
-
-      const response = await uploadBankStatement(file);
+      // a validação de formato é do backend (EC-048) — o erro dele já vem
+      // com a mensagem certa e cobre formatos que o cliente nem conhece
+      const response: StatementUploadResult = await uploadBankStatement(
+        result.assets[0],
+      );
 
       await get().fetchTransactions();
+      set({ isImporting: false });
 
-      return response.transactionsImported || 0;
+      return response;
     } catch (e: any) {
-      set({ error: e.message || "Erro no upload", isLoading: false });
+      const detail = e?.response?.data?.detail;
+      set({ error: detail || e.message || "Erro no upload", isImporting: false });
       throw e;
     }
   },
