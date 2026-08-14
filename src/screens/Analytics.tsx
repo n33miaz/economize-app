@@ -18,7 +18,7 @@ import {
 } from "lucide-react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
 import type { CategorySlice, MonthlyAnalytics } from "../services/api";
@@ -256,7 +256,13 @@ function ExpenseRow({
   const color = resolveCategoryColor(slice, t);
   const share = totalExpense > 0 ? (slice.expenseTotal / totalExpense) * 100 : 0;
   const isUncategorized = slice.categoryId === null;
-  const children = slice.children?.filter((c) => c.expenseTotal > 0) ?? [];
+  const children =
+    slice.children?.filter(
+      (c) => c.expenseTotal > 0 || c.previousExpenseTotal > 0,
+    ) ?? [];
+  // Categoria que zerou fica esmaecida: continua legível, mas não disputa
+  // atenção com o que realmente pesou no mês
+  const isZeroed = slice.expenseTotal === 0 && slice.previousExpenseTotal > 0;
   const delta = slice.expenseDeltaPct;
   const deltaColor =
     delta === null || delta === 0
@@ -266,7 +272,7 @@ function ExpenseRow({
         : t.chart.up;
 
   const content = (
-    <View style={{ flexDirection: "row" }}>
+    <View style={{ flexDirection: "row", opacity: isZeroed ? 0.6 : 1 }}>
       <CategoryIcon category={slice} theme={t} size={36} />
       <View style={{ flex: 1, marginLeft: spacing[3] }}>
         <View
@@ -773,8 +779,14 @@ export default function Analytics() {
     });
   }, [navigation]);
 
+  // Também entra quem gastou no mês anterior e zerou neste (EC-077): some da
+  // lista era pior do que aparecer com 0 e -100%, porque parecia importação
+  // faltando em vez de gasto que acabou
   const expenseSlices = useMemo(
-    () => data?.categories.filter((s) => s.expenseTotal > 0) ?? [],
+    () =>
+      data?.categories.filter(
+        (s) => s.expenseTotal > 0 || s.previousExpenseTotal > 0,
+      ) ?? [],
     [data],
   );
 
