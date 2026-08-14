@@ -24,11 +24,10 @@ import {
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
 import { Indicator } from "../services/api";
-import { colors } from "../theme/colors";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -246,7 +245,7 @@ export default function Home() {
           <RefreshControl
             refreshing={isContentLoading}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            tintColor={t.accent.neon}
           />
         }
       >
@@ -770,7 +769,7 @@ export default function Home() {
                   {article.title}
                 </Text>
               </View>
-              <ChevronRight size={18} color={colors.textSecondary} />
+              <ChevronRight size={18} color={t.text.secondary} />
             </TouchableOpacity>
           ))}
         </Animated.View>

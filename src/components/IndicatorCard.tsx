@@ -2,8 +2,8 @@ import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { ArrowDownRight, ArrowUpRight, Banknote, Star } from "lucide-react-native";
 import Animated from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
-import { colors, darkTheme } from "../theme/colors";
+import * as Haptics from "../utils/haptics";
+import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
 
@@ -33,6 +33,7 @@ const IndicatorCard = React.memo(
     code,
     type,
   }: IndicatorCardProps) => {
+    const t = useTheme();
     const { pressStyle, onPressIn, onPressOut } = usePressScale();
 
     const safeValue = Number(value) || 0;
@@ -41,14 +42,15 @@ const IndicatorCard = React.memo(
     const variationInfo = useMemo(() => {
       const isPositive = safeVariation >= 0;
       return {
-        color: isPositive ? colors.success : colors.danger,
+        color: isPositive ? t.semantic.success : t.semantic.danger,
         bgColor: isPositive
-          ? darkTheme.semantic.successMuted
-          : darkTheme.semantic.dangerMuted,
+          ? t.semantic.successMuted
+          : t.semantic.dangerMuted,
         Icon: isPositive ? ArrowUpRight : ArrowDownRight,
         formatted: `${isPositive ? "+" : ""}${safeVariation.toFixed(2)}%`,
       };
-    }, [safeVariation]);
+      // `t` na lista: sem ele as cores ficavam presas ao tema da montagem
+    }, [safeVariation, t]);
 
     const displayName = useMemo(() => {
       return name?.split("/")[0].replace("Comercial", "").trim() || "Ativo";
@@ -83,8 +85,8 @@ const IndicatorCard = React.memo(
             padding: ds.spacing[5],
             borderRadius: ds.radius["3xl"],
             borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.cardBackground,
+            borderColor: t.border.default,
+            backgroundColor: t.background.surface,
             ...ds.shadow.md,
           }}
         >
@@ -112,19 +114,19 @@ const IndicatorCard = React.memo(
                   borderRadius: ds.radius.xl,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: darkTheme.accent.neonMuted,
+                  backgroundColor: t.accent.neonMuted,
                 }}
               >
-                <Banknote size={20} color={colors.primary} />
+                <Banknote size={20} color={t.accent.neon} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text
-                  style={[ds.typography.bodyLg, { color: colors.textPrimary }]}
+                  style={[ds.typography.bodyLg, { color: t.text.primary }]}
                   numberOfLines={1}
                 >
                   {displayName}
                 </Text>
-                <Text style={[ds.typography.bodySm, { color: colors.textSecondary }]}>
+                <Text style={[ds.typography.bodySm, { color: t.text.secondary }]}>
                   {subtitle}
                 </Text>
               </View>
@@ -151,8 +153,8 @@ const IndicatorCard = React.memo(
               {/* Favorito ativo preenche a estrela com o accent da marca */}
               <Star
                 size={20}
-                color={isFavorite ? colors.primary : colors.inactive}
-                fill={isFavorite ? colors.primary : "none"}
+                color={isFavorite ? t.accent.neon : t.text.tertiary}
+                fill={isFavorite ? t.accent.neon : "none"}
               />
             </TouchableOpacity>
           </View>
@@ -162,7 +164,7 @@ const IndicatorCard = React.memo(
               width: "100%",
               height: 1,
               marginBottom: ds.spacing[4],
-              backgroundColor: darkTheme.border.subtle,
+              backgroundColor: t.border.subtle,
             }}
           />
 
@@ -177,12 +179,12 @@ const IndicatorCard = React.memo(
               <Text
                 style={[
                   ds.typography.bodySm,
-                  { color: colors.textSecondary, marginBottom: ds.spacing[1] },
+                  { color: t.text.secondary, marginBottom: ds.spacing[1] },
                 ]}
               >
                 Cotação Atual
               </Text>
-              <Text style={[ds.typography.numericLg, { color: colors.textPrimary }]}>
+              <Text style={[ds.typography.numericLg, { color: t.text.primary }]}>
                 {displayValue}
               </Text>
             </View>

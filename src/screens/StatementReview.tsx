@@ -16,14 +16,14 @@ import {
 } from "lucide-react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
 import type { Category, CategorizedBy, ReviewGroup } from "../services/api";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { useReviewStore } from "../store/reviewStore";
 import { useToastStore } from "../store/toastStore";
-import { darkTheme, type AppTheme } from "../theme/colors";
+import type { AppTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
 import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -551,10 +551,10 @@ export default function StatementReview() {
               borderRadius: radius.full,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: darkTheme.background.elevated,
+              backgroundColor: t.background.elevated,
             }}
           >
-            <X size={18} color={darkTheme.text.primary} />
+            <X size={18} color={t.text.primary} />
           </TouchableOpacity>,
         ]}
       />

@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   Keyboard,
 } from "react-native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import { Bitcoin, Search, TrendingUp } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 
 import { useDebounce } from "../hooks/useDebounce";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets } from "../theme/motionPresets";
 import { Indicator, isIndexData } from "../services/api";
 import IndicatorCard from "./IndicatorCard";
@@ -41,6 +41,7 @@ export default function AssetListScreen({
   symbol,
   featuredItems = [],
 }: AssetListScreenProps) {
+  const t = useTheme();
   const { listItemEntering } = useMotionPresets();
   const { loading, error, fetchIndicators } = useIndicatorStore();
   const { favorites, toggleFavorite } = useFavoritesStore();
@@ -185,7 +186,7 @@ export default function AssetListScreen({
         />
         {isSearching && (
           <View className="flex-row items-center justify-center py-2">
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator size="small" color={t.accent.neon} />
             <Text className="ml-2 text-textSecondary text-xs font-medium">
               Filtrando mercado...
             </Text>
@@ -230,15 +231,15 @@ export default function AssetListScreen({
             <RefreshControl
               refreshing={loading}
               onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+              colors={[t.accent.neon]}
+              tintColor={t.accent.neon}
               progressViewOffset={20}
             />
           }
           ListEmptyComponent={
             !loading ? (
               <View className="mt-20 items-center px-10 opacity-60">
-                <Search size={48} color={colors.inactive} />
+                <Search size={48} color={t.text.tertiary} />
                 <Text className="text-textSecondary text-base text-center mt-4 font-medium">
                   {searchText
                     ? `Nenhum ativo encontrado para "${searchText}"`
