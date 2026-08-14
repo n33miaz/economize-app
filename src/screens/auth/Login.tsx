@@ -13,6 +13,9 @@ import {
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../theme/ThemeProvider";
 
+// Formulário de login não ganha nada em ficar largo; 420 é a medida do cartão
+const AUTH_MAX_WIDTH = 420;
+
 export default function Login({ navigation }: any) {
   const t = useTheme();
   const [email, setEmail] = useState("");
@@ -32,14 +35,20 @@ export default function Login({ navigation }: any) {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-background justify-center px-6"
+      // A tela de auth não passa pelo PageContainer: sem este teto o
+      // formulário atravessava os 1440px do monitor de ponta a ponta
+      style={{ width: "100%", maxWidth: AUTH_MAX_WIDTH, alignSelf: "center" }}
     >
       <View className="items-center mb-10">
-        <View className="w-24 h-24 bg-accentMuted rounded-3xl justify-center items-center mb-4">
+        <View className="w-24 h-24 bg-accentMuted rounded-3xl justify-center items-center mb-4 overflow-hidden">
           <Image
             // logo-512 e não logo.png: o original é 2048² com 6 MB, baixado
             // inteiro na primeira tela do site para exibir 64px
             source={require("../../../assets/logo-512.png")}
-            className="w-16 h-16"
+            // Dimensão em style, não em className: na web o NativeWind não
+            // aplica largura/altura em <Image> e ela vinha no tamanho natural
+            // (512px), cobrindo o título inteiro
+            style={{ width: 64, height: 64 }}
             resizeMode="contain"
           />
         </View>

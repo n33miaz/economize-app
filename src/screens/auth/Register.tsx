@@ -37,6 +37,8 @@ export default function Register({ navigation }: any) {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-background justify-center px-6"
+      // Mesmo teto do Login: a tela de auth não passa pelo PageContainer
+      style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}
     >
       <TouchableOpacity
         className="absolute top-14 left-6 w-10 h-10 bg-elevated rounded-full justify-center items-center"
