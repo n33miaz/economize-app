@@ -6,7 +6,7 @@
 # a publicar a cada push na main.
 services:
   - type: web
-    name: economize
+    name: economize-web
     runtime: static
     # `--clear` não é zelo excessivo: a URL da API é inlinada em tempo de transform,
     # então um cache do Metro sobrevivente publica o bundle com a URL antiga
