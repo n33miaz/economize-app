@@ -22,7 +22,7 @@ import { useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
 import * as LocalAuthentication from "expo-local-authentication";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { useAuthStore } from "../store/authStore";
@@ -63,6 +63,7 @@ function InfoRow({
   label: string;
   value: string;
 }) {
+  const t = useTheme();
   return (
     <View
       style={{
@@ -76,21 +77,21 @@ function InfoRow({
           width: 36,
           height: 36,
           borderRadius: radius.full,
-          backgroundColor: darkTheme.accent.neonMuted,
+          backgroundColor: t.accent.neonMuted,
           alignItems: "center",
           justifyContent: "center",
           marginRight: spacing[3],
         }}
       >
-        <Icon size={17} color={darkTheme.accent.neon} />
+        <Icon size={17} color={t.accent.neon} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ color: darkTheme.text.secondary, fontSize: 12 }}>
+        <Text style={{ color: t.text.secondary, fontSize: 12 }}>
           {label}
         </Text>
         <Text
           style={{
-            color: darkTheme.text.primary,
+            color: t.text.primary,
             fontSize: 15,
             fontWeight: "600",
             marginTop: 1,
@@ -104,6 +105,7 @@ function InfoRow({
 }
 
 export default function UserInfo() {
+  const t = useTheme();
   const navigation = useNavigation();
   const { cardEntering, listItemEntering } = useMotionPresets();
   const { pressStyle, onPressIn, onPressOut } = usePressScale();
@@ -191,17 +193,17 @@ export default function UserInfo() {
               width: 88,
               height: 88,
               borderRadius: radius.full,
-              backgroundColor: darkTheme.accent.neonMuted,
+              backgroundColor: t.accent.neonMuted,
               alignItems: "center",
               justifyContent: "center",
               borderWidth: 2,
-              borderColor: darkTheme.accent.neon,
+              borderColor: t.accent.neon,
               marginBottom: spacing[3],
             }}
           >
             <Text
               style={{
-                color: darkTheme.accent.neon,
+                color: t.accent.neon,
                 fontSize: 30,
                 fontWeight: "700",
               }}
@@ -225,11 +227,11 @@ export default function UserInfo() {
                 maxLength={100}
                 accessibilityLabel="Editar nome"
                 style={{
-                  color: darkTheme.text.primary,
+                  color: t.text.primary,
                   fontSize: 18,
                   fontWeight: "700",
                   borderBottomWidth: 1,
-                  borderBottomColor: darkTheme.accent.neon,
+                  borderBottomColor: t.accent.neon,
                   paddingVertical: spacing[1],
                   minWidth: 180,
                   textAlign: "center",
@@ -244,7 +246,7 @@ export default function UserInfo() {
                   width: 34,
                   height: 34,
                   borderRadius: radius.full,
-                  backgroundColor: darkTheme.accent.neon,
+                  backgroundColor: t.accent.neon,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -252,10 +254,10 @@ export default function UserInfo() {
                 {isSaving ? (
                   <ActivityIndicator
                     size="small"
-                    color={darkTheme.background.base}
+                    color={t.background.base}
                   />
                 ) : (
-                  <Check size={18} color={darkTheme.background.base} />
+                  <Check size={18} color={t.background.base} />
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -266,14 +268,14 @@ export default function UserInfo() {
                   width: 34,
                   height: 34,
                   borderRadius: radius.full,
-                  backgroundColor: darkTheme.background.elevated,
+                  backgroundColor: t.background.elevated,
                   borderWidth: 1,
-                  borderColor: darkTheme.border.default,
+                  borderColor: t.border.default,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <X size={18} color={darkTheme.text.secondary} />
+                <X size={18} color={t.text.secondary} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -289,14 +291,14 @@ export default function UserInfo() {
             >
               <Text
                 style={{
-                  color: darkTheme.text.primary,
+                  color: t.text.primary,
                   fontSize: 20,
                   fontWeight: "700",
                 }}
               >
                 {displayName}
               </Text>
-              <Pencil size={16} color={darkTheme.text.tertiary} />
+              <Pencil size={16} color={t.text.tertiary} />
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -304,18 +306,18 @@ export default function UserInfo() {
         <Animated.View
           entering={listItemEntering(1)}
           style={{
-            backgroundColor: darkTheme.background.elevated,
+            backgroundColor: t.background.elevated,
             borderRadius: radius["2xl"],
             paddingHorizontal: spacing[4],
             paddingVertical: spacing[2],
             borderWidth: 1,
-            borderColor: darkTheme.border.subtle,
+            borderColor: t.border.subtle,
             marginBottom: spacing[4],
           }}
         >
           {isLoading && !me ? (
             <ActivityIndicator
-              color={darkTheme.accent.neon}
+              color={t.accent.neon}
               style={{ paddingVertical: spacing[5] }}
             />
           ) : (
@@ -324,7 +326,7 @@ export default function UserInfo() {
               <View
                 style={{
                   height: 1,
-                  backgroundColor: darkTheme.border.subtle,
+                  backgroundColor: t.border.subtle,
                 }}
               />
               <InfoRow
@@ -335,7 +337,7 @@ export default function UserInfo() {
               <View
                 style={{
                   height: 1,
-                  backgroundColor: darkTheme.border.subtle,
+                  backgroundColor: t.border.subtle,
                 }}
               />
               <InfoRow
@@ -352,11 +354,11 @@ export default function UserInfo() {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: darkTheme.background.elevated,
+            backgroundColor: t.background.elevated,
             borderRadius: radius["2xl"],
             padding: spacing[4],
             borderWidth: 1,
-            borderColor: darkTheme.border.subtle,
+            borderColor: t.border.subtle,
             marginBottom: spacing[6],
           }}
         >
@@ -365,18 +367,18 @@ export default function UserInfo() {
               width: 36,
               height: 36,
               borderRadius: radius.full,
-              backgroundColor: darkTheme.accent.neonMuted,
+              backgroundColor: t.accent.neonMuted,
               alignItems: "center",
               justifyContent: "center",
               marginRight: spacing[3],
             }}
           >
-            <FingerprintPattern size={17} color={darkTheme.accent.neon} />
+            <FingerprintPattern size={17} color={t.accent.neon} />
           </View>
           <View style={{ flex: 1, marginRight: spacing[3] }}>
             <Text
               style={{
-                color: darkTheme.text.primary,
+                color: t.text.primary,
                 fontSize: 15,
                 fontWeight: "600",
               }}
@@ -385,7 +387,7 @@ export default function UserInfo() {
             </Text>
             <Text
               style={{
-                color: darkTheme.text.secondary,
+                color: t.text.secondary,
                 fontSize: 12,
                 marginTop: 1,
               }}
@@ -400,10 +402,10 @@ export default function UserInfo() {
             onValueChange={handleBiometricToggle}
             disabled={!biometricAvailable}
             trackColor={{
-              false: darkTheme.border.default,
-              true: darkTheme.accent.neon,
+              false: t.border.default,
+              true: t.accent.neon,
             }}
-            thumbColor={darkTheme.background.base}
+            thumbColor={t.background.base}
           />
         </Animated.View>
 
@@ -420,17 +422,17 @@ export default function UserInfo() {
               alignItems: "center",
               justifyContent: "center",
               gap: spacing[2],
-              backgroundColor: darkTheme.background.elevated,
+              backgroundColor: t.background.elevated,
               borderRadius: radius.xl,
               paddingVertical: spacing[4],
               borderWidth: 1,
-              borderColor: darkTheme.border.subtle,
+              borderColor: t.border.subtle,
             }}
           >
-            <Info size={18} color={darkTheme.text.secondary} />
+            <Info size={18} color={t.text.secondary} />
             <Text
               style={{
-                color: darkTheme.text.primary,
+                color: t.text.primary,
                 fontSize: 15,
                 fontWeight: "600",
               }}

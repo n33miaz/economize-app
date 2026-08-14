@@ -4,7 +4,7 @@ import { Info, User } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { spacing, radius } from "../theme/ds";
 
 interface ScreenHeaderProps {
@@ -29,6 +29,7 @@ export default function ScreenHeader({
   showProfileButton = true,
   topInset = true,
 }: ScreenHeaderProps) {
+  const t = useTheme();
   const navigation = useNavigation();
   const paddingTop = topInset
     ? Constants.statusBarHeight + spacing[5]
@@ -47,7 +48,7 @@ export default function ScreenHeader({
     >
       <StatusBar
         barStyle="light-content"
-        backgroundColor={darkTheme.background.base}
+        backgroundColor={t.background.base}
         translucent
       />
 
@@ -92,7 +93,7 @@ export default function ScreenHeader({
               }}
               onPress={() => navigation.navigate("Sobre" as never)}
             >
-              <Info size={18} color={darkTheme.text.primary} />
+              <Info size={18} color={t.text.primary} />
             </TouchableOpacity>
           )}
 
@@ -110,7 +111,7 @@ export default function ScreenHeader({
               }}
               onPress={() => navigation.navigate("Profile" as never)}
             >
-              <User size={18} color={darkTheme.text.primary} />
+              <User size={18} color={t.text.primary} />
             </TouchableOpacity>
           )}
         </View>

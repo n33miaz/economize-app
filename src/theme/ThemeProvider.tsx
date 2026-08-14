@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useColorScheme } from "react-native";
+import { colorScheme as nativewindColorScheme } from "nativewind";
 
 import { darkTheme, lightTheme } from "./colors";
 import { usePreferencesStore } from "../store/preferencesStore";
@@ -15,4 +17,18 @@ export function useTheme(): Theme {
   const resolved = theme === "system" ? systemColorScheme : theme;
   // Dark é o default da marca: qualquer valor indefinido cai no escuro
   return resolved === "light" ? lightTheme : darkTheme;
+}
+
+/**
+ * Repassa a preferência de tema para o NativeWind, que mantém o próprio estado
+ * de color scheme. Sem isso as classes (`bg-surface`, `text-textPrimary`) e o
+ * estilo inline do `useTheme()` divergiam: escolher "Claro" trocava só metade
+ * da tela. Chamado uma única vez, no App.
+ */
+export function useThemeSync() {
+  const theme = usePreferencesStore((s) => s.theme);
+
+  useEffect(() => {
+    nativewindColorScheme.set(theme);
+  }, [theme]);
 }

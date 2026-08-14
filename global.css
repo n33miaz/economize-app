@@ -1,3 +1,61 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+  Fonte única das cores usadas pelas classes do NativeWind. Os mesmos valores
+  vivem tipados em src/theme/colors.ts para o que é estilo inline (gráficos,
+  ícones lucide, sheets) — os dois lados têm que andar juntos.
+
+  Canais RGB separados por espaço porque o tailwind.config monta
+  `rgb(var(--x) / <alpha-value>)`; é isso que faz `bg-danger/15` funcionar.
+
+  `:root` é o tema claro e `.dark:root` é o escuro. Com `darkMode: "class"` no
+  tailwind.config, quem alterna é o `colorScheme.set()` chamado pelo
+  ThemeProvider a partir da preferência salva.
+*/
+@layer base {
+  :root {
+    --color-accent: 138 100 16;
+    --color-accent-pressed: 117 83 7;
+    --color-accent-muted: rgba(138, 100, 16, 0.1);
+    --color-brand-dark: 15 14 11;
+
+    --color-success: 21 128 61;
+    --color-danger: 220 38 38;
+    --color-warning: 194 65 12;
+    --color-info: 37 99 235;
+
+    --color-bg-base: 246 245 243;
+    --color-bg-surface: 255 255 255;
+    --color-bg-elevated: 255 255 255;
+
+    --color-text-primary: 26 24 20;
+    --color-text-secondary: 80 77 68;
+    --color-text-tertiary: 122 118 108;
+
+    --color-border: 211 209 202;
+  }
+
+  .dark:root {
+    --color-accent: 242 193 78;
+    --color-accent-pressed: 223 171 47;
+    --color-accent-muted: rgba(242, 193, 78, 0.14);
+    --color-brand-dark: 15 14 11;
+
+    --color-success: 85 217 127;
+    --color-danger: 248 113 113;
+    --color-warning: 251 146 60;
+    --color-info: 96 165 250;
+
+    --color-bg-base: 15 14 11;
+    --color-bg-surface: 24 23 19;
+    --color-bg-elevated: 34 32 27;
+
+    --color-text-primary: 246 245 244;
+    --color-text-secondary: 175 171 161;
+    --color-text-tertiary: 117 113 102;
+
+    --color-border: 53 51 44;
+  }
+}

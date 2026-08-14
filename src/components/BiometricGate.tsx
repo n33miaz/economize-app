@@ -3,7 +3,7 @@ import { Text, TouchableOpacity, View } from "react-native";
 import { FingerprintPattern } from "lucide-react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useAuthStore } from "../store/authStore";
 import { usePreferencesStore } from "../store/preferencesStore";
@@ -13,6 +13,7 @@ interface Props {
 }
 
 export default function BiometricGate({ children }: Props) {
+  const t = useTheme();
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const biometricLogin = usePreferencesStore((s) => s.biometricLogin);
@@ -63,7 +64,7 @@ export default function BiometricGate({ children }: Props) {
   // Splash neutro enquanto as preferências hidratam: nada de rotas aqui
   if (!hasHydrated) {
     return (
-      <View style={{ flex: 1, backgroundColor: darkTheme.background.base }} />
+      <View style={{ flex: 1, backgroundColor: t.background.base }} />
     );
   }
 
@@ -72,7 +73,7 @@ export default function BiometricGate({ children }: Props) {
       <View
         style={{
           flex: 1,
-          backgroundColor: darkTheme.background.base,
+          backgroundColor: t.background.base,
           alignItems: "center",
           justifyContent: "center",
           padding: spacing[6],
@@ -83,19 +84,19 @@ export default function BiometricGate({ children }: Props) {
             width: 88,
             height: 88,
             borderRadius: radius.full,
-            backgroundColor: darkTheme.accent.neonMuted,
+            backgroundColor: t.accent.neonMuted,
             alignItems: "center",
             justifyContent: "center",
             marginBottom: spacing[5],
             borderWidth: 2,
-            borderColor: darkTheme.accent.neon,
+            borderColor: t.accent.neon,
           }}
         >
-          <FingerprintPattern size={40} color={darkTheme.accent.neon} />
+          <FingerprintPattern size={40} color={t.accent.neon} />
         </View>
         <Text
           style={{
-            color: darkTheme.text.primary,
+            color: t.text.primary,
             fontSize: 20,
             fontWeight: "700",
             marginBottom: spacing[2],
@@ -105,7 +106,7 @@ export default function BiometricGate({ children }: Props) {
         </Text>
         <Text
           style={{
-            color: darkTheme.text.secondary,
+            color: t.text.secondary,
             fontSize: 14,
             textAlign: "center",
             marginBottom: spacing[6],
@@ -119,7 +120,7 @@ export default function BiometricGate({ children }: Props) {
           onPress={runAuth}
           activeOpacity={0.85}
           style={{
-            backgroundColor: darkTheme.accent.neon,
+            backgroundColor: t.accent.neon,
             paddingHorizontal: spacing[6],
             paddingVertical: spacing[3],
             borderRadius: radius.full,
@@ -127,7 +128,7 @@ export default function BiometricGate({ children }: Props) {
         >
           <Text
             style={{
-              color: darkTheme.text.inverse,
+              color: t.text.inverse,
               fontWeight: "700",
               fontSize: 14,
             }}

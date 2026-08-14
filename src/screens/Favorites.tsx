@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Star } from "lucide-react-native";
 import Animated from "react-native-reanimated";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { Indicator, isIndexData } from "../services/api";
 import IndicatorCard from "../components/IndicatorCard";
@@ -21,6 +21,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 
 export default function Favorites({ navigation }: any) {
+  const t = useTheme();
   const { cardEntering, listItemEntering } = useMotionPresets();
   const explorePress = usePressScale();
   const { indicators, loading, fetchIndicators } = useIndicatorStore();
@@ -92,7 +93,7 @@ export default function Favorites({ navigation }: any) {
 
       {loading && favoriteItems.length === 0 ? (
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.accent.neon} />
         </View>
       ) : (
         <FlatList
@@ -104,8 +105,8 @@ export default function Favorites({ navigation }: any) {
             <RefreshControl
               refreshing={loading}
               onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+              colors={[t.accent.neon]}
+              tintColor={t.accent.neon}
             />
           }
           ListEmptyComponent={
@@ -115,7 +116,7 @@ export default function Favorites({ navigation }: any) {
                 className="flex-1 mt-16 items-center justify-center px-8"
               >
                 <View className="w-24 h-24 rounded-full bg-accentMuted justify-center items-center mb-6">
-                  <Star size={48} color={colors.inactive} />
+                  <Star size={48} color={t.text.tertiary} />
                 </View>
                 <Text className="text-xl font-bold text-textPrimary text-center mb-2">
                   Sua lista está vazia

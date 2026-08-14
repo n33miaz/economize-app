@@ -7,7 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import NewsCard from "../components/NewsCard";
 import useNewsData from "../hooks/useNewsData";
 import { NewsArticle } from "../services/api";
@@ -16,6 +16,7 @@ import PageContainer from "../components/PageContainer";
 import ErrorState from "../components/ErrorState";
 
 export default function News() {
+  const t = useTheme();
   const { articles, loading, error, fetchNews } = useNewsData();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,7 +37,7 @@ export default function News() {
 
       {loading && !articles?.length ? (
         <View className="flex-1 justify-center items-center p-5">
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={t.accent.neon} />
           <Text className="mt-3 text-textSecondary font-regular">
             Carregando notícias...
           </Text>
@@ -53,8 +54,8 @@ export default function News() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+              colors={[t.accent.neon]}
+              tintColor={t.accent.neon}
             />
           }
           renderItem={renderNewsCard}

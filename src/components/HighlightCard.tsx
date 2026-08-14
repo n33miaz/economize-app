@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import Animated from "react-native-reanimated";
-import { colors, darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
 
@@ -25,9 +25,10 @@ export default function HighlightCard({
   onPress,
   type,
 }: HighlightCardProps) {
+  const t = useTheme();
   const { pressStyle, onPressIn, onPressOut } = usePressScale();
   const isPositive = variation >= 0;
-  const semanticColor = isPositive ? colors.success : colors.danger;
+  const semanticColor = isPositive ? t.semantic.success : t.semantic.danger;
   const DeltaIcon = isPositive ? ArrowUpRight : ArrowDownRight;
 
   // Índice não é dinheiro: pontos em pt-BR; o resto é BRL formatado
@@ -53,8 +54,8 @@ export default function HighlightCard({
           padding: ds.spacing[5],
           borderRadius: ds.radius["2xl"],
           borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.cardBackground,
+          borderColor: t.border.default,
+          backgroundColor: t.background.surface,
           ...ds.shadow.md,
         }}
       >
@@ -70,12 +71,12 @@ export default function HighlightCard({
               marginRight: ds.spacing[2],
               padding: ds.spacing[2],
               borderRadius: ds.radius.full,
-              backgroundColor: darkTheme.background.elevated,
+              backgroundColor: t.background.elevated,
             }}
           >
-            <Icon size={20} color={colors.textSecondary} />
+            <Icon size={20} color={t.text.secondary} />
           </View>
-          <Text style={[ds.typography.body, { color: colors.textSecondary }]}>
+          <Text style={[ds.typography.body, { color: t.text.secondary }]}>
             {title}
           </Text>
         </View>
@@ -83,7 +84,7 @@ export default function HighlightCard({
         <Text
           style={[
             ds.typography.numericLg,
-            { color: colors.textPrimary, marginBottom: ds.spacing[2] },
+            { color: t.text.primary, marginBottom: ds.spacing[2] },
           ]}
         >
           {formattedValue}
@@ -98,8 +99,8 @@ export default function HighlightCard({
             paddingVertical: ds.spacing[1],
             borderRadius: ds.radius.lg,
             backgroundColor: isPositive
-              ? darkTheme.semantic.successMuted
-              : darkTheme.semantic.dangerMuted,
+              ? t.semantic.successMuted
+              : t.semantic.dangerMuted,
           }}
         >
           <DeltaIcon size={14} color={semanticColor} />
