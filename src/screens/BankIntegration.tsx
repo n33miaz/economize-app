@@ -6,9 +6,9 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Dimensions,
   Linking,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import {
   ArrowDownLeft,
@@ -18,7 +18,7 @@ import {
   Upload,
 } from "lucide-react-native";
 import { PieChart } from "react-native-chart-kit";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
@@ -33,7 +33,8 @@ import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 
-const screenWidth = Dimensions.get("window").width;
+// Teto do gráfico de pizza: acima disso ele só cresce sem informar mais nada
+const MAX_CHART_WIDTH = 420;
 
 // Cores de marca dos próprios bancos (dados, não tema) — únicas exceções
 // permitidas fora dos tokens, porque identificam produtos de terceiros
@@ -71,6 +72,9 @@ export default function BankIntegration() {
   const categoryItems = useCategoriesStore((s) => s.items);
   const fetchCategories = useCategoriesStore((s) => s.fetch);
   const { showToast } = useToastStore();
+  // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
+  const { width: windowWidth } = useWindowDimensions();
+  const chartWidth = Math.min(windowWidth - 80, MAX_CHART_WIDTH);
   const metrics = calculateMetrics();
 
   // A revisão acontece em outra tela e muda o status das linhas: revalidar só
@@ -320,7 +324,7 @@ export default function BankIntegration() {
                 </Text>
                 <PieChart
                   data={chartData}
-                  width={screenWidth - 80}
+                  width={chartWidth}
                   height={140}
                   chartConfig={{
                     color: () => t.text.primary,

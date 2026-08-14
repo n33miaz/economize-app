@@ -1,5 +1,10 @@
 import React, { useMemo } from "react";
-import { View, Text, ActivityIndicator, Dimensions } from "react-native";
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  useWindowDimensions,
+} from "react-native";
 import { LineChart } from "react-native-gifted-charts";
 
 import { useTheme } from "../theme/ThemeProvider";
@@ -9,12 +14,17 @@ interface HistoricalChartProps {
   currencyCode: string;
 }
 
-const screenWidth = Dimensions.get("window").width;
+// Largura máxima do gráfico: no desktop, 70% da janela viraria um traço de
+// 1300px dentro de um sheet de 480
+const MAX_CHART_WIDTH = 420;
 
 export default function HistoricalChart({
   currencyCode,
 }: HistoricalChartProps) {
   const t = useTheme();
+  // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
+  const { width: windowWidth } = useWindowDimensions();
+  const chartWidth = Math.min(windowWidth * 0.7, MAX_CHART_WIDTH);
   const { data, loading, error } = useHistoricalChartData(currencyCode);
 
   const chartData = useMemo(() => {
@@ -52,7 +62,7 @@ export default function HistoricalChart({
       <View className="w-full items-center bg-surface rounded-2xl py-4 border border-border">
         <LineChart
           data={chartData}
-          width={screenWidth * 0.7}
+          width={chartWidth}
           height={160}
           // Série única de histórico usa o token chart.line (a marca)
           color={t.chart.line}

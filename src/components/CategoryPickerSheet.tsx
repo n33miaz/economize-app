@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Dimensions,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Check, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react-native";
@@ -24,8 +24,6 @@ import {
 import CategoryForm from "./CategoryForm";
 import CategoryIcon from "./CategoryIcon";
 import CustomModal from "./CustomModal";
-
-const LIST_MAX_HEIGHT = Dimensions.get("window").height * 0.48;
 
 interface CategoryPickerSheetProps {
   visible: boolean;
@@ -49,6 +47,9 @@ export default function CategoryPickerSheet({
   // A superfície do CustomModal segue o tema — o conteúdo tem que seguir junto,
   // senão o claro fica com texto branco em fundo branco
   const t = useTheme();
+  // Altura vem de hook: o sheet abre no navegador, onde a janela redimensiona
+  const { height: windowHeight } = useWindowDimensions();
+  const listMaxHeight = windowHeight * 0.48;
   const items = useCategoriesStore((s) => s.items);
   const [mode, setMode] = useState<"list" | "create">("list");
   const [drillRootId, setDrillRootId] = useState<string | null>(null);
@@ -248,7 +249,7 @@ export default function CategoryPickerSheet({
               keyboardShouldPersistTaps="handled"
               // teto explícito: o container do sheet não é flex, então sem
               // ele a lista estoura o maxHeight do modal em vez de rolar
-              style={{ maxHeight: LIST_MAX_HEIGHT }}
+              style={{ maxHeight: listMaxHeight }}
             >
               {search.trim().length > 0 ? (
                 searchHits.length > 0 ? (
