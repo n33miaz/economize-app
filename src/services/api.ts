@@ -1,7 +1,9 @@
 import axios, { AxiosError } from "axios";
+import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
 import { useToastStore } from "../store/toastStore";
+import { healthUrlFrom, waitForServer } from "../store/serverStore";
 
 // URL de produção usada quando não há env nem servidor Metro (builds EAS)
 const PROD_BASE_URL = "https://economize-api.onrender.com/api/v1";
@@ -21,9 +23,12 @@ const getBaseUrl = () => {
   return PROD_BASE_URL;
 };
 
+// 30s: a API roda no plano free do Render e uma chamada normal responde em
+// menos de 1s, mas quem estoura o limite é o container hibernado — e para esse
+// caso quem manda é o poll do serverStore, não o timeout
 const api = axios.create({
   baseURL: getBaseUrl(),
-  timeout: 15000, 
+  timeout: 30000,
 });
 
 // Interceptor de Requisição
@@ -53,6 +58,16 @@ api.interceptors.response.use(
         .getState()
         .showToast("Sua sessão expirou. Faça login novamente.", "warning");
       return Promise.reject(error);
+    }
+
+    // Sem resposta nenhuma (timeout ou conexão recusada) é o sintoma do
+    // container hibernado. Em vez de repetir contra um servidor que ainda nem
+    // subiu, espera o health responder — com aviso na tela — e refaz uma vez.
+    const looksAsleep = !error.response || error.code === "ECONNABORTED";
+    if (looksAsleep && originalRequest && !originalRequest._wakeAttempted) {
+      originalRequest._wakeAttempted = true;
+      const awake = await waitForServer(healthUrlFrom(getBaseUrl()));
+      if (awake) return api(originalRequest);
     }
 
     const isNetworkOrServerError =
@@ -297,22 +312,34 @@ export const uploadBankStatement = async (
   file: DocumentPicker.DocumentPickerAsset,
 ) => {
   const formData = new FormData();
-  const fileToUpload = {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType || "application/octet-stream",
-  } as any;
 
-  formData.append("file", fileToUpload);
-
-  try {
-    const response = await api.post("/bank-statements/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
+  if (file.file) {
+    // Web: o picker devolve um File de verdade. O shape {uri,name,type} que o
+    // React Native entende viraria a string "[object Object]" no navegador
+    formData.append("file", file.file, file.name);
+  } else {
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType || "application/octet-stream",
+    } as never);
   }
+
+  // Sem header manual no navegador: multipart precisa do `boundary=...`, que só
+  // o browser sabe gerar. Fixar "multipart/form-data" na mão apagava o boundary
+  // e o servidor não conseguia separar as partes.
+  const headers =
+    Platform.OS === "web"
+      ? undefined
+      : { "Content-Type": "multipart/form-data" };
+
+  // Extrato de ano inteiro leva dezenas de segundos no servidor (1.682
+  // transações levaram 27s): o timeout padrão de 30s cortaria a importação
+  const response = await api.post("/bank-statements/upload", formData, {
+    headers,
+    timeout: 180000,
+  });
+  return response.data;
 };
 
 export const getBankTransactions = async (): Promise<BankTransaction[]> => {

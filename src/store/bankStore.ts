@@ -5,8 +5,27 @@ import {
   getBankTransactions,
   uploadBankStatement,
 } from "../services/api";
+import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { calculateBankMetrics } from "../utils/bankMetrics";
+
+const MIME_TYPES = [
+  "application/x-ofx",
+  "text/csv",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/pdf",
+  "text/plain",
+  "application/octet-stream",
+];
+
+// No navegador a lista vira o `accept` do <input type="file">, que também
+// entende extensão. Sem isso o .ofx do Inter aparecia esmaecido no seletor,
+// porque nenhum browser conhece o MIME "application/x-ofx". No Android o
+// filtro é por MIME e uma extensão solta invalidaria o intent.
+const PICKER_TYPES =
+  Platform.OS === "web"
+    ? [...MIME_TYPES, ".ofx", ".csv", ".xlsx", ".pdf", ".txt"]
+    : MIME_TYPES;
 
 interface BankState {
   transactions: BankTransaction[];
@@ -41,14 +60,7 @@ export const useBankStore = create<BankState>((set, get) => ({
     set({ isImporting: true, error: null });
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "application/x-ofx",
-          "text/csv",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "application/pdf",
-          "text/plain",
-          "application/octet-stream",
-        ],
+        type: PICKER_TYPES,
         copyToCacheDirectory: true,
       });
 
