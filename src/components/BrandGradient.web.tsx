@@ -1,21 +1,27 @@
 import React, { forwardRef } from "react";
 import { View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 import type { BrandGradientProps } from "./BrandGradient";
 
-// O react-native-web não tem `backgroundImage` no StyleSheet (conferido no
-// dist da 0.19): não existe gradiente CSS acessível pela API de estilo do RN.
-// A degradação é assumida — a primeira cor do array é sempre o accent da marca,
-// então o anel do FAB continua dourado, só que chapado. Geometria, sombra e
-// rotação seguem idênticas, porque vêm do `style` de fora.
+// Na web o gradiente vem do `expo-linear-gradient`, que tem implementação para
+// navegador — o `react-native-linear-gradient` não tem, e importar ele aqui
+// derrubava o bundle inteiro antes do React montar.
 const BrandGradient = forwardRef<View, BrandGradientProps>(function BrandGradient(
-  { colors, style, children },
+  { colors, start, end, style, children },
   ref,
 ) {
   return (
-    <View ref={ref} style={[{ backgroundColor: colors[0] }, style]}>
+    <LinearGradient
+      // a lib exige tupla mutável; os temas são `as const`
+      colors={[...colors] as [string, string, ...string[]]}
+      start={start}
+      end={end}
+      style={style}
+      ref={ref as never}
+    >
       {children}
-    </View>
+    </LinearGradient>
   );
 });
 
