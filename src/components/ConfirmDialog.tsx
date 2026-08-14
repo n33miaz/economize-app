@@ -53,7 +53,7 @@ export default function ConfirmDialog() {
   if (!request) return null;
 
   // Os dois fundos (danger e accent) foram validados contra text.inverse nos
-  // dois temas na tabela de contraste da 03_DESIGN_SYSTEM
+  // dois temas na tabela de contraste do design system
   const confirmColor = request.destructive ? t.semantic.danger : t.accent.neon;
 
   return (

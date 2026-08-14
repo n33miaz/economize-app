@@ -2,7 +2,7 @@
 // coesão de marca. Warning é laranja de propósito: âmbar vestiria a cor da
 // marca e viraria ruído semântico. Contraste WCAG (16 pares) e paleta de
 // gráficos (CVD + banda de luminosidade) validados por script em 2026-08-10;
-// racional e provas em docs/03_DESIGN_SYSTEM.md (workspace, fora do repo).
+// racional e provas no design system do projeto (documento fora do repo).
 
 export const darkTheme = {
   background: {
