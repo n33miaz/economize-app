@@ -10,6 +10,7 @@ import Animated, {
 
 import { motion } from "../theme/ds";
 import { softEasing } from "../theme/motionPresets";
+import { CONTENT_MAX_WIDTH, useBreakpoint } from "../hooks/useBreakpoint";
 
 interface PageContainerProps {
   children: React.ReactNode;
@@ -27,6 +28,9 @@ export default function PageContainer({
   style,
   refadeOnFocus = false,
 }: PageContainerProps) {
+  // Todas as telas passam por aqui: é o ponto certo para segurar a largura no
+  // desktop de uma vez, em vez de repetir maxWidth em 19 arquivos
+  const { isDesktop } = useBreakpoint();
   // Com movimento reduzido a tela nasce pronta: sem fade nem deslocamento
   const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(reducedMotion ? 1 : 0);
@@ -74,7 +78,17 @@ export default function PageContainer({
     <View className="flex-1 bg-background overflow-hidden">
       <Animated.View
         className="flex-1 bg-background"
-        style={[style, animatedStyle]}
+        style={[
+          // No desktop o miolo vira uma coluna centralizada com teto de
+          // largura; no celular o valor é nulo e nada muda
+          isDesktop && {
+            width: "100%",
+            maxWidth: CONTENT_MAX_WIDTH,
+            alignSelf: "center",
+          },
+          style,
+          animatedStyle,
+        ]}
       >
         {children}
       </Animated.View>
