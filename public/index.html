@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!--
+  class="dark" já no HTML: o NativeWind lê a classe do documento para decidir o
+  color scheme inicial. Sem ela a primeira pintura usava as variáveis do tema
+  claro e piscava branco antes do React montar. Escuro é o padrão da marca
+  (userInterfaceStyle no app.json e o default do preferencesStore); quem
+  escolher "Claro" troca logo depois, pelo useThemeSync.
+-->
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="utf-8" />
+
+    <!--
+      viewport-fit=cover é o que liga o env(safe-area-inset-*) do iOS. Sem ele
+      o react-native-safe-area-context devolve 0 no navegador e o conteúdo passa
+      por baixo do notch e da barra de gestos do iPhone.
+      Zoom continua liberado de propósito: bloquear é falha de acessibilidade, e
+      o auto-zoom ao focar campo se resolve com fonte de 16px nos inputs.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover"
+    />
+
+    <title>Economize!</title>
+    <meta
+      name="description"
+      content="Controle de gastos com importação de extrato, categorização automática e análise mensal."
+    />
+
+    <!-- Instalação na tela de início do iPhone -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Economize!" />
+    <!-- black-translucent: em modo standalone o app desenha atrás da status bar
+         e quem reserva o espaço é o inset lido acima -->
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="format-detection" content="telephone=no" />
+
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0F0E0B"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#F6F5F3"
+    />
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+
+      body {
+        /* O scroll do app acontece dentro das ScrollView/FlatList; deixar o
+           documento rolar junto criava dois scrolls concorrentes no Safari */
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        /* corta o atraso de 300ms do duplo-toque sem desligar o zoom */
+        touch-action: manipulation;
+        background-color: #0f0e0b;
+        font-family:
+          Roboto,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      /* O Safari do iPhone dá zoom sozinho ao focar campo com fonte menor que
+         16px e não volta mais — a tela fica torta pelo resto da navegação.
+         Só no tamanho de celular, e por CSS, para não mexer na tipografia do
+         app nativo; a diferença de 14 para 16 num campo é imperceptível. */
+      @media screen and (max-width: 480px) {
+        input,
+        textarea,
+        select {
+          font-size: 16px !important;
+        }
+      }
+
+      #root {
+        display: flex;
+        flex-direction: column;
+        /* 100vh no iOS Safari conta a área atrás da barra de endereço e o
+           rodapé ficava cortado; dvh acompanha a barra aparecendo e sumindo */
+        height: 100vh;
+        height: 100dvh;
+      }
+
+      /* Splash de carregamento: o bundle passa de 3 MB e sem isto o primeiro
+         acesso é uma tela em branco. Some sozinho quando o React monta em
+         #root — puro CSS, sem script para dar manutenção */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 20px;
+        background-color: #0f0e0b;
+        transition: opacity 0.25s ease-out;
+      }
+
+      #root:not(:empty) ~ #boot-splash {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      #boot-splash span {
+        color: #f2c14e;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+
+      #boot-splash i {
+        display: block;
+        width: 36px;
+        height: 3px;
+        border-radius: 9999px;
+        background-color: #f2c14e;
+        animation: boot-pulse 1s ease-in-out infinite;
+      }
+
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          opacity: 0.25;
+          transform: scaleX(0.5);
+        }
+        50% {
+          opacity: 1;
+          transform: scaleX(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash i {
+          animation: none;
+          opacity: 0.6;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <div id="boot-splash">
+      <span>Economize!</span>
+      <i></i>
+    </div>
+
+    <noscript>
+      <div style="padding: 24px; color: #f6f5f4; font-family: sans-serif">
+        O Economize! precisa de JavaScript habilitado para funcionar.
+      </div>
+    </noscript>
+  </body>
+</html>
