@@ -3,8 +3,7 @@ import { Text, TouchableOpacity, View } from "react-native";
 import { Sparkles } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
-import LinearGradient from "react-native-linear-gradient";
+import * as Haptics from "../utils/haptics";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,21 +14,23 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, shadow, spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
+import BrandGradient from "./BrandGradient";
 
 interface AssistantFABProps {
   label?: string;
   bottomOffset?: number;
 }
 
-const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+const AnimatedBrandGradient = Animated.createAnimatedComponent(BrandGradient);
 
 export default function AssistantFAB({
   label = "Fale com o Nino",
   bottomOffset,
 }: AssistantFABProps) {
+  const t = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -80,11 +81,11 @@ export default function AssistantFAB({
           shadow.glow,
         ]}
       >
-        <AnimatedLinearGradient
+        <AnimatedBrandGradient
           colors={[
-            darkTheme.accent.neon,
-            darkTheme.semantic.info,
-            darkTheme.accent.neon,
+            t.accent.neon,
+            t.semantic.info,
+            t.accent.neon,
           ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -98,7 +99,7 @@ export default function AssistantFAB({
         >
           <View
             style={{
-              backgroundColor: darkTheme.background.elevated,
+              backgroundColor: t.background.elevated,
               borderRadius: radius.full,
               flexDirection: "row",
               alignItems: "center",
@@ -107,10 +108,10 @@ export default function AssistantFAB({
               gap: spacing[2],
             }}
           >
-            <Sparkles size={18} color={darkTheme.accent.neon} />
+            <Sparkles size={18} color={t.accent.neon} />
             <Text
               style={{
-                color: darkTheme.text.primary,
+                color: t.text.primary,
                 fontWeight: "700",
                 fontSize: 14,
               }}
@@ -118,7 +119,7 @@ export default function AssistantFAB({
               {label}
             </Text>
           </View>
-        </AnimatedLinearGradient>
+        </AnimatedBrandGradient>
       </TouchableOpacity>
     </Animated.View>
   );
