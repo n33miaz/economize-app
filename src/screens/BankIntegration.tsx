@@ -15,6 +15,8 @@ import {
   ArrowUpRight,
   ChevronRight,
   FileText,
+  Link2,
+  RefreshCw,
   Upload,
 } from "lucide-react-native";
 import { PieChart } from "react-native-chart-kit";
@@ -24,6 +26,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import { useBankStore } from "../store/bankStore";
 import { useCategoriesStore } from "../store/categoriesStore";
+import { useConnectorStore } from "../store/connectorStore";
 import { useToastStore } from "../store/toastStore";
 import PageContainer from "../components/PageContainer";
 import AssistantFAB from "../components/AssistantFAB";
@@ -72,6 +75,10 @@ export default function BankIntegration() {
   const categoryItems = useCategoriesStore((s) => s.items);
   const fetchCategories = useCategoriesStore((s) => s.fetch);
   const { showToast } = useToastStore();
+  const pluggy = useConnectorStore((s) => s.pluggy);
+  const isSyncing = useConnectorStore((s) => s.isSyncing);
+  const checkPluggy = useConnectorStore((s) => s.checkPluggy);
+  const runPluggySync = useConnectorStore((s) => s.runPluggySync);
   // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
   const { width: windowWidth } = useWindowDimensions();
   const chartWidth = Math.min(windowWidth - 80, MAX_CHART_WIDTH);
@@ -84,8 +91,39 @@ export default function BankIntegration() {
       fetchTransactions();
       // categorias alimentam os chips das linhas do extrato
       fetchCategories();
-    }, [fetchTransactions, fetchCategories]),
+      // o conector pode ter sido ligado no servidor desde a última visita
+      checkPluggy();
+    }, [fetchTransactions, fetchCategories, checkPluggy]),
   );
+
+  const handlePluggySync = async () => {
+    try {
+      const result = await runPluggySync();
+      if (!result) return;
+      await fetchTransactions();
+      if (result.transactionsImported > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast(
+          `${result.transactionsImported} ${plural(result.transactionsImported, "transação importada", "transações importadas")}.`,
+          "success",
+        );
+      } else if (result.reconciled > 0) {
+        // reconciliada não é falha: o extrato já tinha o mesmo lançamento
+        showToast(
+          `Nada novo — ${result.reconciled} ${plural(result.reconciled, "lançamento já constava", "lançamentos já constavam")}.`,
+          "info",
+        );
+      } else {
+        showToast("Nenhuma transação nova no período.", "info");
+      }
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast(
+        useConnectorStore.getState().error || "Falha ao sincronizar.",
+        "error",
+      );
+    }
+  };
 
   const catById = useMemo(
     () => new Map(categoryItems.map((c) => [c.id, c])),
@@ -336,6 +374,51 @@ export default function BankIntegration() {
                   absolute
                   hasLegend={true}
                 />
+              </View>
+            )}
+
+            {/* Open Finance: some por completo enquanto o servidor não
+                devolver enabled — quem não configurou não precisa nem saber */}
+            {pluggy.enabled && (
+              <View className="bg-surface rounded-3xl p-4 border border-border mt-4">
+                <View className="flex-row items-center mb-2">
+                  <Link2 size={18} color={t.accent.neon} />
+                  <Text className="text-base font-bold text-textPrimary ml-2">
+                    Meu Pluggy
+                  </Text>
+                </View>
+
+                {pluggy.configured ? (
+                  <>
+                    <Text className="text-xs text-textSecondary mb-3">
+                      {`${pluggy.itemCount} ${plural(pluggy.itemCount, "conexão ativa", "conexões ativas")}. A sincronização traz os últimos 90 dias e passa pelo mesmo pipeline do extrato — nada duplica.`}
+                    </Text>
+                    <TouchableOpacity
+                      className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3"
+                      onPress={handlePluggySync}
+                      disabled={isSyncing}
+                      accessibilityLabel="Sincronizar contas do Meu Pluggy"
+                      accessibilityRole="button"
+                      activeOpacity={0.85}
+                      style={{ opacity: isSyncing ? 0.6 : 1 }}
+                    >
+                      {isSyncing ? (
+                        <ActivityIndicator size="small" color={t.accent.neon} />
+                      ) : (
+                        <RefreshCw size={16} color={t.accent.neon} />
+                      )}
+                      <Text className="text-accent font-bold text-sm ml-2">
+                        {isSyncing ? "Sincronizando…" : "Sincronizar agora"}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <Text className="text-xs text-textSecondary">
+                    {pluggy.owner === false
+                      ? "As credenciais do conector pertencem a outra conta."
+                      : "Conector ligado, mas sem credenciais. Configure PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET e PLUGGY_ITEM_IDS no servidor."}
+                  </Text>
+                )}
               </View>
             )}
 

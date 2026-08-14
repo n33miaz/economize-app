@@ -351,6 +351,41 @@ export const getBankTransactions = async (): Promise<BankTransaction[]> => {
   }
 };
 
+// --- Conector Open Finance (Meu Pluggy) ---
+
+export interface PluggyStatus {
+  /** Flag PLUGGY_ENABLED no servidor. Falso esconde a seção inteira. */
+  enabled: boolean;
+  /** As credenciais são de uma pessoa só; `owner` diz se é esta conta. */
+  owner?: boolean;
+  /** Tem clientId, clientSecret e ao menos um item configurado. */
+  configured: boolean;
+  itemCount: number;
+}
+
+export const getPluggyStatus = async (): Promise<PluggyStatus> => {
+  try {
+    const response = await api.get<PluggyStatus>("/connectors/pluggy/status");
+    return response.data;
+  } catch {
+    // Conector é opcional: falhar aqui não pode derrubar a tela de extrato
+    return { enabled: false, configured: false, itemCount: 0 };
+  }
+};
+
+export const syncPluggy = async (
+  days = 90,
+): Promise<StatementUploadResult> => {
+  // Mesma janela do upload: a sincronização passa pelo mesmo pipeline e pode
+  // levar dezenas de segundos com 90 dias de histórico
+  const response = await api.post<StatementUploadResult>(
+    "/connectors/pluggy/sync",
+    null,
+    { params: { days }, timeout: 180000 },
+  );
+  return response.data;
+};
+
 // --- Categorias ---
 export const getCategories = async (): Promise<Category[]> => {
   const response = await api.get<Category[]>("/categories");
