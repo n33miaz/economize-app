@@ -6,10 +6,14 @@ Aplicativo de finanças pessoais desenvolvido com **React Native** e **Expo**. O
 
 ## 📱 Download e Demonstração
 
-O aplicativo foi compilado para Android e pode ser testado em dispositivos físicos.
+A mesma base gera três superfícies: Android, iOS e navegador.
 
+- **Web (mesmo app, sem instalar):** [economize-web.onrender.com](https://economize-web.onrender.com)
 - **Download do APK (Versão Mais Recente):** [Acessar Releases do GitHub](https://github.com/n33miaz/economize-app/releases)
-- **Build Log (Expo):** [Visualizar no Expo Dashboard](https://expo.dev/accounts/n33miaz/projects/painel-economico-br/builds/63c8b75c-2694-48b7-85da-e9da350cea46)
+- **Builds (Expo):** [Projeto no Expo Dashboard](https://expo.dev/accounts/n33miaz/projects/economize)
+
+> No iPhone, abra a versão web pelo Safari e use "Adicionar à Tela de Início":
+> o app roda em tela cheia, respeitando o notch e a barra de gestos.
 
 ---
 
