@@ -36,7 +36,9 @@ export default function Login({ navigation }: any) {
       <View className="items-center mb-10">
         <View className="w-24 h-24 bg-accentMuted rounded-3xl justify-center items-center mb-4">
           <Image
-            source={require("../../../assets/logo.png")}
+            // logo-512 e não logo.png: o original é 2048² com 6 MB, baixado
+            // inteiro na primeira tela do site para exibir 64px
+            source={require("../../../assets/logo-512.png")}
             className="w-16 h-16"
             resizeMode="contain"
           />

@@ -13,7 +13,7 @@ import Constants from "expo-constants";
 import { Code, Globe } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import ScreenHeader from "../components/ScreenHeader";
@@ -24,11 +24,12 @@ const GITHUB_URL = "https://github.com/n33miaz";
 const PROJECT_URL = "https://github.com/n33miaz/economize";
 
 function InfoBlock({ title, children }: { title: string; children: string }) {
+  const t = useTheme();
   return (
     <View style={{ marginBottom: spacing[5] }}>
       <Text
         style={{
-          color: darkTheme.text.tertiary,
+          color: t.text.tertiary,
           fontSize: 11,
           fontWeight: "700",
           letterSpacing: 1.2,
@@ -40,7 +41,7 @@ function InfoBlock({ title, children }: { title: string; children: string }) {
       </Text>
       <Text
         style={{
-          color: darkTheme.text.primary,
+          color: t.text.primary,
           fontSize: 14,
           lineHeight: 22,
         }}
@@ -52,6 +53,7 @@ function InfoBlock({ title, children }: { title: string; children: string }) {
 }
 
 export default function About() {
+  const t = useTheme();
   const { cardEntering, listItemEntering } = useMotionPresets();
   const repoPress = usePressScale();
   const open = (url: string) => Linking.openURL(url);
@@ -69,13 +71,13 @@ export default function About() {
           style={{ alignItems: "center", marginBottom: spacing[6] }}
         >
           <Image
-            source={require("../../assets/logo.png")}
+            source={require("../../assets/logo-512.png")}
             style={{ width: 88, height: 88, borderRadius: radius["2xl"] }}
             resizeMode="contain"
           />
           <Text
             style={{
-              color: darkTheme.text.primary,
+              color: t.text.primary,
               fontSize: 22,
               fontWeight: "700",
               marginTop: spacing[3],
@@ -85,7 +87,7 @@ export default function About() {
           </Text>
           <Text
             style={{
-              color: darkTheme.text.secondary,
+              color: t.text.secondary,
               fontSize: 12,
               marginTop: 2,
             }}
@@ -97,11 +99,11 @@ export default function About() {
         <Animated.View
           entering={listItemEntering(1)}
           style={{
-            backgroundColor: darkTheme.background.elevated,
+            backgroundColor: t.background.elevated,
             borderRadius: radius.xl,
             padding: spacing[5],
             borderWidth: 1,
-            borderColor: darkTheme.border.subtle,
+            borderColor: t.border.subtle,
             marginBottom: spacing[5],
           }}
         >
@@ -135,17 +137,17 @@ export default function About() {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: darkTheme.accent.neonMuted,
-              borderColor: darkTheme.accent.neon,
+              backgroundColor: t.accent.neonMuted,
+              borderColor: t.accent.neon,
               borderWidth: 1,
               paddingVertical: spacing[3],
               borderRadius: radius.full,
             }}
           >
-            <Code size={18} color={darkTheme.accent.neon} />
+            <Code size={18} color={t.accent.neon} />
             <Text
               style={{
-                color: darkTheme.accent.neon,
+                color: t.accent.neon,
                 fontWeight: "700",
                 marginLeft: spacing[2],
               }}
@@ -159,14 +161,14 @@ export default function About() {
           entering={listItemEntering(3)}
           style={{
             borderTopWidth: 1,
-            borderTopColor: darkTheme.border.subtle,
+            borderTopColor: t.border.subtle,
             paddingTop: spacing[5],
             alignItems: "center",
           }}
         >
           <Text
             style={{
-              color: darkTheme.text.tertiary,
+              color: t.text.tertiary,
               fontSize: 11,
               letterSpacing: 1,
               textTransform: "uppercase",
@@ -193,7 +195,7 @@ export default function About() {
             />
             <Text
               style={{
-                color: darkTheme.text.primary,
+                color: t.text.primary,
                 fontWeight: "600",
                 fontSize: 13,
               }}
@@ -208,7 +210,7 @@ export default function About() {
               accessibilityRole="button"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Globe size={22} color={darkTheme.text.secondary} />
+              <Globe size={22} color={t.text.secondary} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => open(GITHUB_URL)}
@@ -216,12 +218,12 @@ export default function About() {
               accessibilityRole="button"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Code size={22} color={darkTheme.text.secondary} />
+              <Code size={22} color={t.text.secondary} />
             </TouchableOpacity>
           </View>
           <Text
             style={{
-              color: darkTheme.text.tertiary,
+              color: t.text.tertiary,
               fontSize: 10,
               marginTop: spacing[4],
             }}
