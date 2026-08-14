@@ -1,0 +1,29 @@
+# Blueprint do Render — o site estático do Economize.
+# `expo export --platform web` transforma a MESMA base do app nativo num site;
+# não existe segundo código-fonte para manter.
+#
+# Ao conectar este repositório em "New > Blueprint", o Render cria o site e passa
+# a publicar a cada push na main.
+services:
+  - type: web
+    name: economize
+    runtime: static
+    # `--clear` não é zelo excessivo: a URL da API é inlinada em tempo de transform,
+    # então um cache do Metro sobrevivente publica o bundle com a URL antiga
+    buildCommand: npm ci && npx expo export --platform web --output-dir dist --clear
+    staticPublishPath: ./dist
+    autoDeploy: true
+    envVars:
+      # O Metro embute esta variável no bundle em tempo de build — por isso ela
+      # precisa estar aqui, e não no runtime: no navegador já é tarde
+      - key: EXPO_PUBLIC_API_BASE_URL
+        value: https://economize-api.onrender.com/api/v1
+      # Expo SDK 52 é testado com a linha 20; sem fixar, o Render escolhe sozinho
+      - key: NODE_VERSION
+        value: "20"
+    routes:
+      # O app é uma SPA: qualquer rota que não seja arquivo cai no index.html,
+      # senão dar F5 em /analise devolveria 404
+      - type: rewrite
+        source: /*
+        destination: /index.html
