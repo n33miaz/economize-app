@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   Text,
@@ -10,10 +9,10 @@ import {
 } from "react-native";
 import { FileText, Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import {
@@ -21,6 +20,7 @@ import {
   ReportPeriod,
   useReportsStore,
 } from "../store/reportsStore";
+import { useToastStore } from "../store/toastStore";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import Skeleton from "../components/Skeleton";
@@ -47,6 +47,7 @@ function formatDate(iso: string) {
 }
 
 function ReportCard({ item, index }: { item: Report; index: number }) {
+  const t = useTheme();
   // Entrada em cascata acompanha a posição do card na lista
   const { listItemEntering } = useMotionPresets();
   const saldo = item.totalIncome - item.totalExpense;
@@ -55,11 +56,11 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
     <Animated.View
       entering={listItemEntering(index)}
       style={{
-        backgroundColor: darkTheme.background.elevated,
+        backgroundColor: t.background.elevated,
         borderRadius: radius.xl,
         padding: spacing[4],
         borderWidth: 1,
-        borderColor: darkTheme.border.subtle,
+        borderColor: t.border.subtle,
         marginBottom: spacing[3],
       }}
     >
@@ -72,7 +73,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
       >
         <Text
           style={{
-            color: darkTheme.text.tertiary,
+            color: t.text.tertiary,
             fontSize: 11,
             fontWeight: "700",
             letterSpacing: 1,
@@ -81,19 +82,19 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
         >
           {PERIOD_LABELS[item.period]}
         </Text>
-        <Text style={{ color: darkTheme.text.secondary, fontSize: 12 }}>
+        <Text style={{ color: t.text.secondary, fontSize: 12 }}>
           {formatDate(item.startDate)} → {formatDate(item.endDate)}
         </Text>
       </View>
 
       <View style={{ flexDirection: "row", marginBottom: spacing[3] }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: darkTheme.text.tertiary, fontSize: 11 }}>
+          <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
             Receitas
           </Text>
           <Text
             style={{
-              color: darkTheme.semantic.success,
+              color: t.semantic.success,
               fontWeight: "700",
               fontSize: 14,
             }}
@@ -102,12 +103,12 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
           </Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: darkTheme.text.tertiary, fontSize: 11 }}>
+          <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
             Despesas
           </Text>
           <Text
             style={{
-              color: darkTheme.semantic.danger,
+              color: t.semantic.danger,
               fontWeight: "700",
               fontSize: 14,
             }}
@@ -116,15 +117,15 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
           </Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: darkTheme.text.tertiary, fontSize: 11 }}>
+          <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
             Saldo
           </Text>
           <Text
             style={{
               // Delta financeiro usa o verde semântico, nunca o accent da marca
               color: positivo
-                ? darkTheme.semantic.success
-                : darkTheme.semantic.danger,
+                ? t.semantic.success
+                : t.semantic.danger,
               fontWeight: "700",
               fontSize: 14,
             }}
@@ -138,7 +139,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
         <View
           style={{
             alignSelf: "flex-start",
-            backgroundColor: darkTheme.accent.neonMuted,
+            backgroundColor: t.accent.neonMuted,
             paddingHorizontal: spacing[3],
             paddingVertical: 4,
             borderRadius: radius.full,
@@ -147,7 +148,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
         >
           <Text
             style={{
-              color: darkTheme.accent.neon,
+              color: t.accent.neon,
               fontSize: 11,
               fontWeight: "700",
             }}
@@ -160,7 +161,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
       {item.summary && (
         <Text
           style={{
-            color: darkTheme.text.secondary,
+            color: t.text.secondary,
             fontSize: 13,
             lineHeight: 19,
           }}
@@ -173,9 +174,11 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
 }
 
 export default function Reports() {
+  const t = useTheme();
   const insets = useSafeAreaInsets();
   const generatePress = usePressScale();
   const { items, isLoading, isGenerating, fetch, generate } = useReportsStore();
+  const showToast = useToastStore((s) => s.showToast);
   const [tab, setTab] = useState<ReportPeriod>("MONTHLY");
 
   useEffect(() => {
@@ -196,9 +199,9 @@ export default function Reports() {
     else start.setFullYear(start.getFullYear() - 1);
     const created = await generate(tab, start.toISOString(), now.toISOString());
     if (!created) {
-      Alert.alert(
-        "Geração falhou",
-        "Tente novamente em instantes. Se persistir, importe um extrato primeiro.",
+      showToast(
+        "Geração falhou. Tente de novo; se persistir, importe um extrato primeiro.",
+        "error",
       );
     }
   };
@@ -224,7 +227,7 @@ export default function Reports() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: darkTheme.accent.neon,
+                backgroundColor: t.accent.neon,
                 paddingHorizontal: spacing[3],
                 height: 36,
                 borderRadius: radius.full,
@@ -234,14 +237,14 @@ export default function Reports() {
               {isGenerating ? (
                 <ActivityIndicator
                   size="small"
-                  color={darkTheme.text.inverse}
+                  color={t.text.inverse}
                 />
               ) : (
                 <>
-                  <Plus size={16} color={darkTheme.text.inverse} />
+                  <Plus size={16} color={t.text.inverse} />
                   <Text
                     style={{
-                      color: darkTheme.text.inverse,
+                      color: t.text.inverse,
                       fontWeight: "700",
                       fontSize: 12,
                       marginLeft: spacing[1],
@@ -277,19 +280,19 @@ export default function Reports() {
                 borderRadius: radius.full,
                 alignItems: "center",
                 backgroundColor: active
-                  ? darkTheme.accent.neon
-                  : darkTheme.background.elevated,
+                  ? t.accent.neon
+                  : t.background.elevated,
                 borderWidth: 1,
                 borderColor: active
-                  ? darkTheme.accent.neon
-                  : darkTheme.border.subtle,
+                  ? t.accent.neon
+                  : t.border.subtle,
               }}
             >
               <Text
                 style={{
                   color: active
-                    ? darkTheme.text.inverse
-                    : darkTheme.text.primary,
+                    ? t.text.inverse
+                    : t.text.primary,
                   fontWeight: "700",
                   fontSize: 12,
                 }}
@@ -315,7 +318,7 @@ export default function Reports() {
           <RefreshControl
             refreshing={isLoading}
             onRefresh={() => fetch(tab)}
-            tintColor={darkTheme.accent.neon}
+            tintColor={t.accent.neon}
           />
         }
         ListEmptyComponent={
@@ -329,10 +332,10 @@ export default function Reports() {
             </View>
           ) : (
             <View style={{ alignItems: "center", marginTop: spacing[10] }}>
-              <FileText size={48} color={darkTheme.text.tertiary} />
+              <FileText size={48} color={t.text.tertiary} />
               <Text
                 style={{
-                  color: darkTheme.text.secondary,
+                  color: t.text.secondary,
                   marginTop: spacing[3],
                   textAlign: "center",
                   paddingHorizontal: spacing[6],

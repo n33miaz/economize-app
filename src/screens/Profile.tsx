@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import {
   ChevronRight,
   CircleUserRound,
@@ -21,9 +15,10 @@ import type { LucideIcon } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
+import { askConfirm } from "../store/confirmStore";
 import { useAuthStore } from "../store/authStore";
 import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
@@ -41,15 +36,16 @@ function StatCard({
   value: string | number;
   Icon: LucideIcon;
 }) {
+  const t = useTheme();
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: darkTheme.background.elevated,
+        backgroundColor: t.background.elevated,
         borderRadius: radius.xl,
         padding: spacing[4],
         borderWidth: 1,
-        borderColor: darkTheme.border.subtle,
+        borderColor: t.border.subtle,
       }}
     >
       <View
@@ -57,17 +53,17 @@ function StatCard({
           width: 32,
           height: 32,
           borderRadius: radius.full,
-          backgroundColor: darkTheme.accent.neonMuted,
+          backgroundColor: t.accent.neonMuted,
           alignItems: "center",
           justifyContent: "center",
           marginBottom: spacing[2],
         }}
       >
-        <Icon size={16} color={darkTheme.accent.neon} />
+        <Icon size={16} color={t.accent.neon} />
       </View>
       <Text
         style={{
-          color: darkTheme.text.primary,
+          color: t.text.primary,
           fontSize: 22,
           fontWeight: "700",
         }}
@@ -76,7 +72,7 @@ function StatCard({
       </Text>
       <Text
         style={{
-          color: darkTheme.text.secondary,
+          color: t.text.secondary,
           fontSize: 12,
           marginTop: 2,
         }}
@@ -98,10 +94,11 @@ function ActionRow({
   onPress: () => void;
   destructive?: boolean;
 }) {
+  const t = useTheme();
   const { pressStyle, onPressIn, onPressOut } = usePressScale();
   const color = destructive
-    ? darkTheme.semantic.danger
-    : darkTheme.text.primary;
+    ? t.semantic.danger
+    : t.text.primary;
   return (
     <Animated.View style={pressStyle}>
       <TouchableOpacity
@@ -114,13 +111,13 @@ function ActionRow({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          backgroundColor: darkTheme.background.elevated,
+          backgroundColor: t.background.elevated,
           borderRadius: radius.xl,
           paddingVertical: spacing[4],
           paddingHorizontal: spacing[4],
           marginBottom: spacing[2],
           borderWidth: 1,
-          borderColor: darkTheme.border.subtle,
+          borderColor: t.border.subtle,
         }}
       >
         <Icon size={20} color={color} />
@@ -136,7 +133,7 @@ function ActionRow({
           {label}
         </Text>
         {!destructive && (
-          <ChevronRight size={18} color={darkTheme.text.tertiary} />
+          <ChevronRight size={18} color={t.text.tertiary} />
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -144,6 +141,7 @@ function ActionRow({
 }
 
 export default function Profile() {
+  const t = useTheme();
   const navigation = useNavigation();
   const { cardEntering, listItemEntering } = useMotionPresets();
   const { userName, logout } = useAuthStore();
@@ -166,14 +164,13 @@ export default function Profile() {
     .toUpperCase();
 
   const handleLogout = () => {
-    Alert.alert("Sair", "Tem certeza que deseja encerrar a sessão?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: () => logout(),
-      },
-    ]);
+    askConfirm({
+      title: "Sair",
+      message: "Tem certeza que deseja encerrar a sessão?",
+      confirmLabel: "Sair",
+      destructive: true,
+      onConfirm: () => logout(),
+    });
   };
 
   return (
@@ -196,17 +193,17 @@ export default function Profile() {
               width: 96,
               height: 96,
               borderRadius: radius.full,
-              backgroundColor: darkTheme.accent.neonMuted,
+              backgroundColor: t.accent.neonMuted,
               alignItems: "center",
               justifyContent: "center",
               borderWidth: 2,
-              borderColor: darkTheme.accent.neon,
+              borderColor: t.accent.neon,
               marginBottom: spacing[3],
             }}
           >
             <Text
               style={{
-                color: darkTheme.accent.neon,
+                color: t.accent.neon,
                 fontSize: 32,
                 fontWeight: "700",
               }}
@@ -216,7 +213,7 @@ export default function Profile() {
           </View>
           <Text
             style={{
-              color: darkTheme.text.primary,
+              color: t.text.primary,
               fontSize: 20,
               fontWeight: "700",
             }}
@@ -225,7 +222,7 @@ export default function Profile() {
           </Text>
           <Text
             style={{
-              color: darkTheme.text.secondary,
+              color: t.text.secondary,
               fontSize: 13,
               marginTop: 2,
             }}

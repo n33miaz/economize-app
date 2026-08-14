@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -15,10 +14,11 @@ import {
 import { SendHorizontal, Sparkles, Trash2, X } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
 import { ChatMessage, useAiStore } from "../store/aiStore";
+import { askConfirm } from "../store/confirmStore";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
@@ -195,17 +195,16 @@ export default function AiAssistant() {
 
   const askClear = () => {
     if (messages.length <= 1) return;
-    Alert.alert("Limpar conversa", "Apagar todo o histórico com o Nino?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Limpar",
-        style: "destructive",
-        onPress: () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          clearHistory();
-        },
+    askConfirm({
+      title: "Limpar conversa",
+      message: "Apagar todo o histórico com o Nino?",
+      confirmLabel: "Limpar",
+      destructive: true,
+      onConfirm: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        clearHistory();
       },
-    ]);
+    });
   };
 
   const showSuggestions = messages.length <= 1;

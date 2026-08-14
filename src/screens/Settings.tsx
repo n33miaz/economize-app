@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Linking,
   ScrollView,
   Switch,
@@ -22,7 +21,7 @@ import type { LucideIcon } from "lucide-react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import Animated from "react-native-reanimated";
 
-import { darkTheme } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import {
@@ -31,16 +30,18 @@ import {
   ThemeMode,
   usePreferencesStore,
 } from "../store/preferencesStore";
+import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 
 function SectionTitle({ children }: { children: string }) {
+  const t = useTheme();
   return (
     <Text
       style={{
-        color: darkTheme.text.tertiary,
+        color: t.text.tertiary,
         fontSize: 11,
         fontWeight: "700",
         letterSpacing: 1.2,
@@ -69,6 +70,7 @@ function Row({
   onPress?: () => void;
   index?: number;
 }) {
+  const t = useTheme();
   // Cada linha conhece sua posição para entrar em cascata na tela
   const { listItemEntering } = useMotionPresets();
   const { pressStyle, onPressIn, onPressOut } = usePressScale();
@@ -85,13 +87,13 @@ function Row({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          backgroundColor: darkTheme.background.elevated,
+          backgroundColor: t.background.elevated,
           borderRadius: radius.lg,
           paddingVertical: spacing[3],
           paddingHorizontal: spacing[4],
           marginBottom: spacing[2],
           borderWidth: 1,
-          borderColor: darkTheme.border.subtle,
+          borderColor: t.border.subtle,
         }}
       >
         <View
@@ -101,16 +103,16 @@ function Row({
             borderRadius: radius.full,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: darkTheme.background.surface,
+            backgroundColor: t.background.surface,
             marginRight: spacing[3],
           }}
         >
-          <Icon size={16} color={darkTheme.text.primary} />
+          <Icon size={16} color={t.text.primary} />
         </View>
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            color: darkTheme.text.primary,
+            color: t.text.primary,
             fontSize: 14,
             fontWeight: "600",
           }}
@@ -120,7 +122,7 @@ function Row({
         {description && (
           <Text
             style={{
-              color: darkTheme.text.secondary,
+              color: t.text.secondary,
               fontSize: 12,
               marginTop: 2,
             }}
@@ -144,11 +146,12 @@ function SegmentedControl<T extends string>({
   value: T;
   onChange: (next: T) => void;
 }) {
+  const t = useTheme();
   return (
     <View
       style={{
         flexDirection: "row",
-        backgroundColor: darkTheme.background.surface,
+        backgroundColor: t.background.surface,
         borderRadius: radius.full,
         padding: 2,
         marginBottom: spacing[2],
@@ -169,14 +172,14 @@ function SegmentedControl<T extends string>({
               paddingVertical: spacing[2],
               borderRadius: radius.full,
               backgroundColor: active
-                ? darkTheme.accent.neon
+                ? t.accent.neon
                 : "transparent",
               alignItems: "center",
             }}
           >
             <Text
               style={{
-                color: active ? darkTheme.text.inverse : darkTheme.text.primary,
+                color: active ? t.text.inverse : t.text.primary,
                 fontSize: 12,
                 fontWeight: "700",
               }}
@@ -191,6 +194,7 @@ function SegmentedControl<T extends string>({
 }
 
 export default function Settings() {
+  const t = useTheme();
   const {
     theme,
     biometricLogin,
@@ -230,19 +234,13 @@ export default function Settings() {
   };
 
   const handleClearLocal = () => {
-    Alert.alert(
-      "Apagar dados locais",
-      "Isso vai remover preferências e cache. Deseja continuar?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Apagar",
-          style: "destructive",
-          onPress: () =>
-            showToast("Funcionalidade em breve", "info"),
-        },
-      ],
-    );
+    askConfirm({
+      title: "Apagar dados locais",
+      message: "Isso vai remover preferências e cache. Deseja continuar?",
+      confirmLabel: "Apagar",
+      destructive: true,
+      onConfirm: () => showToast("Funcionalidade em breve", "info"),
+    });
   };
 
   return (
@@ -276,10 +274,10 @@ export default function Settings() {
               onValueChange={handleBiometricToggle}
               disabled={!biometricAvailable}
               trackColor={{
-                false: darkTheme.border.default,
-                true: darkTheme.accent.neon,
+                false: t.border.default,
+                true: t.accent.neon,
               }}
-              thumbColor={darkTheme.background.base}
+              thumbColor={t.background.base}
             />
           }
         />
@@ -320,10 +318,10 @@ export default function Settings() {
               value={notificationsEnabled}
               onValueChange={toggleNotifications}
               trackColor={{
-                false: darkTheme.border.default,
-                true: darkTheme.accent.neon,
+                false: t.border.default,
+                true: t.accent.neon,
               }}
-              thumbColor={darkTheme.background.base}
+              thumbColor={t.background.base}
             />
           }
         />

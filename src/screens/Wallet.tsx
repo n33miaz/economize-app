@@ -5,9 +5,8 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
-  Alert,
-  Dimensions,
   LayoutAnimation,
+  useWindowDimensions,
 } from "react-native";
 import {
   ChartPie,
@@ -17,7 +16,7 @@ import {
   X,
 } from "lucide-react-native";
 import { PieChart } from "react-native-chart-kit";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 
@@ -26,13 +25,19 @@ import { radius, shadow, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { useWalletStore, Transaction } from "../store/walletStore";
 import { useIndicatorStore } from "../store/indicatorStore";
+import { askConfirm } from "../store/confirmStore";
+import { useToastStore } from "../store/toastStore";
 import PageContainer from "../components/PageContainer";
 import CustomModal from "../components/CustomModal";
 
-const screenWidth = Dimensions.get("window").width;
-
 export default function Wallet() {
   const t = useTheme();
+  // Hook, e não Dimensions.get no módulo: no navegador a janela é
+  // redimensionável e o valor congelado no import deixava o gráfico cortado
+  const { width: windowWidth } = useWindowDimensions();
+  // Teto: acima disso a pizza só cresce sem informar mais nada
+  const chartWidth = Math.min(windowWidth - 60, 420);
+  const showToast = useToastStore((s) => s.showToast);
   const { cardEntering, listItemEntering, fabEntering } = useMotionPresets();
   // Instâncias separadas: FAB e botão de salvar têm ciclos de toque próprios
   const fabPress = usePressScale();
@@ -91,7 +96,8 @@ export default function Wallet() {
 
   const handleAdd = () => {
     if (!amount || !price || !code) {
-      Alert.alert("Atenção", "Preencha todos os campos para continuar.");
+      // Validação de campo é aviso, não decisão: toast em vez de diálogo
+      showToast("Preencha todos os campos para continuar.", "warning");
       return;
     }
 
@@ -113,18 +119,17 @@ export default function Wallet() {
 
   const handleDelete = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert("Remover", "Deseja excluir esta transação?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          removeTransaction(id);
-        },
+    askConfirm({
+      title: "Remover",
+      message: "Deseja excluir esta transação?",
+      confirmLabel: "Excluir",
+      destructive: true,
+      onConfirm: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        removeTransaction(id);
       },
-    ]);
+    });
   };
 
   const renderItem = ({
@@ -215,7 +220,7 @@ export default function Wallet() {
                 </Text>
                 <PieChart
                   data={chartData}
-                  width={screenWidth - 60}
+                  width={chartWidth}
                   height={200}
                   chartConfig={{
                     color: () => t.text.primary,

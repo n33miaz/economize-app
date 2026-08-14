@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   LayoutAnimation,
   Text,
@@ -15,13 +14,14 @@ import {
   Trash2,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
 import type { Category, CategoryFlow } from "../services/api";
 import { useCategoriesStore } from "../store/categoriesStore";
+import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
-import { darkTheme, type AppTheme } from "../theme/colors";
+import type { AppTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
 import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -323,36 +323,29 @@ export default function Categories() {
   const handleDelete = (category: Category) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const childCount = items.filter((c) => c.parentId === category.id).length;
-    Alert.alert(
-      "Excluir categoria",
-      childCount > 0
-        ? `Remover "${category.name}" leva junto ${childCount === 1 ? "a subcategoria dela" : `as ${childCount} subcategorias dela`}. Se houver transações no histórico, tudo é arquivado em vez de excluído.`
-        : `Remover "${category.name}"? Se houver transações no histórico, ela será arquivada em vez de excluída.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            const result = await remove(category.id);
-            if (result === "deleted") {
-              showToast("Categoria excluída.", "success");
-            } else if (result === "archived") {
-              showToast(
-                "Categoria arquivada — há transações no histórico.",
-                "info",
-              );
-            } else {
-              showToast(
-                useCategoriesStore.getState().error ||
-                  "Falha ao remover categoria.",
-                "error",
-              );
-            }
-          },
-        },
-      ],
-    );
+    askConfirm({
+      title: "Excluir categoria",
+      message:
+        childCount > 0
+          ? `Remover "${category.name}" leva junto ${childCount === 1 ? "a subcategoria dela" : `as ${childCount} subcategorias dela`}. Se houver transações no histórico, tudo é arquivado em vez de excluído.`
+          : `Remover "${category.name}"? Se houver transações no histórico, ela será arquivada em vez de excluída.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+      onConfirm: async () => {
+        const result = await remove(category.id);
+        if (result === "deleted") {
+          showToast("Categoria excluída.", "success");
+        } else if (result === "archived") {
+          showToast("Categoria arquivada — há transações no histórico.", "info");
+        } else {
+          showToast(
+            useCategoriesStore.getState().error ||
+              "Falha ao remover categoria.",
+            "error",
+          );
+        }
+      },
+    });
   };
 
   const handleRestore = async (category: Category) => {
@@ -424,10 +417,10 @@ export default function Categories() {
                 borderRadius: radius.full,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: darkTheme.accent.neon,
+                backgroundColor: t.accent.neon,
               }}
             >
-              <Plus size={18} color={darkTheme.text.inverse} />
+              <Plus size={18} color={t.text.inverse} />
             </TouchableOpacity>
           </Animated.View>,
         ]}
