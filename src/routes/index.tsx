@@ -50,6 +50,9 @@ import Categories from "../screens/Categories";
 import StatementReview from "../screens/StatementReview";
 import UserInfo from "../screens/UserInfo";
 
+// Altura da barra inferior sem contar o inset da barra de gestos
+const BOTTOM_BAR_HEIGHT = 84;
+
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
 const TopTab = createMaterialTopTabNavigator();
@@ -226,6 +229,12 @@ function MainTabs() {
         tabBarLabelPosition: isWide ? "beside-icon" : "below-icon",
         tabBarActiveTintColor: t.accent.neon,
         tabBarInactiveTintColor: t.text.tertiary,
+        // No trilho lateral o item ativo ganha uma pílula de fundo. Sem definir
+        // a cor, ela herda o `primary` do tema (o dourado da marca) e o ícone
+        // dourado sumia dentro dela — dourado sobre dourado.
+        tabBarActiveBackgroundColor: isWide
+          ? t.accent.neonMuted
+          : "transparent",
         tabBarStyle: isWide
           ? {
               backgroundColor: t.background.surface,
@@ -241,9 +250,12 @@ function MainTabs() {
             }
           : {
               backgroundColor: t.background.surface,
-              height: 70 + bottomInset,
+              // 84 é o mínimo para o halo da Home (48) + rótulo caberem dentro
+              // do `overflow: hidden` da barra. Com 70 o rótulo era cortado
+              // sempre que não havia inset de barra de gestos para dar folga
+              height: BOTTOM_BAR_HEIGHT + bottomInset,
               paddingBottom: bottomInset > 0 ? bottomInset : 10,
-              paddingTop: 10,
+              paddingTop: 8,
               // No dark, sombra é invisível — a borda superior faz a separação
               borderTopWidth: 1,
               borderTopColor: t.border.default,
