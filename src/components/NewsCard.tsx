@@ -38,7 +38,10 @@ const NewsCard = React.memo(({ article }: NewsCardProps) => {
       {article.urlToImage ? (
         <Image
           source={{ uri: article.urlToImage }}
-          className="w-full h-40 bg-elevated"
+          className="bg-elevated"
+          // Dimensão em style, não em className: na web o NativeWind não
+          // aplica largura/altura em <Image> e a foto vinha no tamanho original
+          style={{ width: "100%", height: 160 }}
           resizeMode="cover"
         />
       ) : (
