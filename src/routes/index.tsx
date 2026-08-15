@@ -221,9 +221,16 @@ function MainTabs() {
         // "shift" desliza + esmaece na troca de tab — mesma família de movimento
         // da entrada do assistente, no lugar do corte seco do fade
         animation: "shift",
-        tabBarButton: (props) => (
-          <TouchableOpacity {...(props as any)} activeOpacity={1} />
-        ),
+        // Na web o React Navigation renderiza cada aba como <a href="/Main/...">
+        // e o botão dele chama preventDefault no clique. Trocar por um
+        // TouchableOpacity cru tirava esse preventDefault: o navegador seguia o
+        // link, recarregava a página e o app voltava para a Home — as abas
+        // Indicadores e Finanças ficavam inalcançáveis. O botão customizado
+        // existe só para matar o feedback de opacidade, que não vale isso.
+        tabBarButton:
+          Platform.OS === "web"
+            ? undefined
+            : (props) => <TouchableOpacity {...(props as any)} activeOpacity={1} />,
         headerShown: false,
         tabBarPosition: isWide ? "left" : "bottom",
         tabBarLabelPosition: isWide ? "beside-icon" : "below-icon",
