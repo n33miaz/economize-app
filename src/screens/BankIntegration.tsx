@@ -39,6 +39,12 @@ import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 // Teto do gráfico de pizza: acima disso ele só cresce sem informar mais nada
 const MAX_CHART_WIDTH = 420;
 
+// `toFixed(2)` deixava "R$ 18129.68" na tela: ponto no lugar da vírgula e sem
+// separador de milhar, num app inteiro em pt-BR
+function formatBRL(value: number) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 // Cores de marca dos próprios bancos (dados, não tema) — únicas exceções
 // permitidas fora dos tokens, porque identificam produtos de terceiros
 const BANK_SHORTCUTS = [
@@ -204,14 +210,16 @@ export default function BankIntegration() {
     return [
       {
         name: "Entradas",
-        population: metrics.income,
+        // arredondado: a legenda do chart-kit imprime o número cru, e a soma
+        // de floats aparecia como "18129.680000000004" na tela
+        population: Math.round(metrics.income * 100) / 100,
         color: t.chart.up,
         legendFontColor: t.text.secondary,
         legendFontSize: 12,
       },
       {
         name: "Saídas",
-        population: metrics.expense,
+        population: Math.round(metrics.expense * 100) / 100,
         color: t.chart.down,
         legendFontColor: t.text.secondary,
         legendFontSize: 12,
@@ -304,7 +312,8 @@ export default function BankIntegration() {
         <Text
           className={`font-bold text-base ${isCredit ? "text-success" : "text-textPrimary"}`}
         >
-          {isCredit ? "+ " : "- "}R$ {Math.abs(item.amount).toFixed(2)}
+          {isCredit ? "+ " : "- "}
+          {formatBRL(Math.abs(item.amount))}
         </Text>
       </Animated.View>
     );
@@ -339,7 +348,7 @@ export default function BankIntegration() {
                   </Text>
                 </View>
                 <Text className="text-success font-bold text-xl">
-                  R$ {metrics.income.toFixed(2)}
+                  {formatBRL(metrics.income)}
                 </Text>
               </View>
               <View className="items-center flex-1">
@@ -350,7 +359,7 @@ export default function BankIntegration() {
                   </Text>
                 </View>
                 <Text className="text-danger font-bold text-xl">
-                  R$ {metrics.expense.toFixed(2)}
+                  {formatBRL(metrics.expense)}
                 </Text>
               </View>
             </Animated.View>
