@@ -10,7 +10,7 @@ import Animated, {
 
 import { motion } from "../theme/ds";
 import { softEasing } from "../theme/motionPresets";
-import { CONTENT_MAX_WIDTH, useBreakpoint } from "../hooks/useBreakpoint";
+import { useContentCapStyle } from "../hooks/useBreakpoint";
 
 interface PageContainerProps {
   children: React.ReactNode;
@@ -21,24 +21,33 @@ interface PageContainerProps {
    * por isso não repetem a animação de entrada sozinhas.
    */
   refadeOnFocus?: boolean;
+  /**
+   * Desliga a entrada da PÁGINA. Serve para as telas que já entram em cascata
+   * bloco a bloco: as duas animações se somam (deslocamento em dobro e
+   * opacidade multiplicada por ela mesma) e o resultado é um começo mais
+   * escuro e mais alto do que qualquer uma delas isolada.
+   */
+  animateEntry?: boolean;
 }
 
 export default function PageContainer({
   children,
   style,
   refadeOnFocus = false,
+  animateEntry = true,
 }: PageContainerProps) {
   // Todas as telas passam por aqui: é o ponto certo para segurar a largura no
   // desktop de uma vez, em vez de repetir maxWidth em 19 arquivos
-  const { isDesktop } = useBreakpoint();
+  const capStyle = useContentCapStyle();
   // Com movimento reduzido a tela nasce pronta: sem fade nem deslocamento
   const reducedMotion = useReducedMotion();
-  const opacity = useSharedValue(reducedMotion ? 1 : 0);
-  const translateY = useSharedValue(reducedMotion ? 0 : 12);
+  const still = reducedMotion || !animateEntry;
+  const opacity = useSharedValue(still ? 1 : 0);
+  const translateY = useSharedValue(still ? 0 : 12);
   const hasFocusedOnce = useRef(false);
 
   useEffect(() => {
-    if (reducedMotion) return;
+    if (still) return;
     opacity.value = withTiming(1, {
       duration: motion.duration.base,
       easing: softEasing,
@@ -81,11 +90,7 @@ export default function PageContainer({
         style={[
           // No desktop o miolo vira uma coluna centralizada com teto de
           // largura; no celular o valor é nulo e nada muda
-          isDesktop && {
-            width: "100%",
-            maxWidth: CONTENT_MAX_WIDTH,
-            alignSelf: "center",
-          },
+          capStyle,
           style,
           animatedStyle,
         ]}
