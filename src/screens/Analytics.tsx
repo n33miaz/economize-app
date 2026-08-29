@@ -7,15 +7,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  CalendarDays,
-  ChartPie,
-  ChevronDown,
-  ChevronRight,
-  ClipboardList,
-} from "lucide-react-native";
+import ArrowDownRight from "lucide-react-native/dist/esm/icons/arrow-down-right";
+import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
+import CalendarDays from "lucide-react-native/dist/esm/icons/calendar-days";
+import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
+import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
+import ClipboardList from "lucide-react-native/dist/esm/icons/clipboard-list";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
@@ -28,24 +26,31 @@ import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets } from "../theme/motionPresets";
+import BlockGrid from "../components/BlockGrid";
 import CategoryIcon, { resolveCategoryColor } from "../components/CategoryIcon";
-import MonthSelector, { formatMonthLabel } from "../components/MonthSelector";
+import CycleAnchorSheet from "../components/CycleAnchorSheet";
+import CycleWindowChip from "../components/CycleWindowChip";
+import MonthSelector from "../components/MonthSelector";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
+import { usePreferencesStore, selectCycleAnchorDay } from "../store/preferencesStore";
+import {
+  cycleChipLabel,
+  cycleMonthKeys,
+  cycleWindowForMonth,
+  describeWindow,
+  formatMonthLabel,
+  formatWindowLabel,
+} from "../utils/cycleWindow";
+import { useBreakpoint } from "../hooks/useBreakpoint";
+import { formatBRL, formatBRLCompact } from "../utils/money";
 
 // Os dois temas são estruturalmente idênticos; o cast só normaliza os
 // literais `as const` para o tipo que CategoryIcon/resolveCategoryColor esperam
 function useAppTheme(): AppTheme {
   return useTheme() as AppTheme;
-}
-
-function formatBRL(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
 }
 
 // Positivo ganha "+" explícito; o negativo já vem com o sinal do Intl
@@ -58,13 +63,26 @@ function formatSignedPct(value: number) {
   return `${rounded > 0 ? "+" : ""}${rounded}%`;
 }
 
-/** Card destacado com o saldo do mês e a comparação com o mês anterior. */
+/**
+ * Card destacado com o saldo do período e a comparação com o anterior.
+ *
+ * O chip de janela NÃO mora mais aqui: ele é o único acesso à âncora nesta
+ * tela, e este card não é renderizado quando o ciclo está vazio — justamente a
+ * situação em que o usuário precisa corrigir a âncora. Subiu para o corpo da
+ * tela, onde existe nos dois ramos.
+ */
 function MonthHero({ data }: { data: MonthlyAnalytics }) {
   const t = useAppTheme();
   const { cardEntering } = useMotionPresets();
 
   const prev = data.previous;
   const prevHasData = prev.totalIncome !== 0 || prev.totalExpense !== 0;
+  // Sem `month` na resposta o recorte é uma janela — e aí o comparável deixa de
+  // ser o mês anterior do calendário
+  const isWindowMode = !data.month;
+  const previousLabel = prev.month
+    ? formatMonthLabel(prev.month)
+    : (formatWindowLabel(prev.start, prev.end) ?? "a janela anterior");
   const netDelta = data.net - prev.net;
   const expenseDeltaPct =
     prev.totalExpense > 0
@@ -107,7 +125,7 @@ function MonthHero({ data }: { data: MonthlyAnalytics }) {
           textTransform: "uppercase",
         }}
       >
-        Saldo do mês
+        {isWindowMode ? "Saldo do ciclo" : "Saldo do mês"}
       </Text>
       <Text
         style={{
@@ -117,39 +135,55 @@ function MonthHero({ data }: { data: MonthlyAnalytics }) {
         }}
         numberOfLines={1}
         adjustsFontSizeToFit
+        // O que a tela abrevia, o leitor de tela fala por extenso
+        accessibilityLabel={`${
+          isWindowMode ? "Saldo do ciclo" : "Saldo do mês"
+        }: ${formatBRL(data.net)}`}
       >
-        {formatBRL(data.net)}
+        {/* Abreviar em vez de espremer: na web o `adjustsFontSizeToFit` é
+            ignorado, então o valor cheio simplesmente cortava */}
+        {formatBRLCompact(data.net)}
       </Text>
 
       <View
-        style={{ flexDirection: "row", gap: spacing[4], marginTop: spacing[5] }}
+        style={{
+          flexDirection: "row",
+          // 12 e não 16: cada ponto de vão sai da largura do número, e este é
+          // o mesmo slot de duas colunas que corta na web
+          gap: spacing[3],
+          marginTop: spacing[5],
+        }}
       >
         <View style={{ flex: 1 }}>
           <Text style={{ color: t.text.tertiary, fontSize: 12 }}>Entradas</Text>
           <Text
             style={{
-              ...typography.numericLg,
+              // `numericMd`: metade de card é o slot mais estreito do app —
+              // ver o comentário do token em theme/typography.ts
+              ...typography.numericMd,
               color: t.chart.up,
               marginTop: spacing[1],
             }}
             numberOfLines={1}
             adjustsFontSizeToFit
+            accessibilityLabel={`Entradas: ${formatBRL(data.totalIncome)}`}
           >
-            {formatBRL(data.totalIncome)}
+            {formatBRLCompact(data.totalIncome)}
           </Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ color: t.text.tertiary, fontSize: 12 }}>Saídas</Text>
           <Text
             style={{
-              ...typography.numericLg,
+              ...typography.numericMd,
               color: t.chart.down,
               marginTop: spacing[1],
             }}
             numberOfLines={1}
             adjustsFontSizeToFit
+            accessibilityLabel={`Saídas: ${formatBRL(data.totalExpense)}`}
           >
-            {formatBRL(data.totalExpense)}
+            {formatBRLCompact(data.totalExpense)}
           </Text>
         </View>
       </View>
@@ -172,7 +206,7 @@ function MonthHero({ data }: { data: MonthlyAnalytics }) {
             }}
           >
             <Text style={{ color: t.text.tertiary, fontSize: 12 }}>
-              vs {formatMonthLabel(prev.month)}
+              vs {previousLabel}
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <NetArrow size={14} color={netDeltaColor} />
@@ -221,7 +255,26 @@ function MonthHero({ data }: { data: MonthlyAnalytics }) {
           </View>
         ) : (
           <Text style={{ color: t.text.tertiary, fontSize: 12 }}>
-            Sem dados do mês anterior
+            {isWindowMode
+              ? "Sem dados na janela anterior"
+              : "Sem dados do mês anterior"}
+          </Text>
+        )}
+
+        {/* Regra da casa: o número comparado tem que estar explicado na tela.
+            Em modo janela o comparável não é o mês passado, e migrar de um modo
+            para o outro muda os percentuais acima */}
+        {isWindowMode && (
+          <Text
+            style={{
+              color: t.text.tertiary,
+              fontSize: 11,
+              lineHeight: 16,
+              marginTop: spacing[2],
+            }}
+          >
+            Seu ciclo não é o mês do calendário, então a comparação é com a
+            janela anterior de mesmo tamanho, terminando na véspera do início.
           </Text>
         )}
       </View>
@@ -654,8 +707,14 @@ function GlobalEmpty({ onImport }: { onImport: () => void }) {
   );
 }
 
-/** Vazio do mês: há histórico em outros meses, mas este não teve movimento. */
-function MonthEmpty({ month }: { month: string }) {
+/** Vazio do período: há histórico em outros, mas este não teve movimento. */
+function MonthEmpty({
+  label,
+  isWindowMode,
+}: {
+  label: string;
+  isWindowMode: boolean;
+}) {
   const t = useAppTheme();
   const { cardEntering } = useMotionPresets();
   return (
@@ -677,7 +736,7 @@ function MonthEmpty({ month }: { month: string }) {
           marginTop: spacing[3],
         }}
       >
-        Nada por aqui em {formatMonthLabel(month)}
+        Nada por aqui em {label}
       </Text>
       <Text
         style={{
@@ -687,7 +746,10 @@ function MonthEmpty({ month }: { month: string }) {
           marginTop: spacing[1],
         }}
       >
-        Nenhuma movimentação registrada neste mês. Escolha outro mês acima.
+        Nenhuma movimentação registrada neste período. Escolha outro acima
+        {isWindowMode
+          ? " — ou ajuste o dia em que seu mês vira, na engrenagem."
+          : "."}
       </Text>
     </Animated.View>
   );
@@ -726,6 +788,8 @@ export default function Analytics() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const t = useAppTheme();
+  // Gastos e receitas viram colunas irmãs a partir de 768 px de miolo
+  const { columns } = useBreakpoint();
 
   const {
     data,
@@ -736,6 +800,8 @@ export default function Analytics() {
     fetchMonths,
     fetchMonthly,
   } = useAnalyticsStore();
+  const anchorDay = usePreferencesStore(selectCycleAnchorDay);
+  const [anchorSheetOpen, setAnchorSheetOpen] = useState(false);
 
   // Meses primeiro: o store cai no mês mais recente com movimento antes
   // de buscar a consolidação. No foco (e não só na montagem), porque revisar
@@ -802,6 +868,35 @@ export default function Analytics() {
   const monthIsEmpty =
     data !== null && data.totalIncome === 0 && data.totalExpense === 0;
 
+  // Os chips continuam nascendo dos meses com movimento (só o servidor sabe
+  // onde há dado); em modo janela cada mês vira o mês-âncora de um ciclo, e
+  // entra um a mais para os primeiros dias do histórico não ficarem órfãos
+  const periodKeys = useMemo(
+    () => cycleMonthKeys(anchorDay, months),
+    [anchorDay, months],
+  );
+  const chipLabel = useCallback(
+    (month: string) => cycleChipLabel(anchorDay, month),
+    [anchorDay],
+  );
+  const chipDescription = useCallback(
+    (month: string) => {
+      const window = cycleWindowForMonth(anchorDay, month);
+      const spoken = describeWindow(window.start, window.end);
+      return spoken
+        ? `Ver análise ${spoken}`
+        : `Ver análise de ${chipLabel(month)}`;
+    },
+    [anchorDay, chipLabel],
+  );
+  // Rótulo do vazio: o mês quando o ciclo é o calendário, a janela quando não é
+  const emptyLabel =
+    data === null
+      ? ""
+      : data.month
+        ? formatMonthLabel(data.month)
+        : (formatWindowLabel(data.start, data.end) ?? "este período");
+
   if (error && !data) {
     return (
       <PageContainer>
@@ -843,27 +938,51 @@ export default function Analytics() {
           />
         }
       >
-        <View style={{ marginBottom: months.length > 0 ? spacing[1] : 0 }}>
+        <View style={{ marginBottom: periodKeys.length > 0 ? spacing[1] : 0 }}>
           <MonthSelector
-            months={months}
+            months={periodKeys}
             selected={selectedMonth}
             onSelect={(month) => fetchMonthly(month)}
+            formatLabel={chipLabel}
+            describeOption={chipDescription}
           />
         </View>
 
+        {/* A janela somada e a engrenagem, fora do card do saldo: o ciclo vazio
+            não renderiza o card, e era exatamente lá que o controle da âncora
+            precisava estar. Some só quando não há extrato nenhum — aí a
+            resposta é importar, não trocar o ciclo */}
+        {data !== null && months.length > 0 && (
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              paddingHorizontal: spacing[5],
+              marginTop: spacing[2],
+            }}
+          >
+            <CycleWindowChip
+              start={data.start}
+              end={data.end}
+              onPress={() => setAnchorSheetOpen(true)}
+            />
+          </View>
+        )}
+
         {!data ? (
-          <View style={{ marginTop: months.length > 0 ? spacing[4] : 0 }}>
-            <AnalyticsSkeleton showChips={months.length === 0} />
+          <View style={{ marginTop: periodKeys.length > 0 ? spacing[4] : 0 }}>
+            <AnalyticsSkeleton showChips={periodKeys.length === 0} />
           </View>
         ) : monthIsEmpty ? (
           months.length === 0 ? (
             <GlobalEmpty onImport={goToImport} />
           ) : (
-            <MonthEmpty month={data.month} />
+            <MonthEmpty label={emptyLabel} isWindowMode={!data.month} />
           )
         ) : (
-          // key pelo mês: trocar de mês remonta o bloco e refaz a cascata
-          <View key={data.month}>
+          // key pelo início do recorte: trocar de período remonta o bloco e
+          // refaz a cascata (em modo janela `month` volta null e não serve)
+          <View key={data.start ?? data.month ?? "atual"}>
             <MonthHero data={data} />
 
             {data.pendingReviewCount > 0 && (
@@ -873,8 +992,14 @@ export default function Analytics() {
               />
             )}
 
-            {expenseSlices.length > 0 && (
+            {/* As duas listas de categoria respondem à mesma pergunta por
+                lados opostos (para onde foi × de onde veio): no desktop elas
+                ficam lado a lado e a comparação deixa de exigir rolagem */}
+            <BlockGrid columns={columns}>
+              {[
+            expenseSlices.length > 0 && (
               <View
+                key="gastos"
                 style={{ marginTop: spacing[6], paddingHorizontal: spacing[5] }}
               >
                 <Text
@@ -910,10 +1035,11 @@ export default function Analytics() {
                   ))}
                 </View>
               </View>
-            )}
+            ),
 
-            {incomeSlices.length > 0 && (
+            incomeSlices.length > 0 && (
               <View
+                key="receitas"
                 style={{ marginTop: spacing[6], paddingHorizontal: spacing[5] }}
               >
                 <Text
@@ -945,10 +1071,17 @@ export default function Analytics() {
                   ))}
                 </View>
               </View>
-            )}
+            ),
+              ]}
+            </BlockGrid>
           </View>
         )}
       </ScrollView>
+
+      <CycleAnchorSheet
+        visible={anchorSheetOpen}
+        onClose={() => setAnchorSheetOpen(false)}
+      />
     </PageContainer>
   );
 }
