@@ -2,15 +2,19 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import * as LocalAuthentication from "expo-local-authentication";
 
+import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore } from "../../store/authStore";
+import { usePreferencesStore } from "../../store/preferencesStore";
+import { askConfirm } from "../../store/confirmStore";
+import { useToastStore } from "../../store/toastStore";
 import { useTheme } from "../../theme/ThemeProvider";
 
 // Formulário de login não ganha nada em ficar largo; 420 é a medida do cartão
@@ -20,13 +24,77 @@ export default function Login({ navigation }: any) {
   const t = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, completeLogin, isLoading, error, clearError } = useAuthStore();
 
   const handleLogin = async () => {
     if (!email || !password) return;
     try {
-      await login(email, password);
-    } catch (e) {
+      const { biometricLogin, biometricChoiceMade } =
+        usePreferencesStore.getState();
+
+      // A oferta de biometria só faz sentido quando há hardware enrolado e o
+      // usuário nunca decidiu (nem por aqui, nem pelos toggles). Na web
+      // hasHardwareAsync resolve false e o login segue direto, sem modal.
+      let askBiometric = false;
+      if (!biometricChoiceMade && !biometricLogin) {
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const enrolled =
+          hasHardware && (await LocalAuthentication.isEnrolledAsync());
+        askBiometric = hasHardware && enrolled;
+      }
+
+      const deferred = await login(email, password, {
+        deferCommit: askBiometric,
+      });
+      if (!deferred) return;
+
+      // Credenciais válidas, token retido: a troca para as rotas autenticadas
+      // (completeLogin) só acontece depois da resposta do modal
+      askConfirm({
+        title: "Desbloquear com biometria?",
+        message:
+          "Use a digital ou o rosto para proteger o Economize!: vamos pedir o desbloqueio sempre que o app abrir.",
+        confirmLabel: "Usar biometria",
+        cancelLabel: "Agora não",
+        onConfirm: async () => {
+          const { setBiometric, setBiometricChoiceMade } =
+            usePreferencesStore.getState();
+          const showToast = useToastStore.getState().showToast;
+          try {
+            const result = await LocalAuthentication.authenticateAsync({
+              promptMessage: "Confirme sua biometria",
+              cancelLabel: "Cancelar",
+            });
+            if (result.success) {
+              setBiometric(true);
+              showToast("Desbloqueio por biometria ativado.", "success");
+            } else {
+              showToast(
+                "Biometria não confirmada. Você pode ativar depois no Perfil, em Preferências.",
+                "warning",
+              );
+            }
+          } catch {
+            // authenticateAsync também REJEITA (não só resolve success=false);
+            // sem este catch o login morreria com o token retido na closure
+            showToast(
+              "Biometria indisponível agora. Você pode ativar depois no Perfil, em Preferências.",
+              "warning",
+            );
+          } finally {
+            setBiometricChoiceMade(true);
+            completeLogin(deferred.token, deferred.name);
+          }
+        },
+        onCancel: () => {
+          const { setBiometric, setBiometricChoiceMade } =
+            usePreferencesStore.getState();
+          setBiometric(false);
+          setBiometricChoiceMade(true);
+          completeLogin(deferred.token, deferred.name);
+        },
+      });
+    } catch {
       // Erro tratado no store
     }
   };
@@ -65,13 +133,8 @@ export default function Login({ navigation }: any) {
       )}
 
       <View className="mb-4">
-        <Text className="text-sm font-bold text-textSecondary mb-2">
-          E-mail
-        </Text>
-        <TextInput
-          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
-          placeholder="seu@email.com"
-          placeholderTextColor={t.text.tertiary}
+        <FloatingLabelInput
+          label="E-mail"
           value={email}
           onChangeText={(text) => {
             setEmail(text);
@@ -79,25 +142,32 @@ export default function Login({ navigation }: any) {
           }}
           autoCapitalize="none"
           keyboardType="email-address"
-          accessibilityLabel="E-mail"
         />
       </View>
 
-      <View className="mb-6">
-        <Text className="text-sm font-bold text-textSecondary mb-2">Senha</Text>
-        <TextInput
-          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
-          placeholder="••••••••"
-          placeholderTextColor={t.text.tertiary}
+      <View className="mb-2">
+        <FloatingLabelInput
+          label="Senha"
           value={password}
           onChangeText={(text) => {
             setPassword(text);
             clearError();
           }}
           secureTextEntry
-          accessibilityLabel="Senha"
         />
       </View>
+
+      <TouchableOpacity
+        className="self-end mb-6 py-1"
+        onPress={() => navigation.navigate("ForgotPassword")}
+        accessibilityLabel="Esqueci minha senha"
+        accessibilityRole="button"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text className="text-primary font-bold text-sm">
+          Esqueci minha senha
+        </Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"

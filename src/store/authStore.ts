@@ -3,13 +3,23 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../services/api";
 
+interface LoginResult {
+  token: string;
+  name: string;
+}
+
 interface AuthState {
   token: string | null;
   userName: string | null;
   isLoading: boolean;
   error: string | null;
   hasHydrated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    options?: { deferCommit?: boolean },
+  ) => Promise<LoginResult | undefined>;
+  completeLogin: (token: string, userName: string) => void;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
@@ -24,15 +34,26 @@ export const useAuthStore = create(
       error: null,
       hasHydrated: false,
 
-      login: async (email, password) => {
+      login: async (email, password, options) => {
         set({ isLoading: true, error: null });
         try {
           const response = await api.post("/auth/login", { email, password });
+          // Com deferCommit o token validado NÃO entra no estado: gravar o
+          // token troca a árvore de navegação na hora, e o chamador ainda
+          // precisa resolver o modal de biometria antes de entrar no app
+          if (options?.deferCommit) {
+            set({ isLoading: false });
+            return {
+              token: response.data.token,
+              name: response.data.name,
+            };
+          }
           set({
             token: response.data.token,
             userName: response.data.name,
             isLoading: false,
           });
+          return undefined;
         } catch (error: any) {
           set({
             error:
@@ -43,6 +64,10 @@ export const useAuthStore = create(
           });
           throw error;
         }
+      },
+
+      completeLogin: (token, userName) => {
+        set({ token, userName, error: null });
       },
 
       register: async (name, email, password) => {
@@ -72,6 +97,18 @@ export const useAuthStore = create(
 
       logout: () => {
         set({ token: null, userName: null, error: null });
+        // O accountsStore é o único store com cache permanente
+        // (`hasLoadedOnce`): sem zerá-lo AQUI, um login com outra conta
+        // continuaria desenhando os cartões e as faturas da conta anterior,
+        // porque nenhuma tela refaz o fetch depois do primeiro sucesso.
+        // Ponto único de propósito — sair pelo Perfil, pela biometria, pelo
+        // 401 do interceptor e pelo "apagar dados locais" passam todos aqui.
+        //
+        // Import tardio pelo mesmo motivo (e no mesmo estilo) do interceptor
+        // em `services/api`: o accountsStore importa a API, que importa este
+        // store, e trazer o módulo no topo fecharia o ciclo na inicialização.
+        const { useAccountsStore } = require("./accountsStore");
+        useAccountsStore.getState().reset();
       },
 
       clearError: () => set({ error: null }),

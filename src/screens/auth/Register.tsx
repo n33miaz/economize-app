@@ -2,18 +2,23 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { ArrowLeft } from "lucide-react-native";
+import ArrowLeft from "lucide-react-native/dist/esm/icons/arrow-left";
 import Animated from "react-native-reanimated";
 
+import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../../theme/motionPresets";
+import {
+  getPasswordStrength,
+  validateNewPassword,
+  type PasswordStrength,
+} from "../../utils/passwordPolicy";
 
 export default function Register({ navigation }: any) {
   const t = useTheme();
@@ -22,13 +27,29 @@ export default function Register({ navigation }: any) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmationError, setConfirmationError] = useState<string | null>(
+    null,
+  );
   const { register, isLoading, error, clearError } = useAuthStore();
+
+  const strength: PasswordStrength = getPasswordStrength(password);
+  const strengthColor = {
+    fraca: t.semantic.danger,
+    média: t.semantic.warning,
+    forte: t.semantic.success,
+  }[strength];
 
   const handleRegister = async () => {
     if (!name || !email || !password) return;
+    const errors = validateNewPassword(password, confirmation);
+    setPasswordError(errors.passwordError);
+    setConfirmationError(errors.confirmationError);
+    if (errors.passwordError || errors.confirmationError) return;
     try {
       await register(name, email, password);
-    } catch (e) {
+    } catch {
       // Erro tratado no store
     }
   };
@@ -41,7 +62,7 @@ export default function Register({ navigation }: any) {
       style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}
     >
       <TouchableOpacity
-        className="absolute top-14 left-6 w-10 h-10 bg-elevated rounded-full justify-center items-center"
+        className="absolute top-14 left-6 w-10 h-10 bg-elevated rounded-xl justify-center items-center"
         onPress={() => navigation.goBack()}
         accessibilityLabel="Voltar"
         accessibilityRole="button"
@@ -66,30 +87,19 @@ export default function Register({ navigation }: any) {
       )}
 
       <Animated.View entering={listItemEntering(1)} className="mb-4">
-        <Text className="text-sm font-bold text-textSecondary mb-2">
-          Nome Completo
-        </Text>
-        <TextInput
-          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
-          placeholder="João Silva"
-          placeholderTextColor={t.text.tertiary}
+        <FloatingLabelInput
+          label="Nome Completo"
           value={name}
           onChangeText={(text) => {
             setName(text);
             clearError();
           }}
-          accessibilityLabel="Nome completo"
         />
       </Animated.View>
 
       <Animated.View entering={listItemEntering(2)} className="mb-4">
-        <Text className="text-sm font-bold text-textSecondary mb-2">
-          E-mail
-        </Text>
-        <TextInput
-          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
-          placeholder="seu@email.com"
-          placeholderTextColor={t.text.tertiary}
+        <FloatingLabelInput
+          label="E-mail"
           value={email}
           onChangeText={(text) => {
             setEmail(text);
@@ -97,28 +107,52 @@ export default function Register({ navigation }: any) {
           }}
           autoCapitalize="none"
           keyboardType="email-address"
-          accessibilityLabel="E-mail"
         />
       </Animated.View>
 
-      <Animated.View entering={listItemEntering(3)} className="mb-8">
-        <Text className="text-sm font-bold text-textSecondary mb-2">Senha</Text>
-        <TextInput
-          className="bg-elevated border border-border rounded-xl px-4 h-14 text-textPrimary"
-          placeholder="••••••••"
-          placeholderTextColor={t.text.tertiary}
+      <Animated.View entering={listItemEntering(3)} className="mb-4">
+        <FloatingLabelInput
+          label="Senha"
           value={password}
           onChangeText={(text) => {
             setPassword(text);
+            setPasswordError(null);
             clearError();
           }}
           secureTextEntry
-          accessibilityLabel="Senha"
+          error={passwordError}
         />
+        {passwordError ? (
+          <Text className="text-danger text-xs mt-1 ml-1">{passwordError}</Text>
+        ) : password.length > 0 ? (
+          // Cor semântica é dinâmica por tema — vai inline com tokens
+          <Text className="text-xs mt-1 ml-1" style={{ color: strengthColor }}>
+            Força da senha: {strength}
+          </Text>
+        ) : null}
+      </Animated.View>
+
+      <Animated.View entering={listItemEntering(4)} className="mb-8">
+        <FloatingLabelInput
+          label="Confirmar senha"
+          value={confirmation}
+          onChangeText={(text) => {
+            setConfirmation(text);
+            setConfirmationError(null);
+            clearError();
+          }}
+          secureTextEntry
+          error={confirmationError}
+        />
+        {confirmationError && (
+          <Text className="text-danger text-xs mt-1 ml-1">
+            {confirmationError}
+          </Text>
+        )}
       </Animated.View>
 
       <Animated.View
-        entering={listItemEntering(4)}
+        entering={listItemEntering(5)}
         style={submitPress.pressStyle}
       >
         <TouchableOpacity
