@@ -6,12 +6,10 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import {
-  CircleAlert,
-  CircleCheck,
-  Info,
-  TriangleAlert,
-} from "lucide-react-native";
+import CircleAlert from "lucide-react-native/dist/esm/icons/circle-alert";
+import CircleCheck from "lucide-react-native/dist/esm/icons/circle-check";
+import Info from "lucide-react-native/dist/esm/icons/info";
+import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useToastStore } from "../store/toastStore";
@@ -62,8 +60,9 @@ export default function Toast() {
   return (
     <View
       className="absolute inset-0 items-center justify-start"
-      style={{ zIndex: 9999, elevation: 99 }}
-      pointerEvents="box-none"
+      // `pointerEvents` no estilo, não como prop: a prop está depreciada e
+      // avisava no console da web a cada carga da página
+      style={{ zIndex: 9999, elevation: 99, pointerEvents: "box-none" }}
     >
       <Animated.View
         className="absolute top-0 self-center max-w-[90%]"

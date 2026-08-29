@@ -1,14 +1,12 @@
 import React, { useMemo } from "react";
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  useWindowDimensions,
-} from "react-native";
+import { View, Text, useWindowDimensions } from "react-native";
 import { LineChart } from "react-native-gifted-charts";
 
+import Skeleton from "./Skeleton";
+import { radius } from "../theme/ds";
 import { useTheme } from "../theme/ThemeProvider";
 import { useHistoricalChartData } from "../hooks/useHistoricalChartData";
+import { formatBRL } from "../utils/money";
 
 interface HistoricalChartProps {
   currencyCode: string;
@@ -36,9 +34,11 @@ export default function HistoricalChart({
   }, [data]);
 
   if (loading) {
+    // Mesma pegada da caixa do gráfico (h-56, rounded-2xl): o traçado chega
+    // sem salto de layout
     return (
-      <View className="h-56 justify-center items-center bg-elevated border border-border rounded-2xl mt-5">
-        <ActivityIndicator color={t.accent.neon} />
+      <View className="mt-5">
+        <Skeleton width="100%" height={224} borderRadius={radius["2xl"]} />
       </View>
     );
   }
@@ -88,7 +88,7 @@ export default function HistoricalChart({
               return (
                 <View className="bg-elevated border border-border p-3 rounded-xl items-center justify-center -ml-12">
                   <Text className="text-textPrimary font-bold text-base">
-                    R$ {items[0].value.toFixed(2)}
+                    {formatBRL(items[0].value)}
                   </Text>
                   <Text className="text-textSecondary text-xs mt-1">
                     {items[0].label}

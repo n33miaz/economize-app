@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { FileText, Plus } from "lucide-react-native";
+import FileText from "lucide-react-native/dist/esm/icons/file-text";
+import Plus from "lucide-react-native/dist/esm/icons/plus";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
@@ -21,30 +22,30 @@ import {
   useReportsStore,
 } from "../store/reportsStore";
 import { useToastStore } from "../store/toastStore";
+import {
+  usePreferencesStore,
+  selectCycleAnchorDay,
+} from "../store/preferencesStore";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import Skeleton from "../components/Skeleton";
-import AssistantFAB from "../components/AssistantFAB";
+import AssistantFAB, {
+  ASSISTANT_FAB_HEIGHT,
+} from "../components/AssistantFAB";
+import { useBreakpoint } from "../hooks/useBreakpoint";
+import { padRowsForColumns } from "../utils/layout";
+import { formatBRL, formatBRLCompact } from "../utils/money";
+import {
+  cycleWindowContaining,
+  formatDayMonthShort,
+  todayIso,
+} from "../utils/cycleWindow";
 
 const PERIOD_LABELS: Record<ReportPeriod, string> = {
   WEEKLY: "Semanais",
   MONTHLY: "Mensais",
   YEARLY: "Anuais",
 };
-
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-  });
-}
 
 function ReportCard({ item, index }: { item: Report; index: number }) {
   const t = useTheme();
@@ -83,23 +84,33 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
           {PERIOD_LABELS[item.period]}
         </Text>
         <Text style={{ color: t.text.secondary, fontSize: 12 }}>
-          {formatDate(item.startDate)} → {formatDate(item.endDate)}
+          {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
+              pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
+              ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
+          {formatDayMonthShort(item.startDate)} →{" "}
+          {formatDayMonthShort(item.endDate)}
         </Text>
       </View>
 
+      {/* Três valores dividem a largura do card, e o card já pode estar numa
+          grade de duas colunas: um terço de meia tela não comporta
+          "R$ 128.430,17" em 14 px. Abreviar mantém os três alinhados — e cada
+          um leva o valor por extenso no rótulo acessível */}
       <View style={{ flexDirection: "row", marginBottom: spacing[3] }}>
         <View style={{ flex: 1 }}>
           <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
             Receitas
           </Text>
           <Text
+            numberOfLines={1}
+            accessibilityLabel={`Receitas: ${formatBRL(item.totalIncome)}`}
             style={{
               color: t.semantic.success,
               fontWeight: "700",
               fontSize: 14,
             }}
           >
-            {formatCurrency(item.totalIncome)}
+            {formatBRLCompact(item.totalIncome)}
           </Text>
         </View>
         <View style={{ flex: 1 }}>
@@ -107,13 +118,15 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
             Despesas
           </Text>
           <Text
+            numberOfLines={1}
+            accessibilityLabel={`Despesas: ${formatBRL(item.totalExpense)}`}
             style={{
               color: t.semantic.danger,
               fontWeight: "700",
               fontSize: 14,
             }}
           >
-            {formatCurrency(item.totalExpense)}
+            {formatBRLCompact(item.totalExpense)}
           </Text>
         </View>
         <View style={{ flex: 1 }}>
@@ -121,6 +134,8 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
             Saldo
           </Text>
           <Text
+            numberOfLines={1}
+            accessibilityLabel={`Saldo: ${formatBRL(saldo)}`}
             style={{
               // Delta financeiro usa o verde semântico, nunca o accent da marca
               color: positivo
@@ -130,7 +145,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
               fontSize: 14,
             }}
           >
-            {formatCurrency(saldo)}
+            {formatBRLCompact(saldo)}
           </Text>
         </View>
       </View>
@@ -177,8 +192,12 @@ export default function Reports() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const generatePress = usePressScale();
+  // Card de relatório é bloco fechado e de altura parecida — o caso em que
+  // uma grade de duas colunas ganha o dobro de leitura sem custo nenhum
+  const { columns } = useBreakpoint();
   const { items, isLoading, isGenerating, fetch, generate } = useReportsStore();
   const showToast = useToastStore((s) => s.showToast);
+  const anchorDay = usePreferencesStore(selectCycleAnchorDay);
   const [tab, setTab] = useState<ReportPeriod>("MONTHLY");
 
   useEffect(() => {
@@ -190,13 +209,30 @@ export default function Reports() {
     [items, tab],
   );
 
+  // Memoizado porque o preenchimento da última linha devolve array NOVO
+  // sempre que sobra vaga: inline, a `data` da FlatList mudava de identidade
+  // a cada render do pai e a lista inteira se dava por alterada
+  const rows = useMemo(
+    () => padRowsForColumns(filtered, columns),
+    [filtered, columns],
+  );
+
   const handleGenerate = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const now = new Date();
     const start = new Date(now);
-    if (tab === "WEEKLY") start.setDate(start.getDate() - 7);
-    else if (tab === "MONTHLY") start.setMonth(start.getMonth() - 1);
-    else start.setFullYear(start.getFullYear() - 1);
+    if (tab === "MONTHLY") {
+      // O relatório mensal passa a fechar o CICLO do usuário em vez de "os
+      // últimos 30 dias": a mesma âncora que rege a Home e a Análise. O fim
+      // continua sendo agora — um relatório que terminasse no futuro venderia
+      // um mês fechado que ainda está acontecendo.
+      const window = cycleWindowContaining(anchorDay, todayIso(now));
+      start.setTime(Date.parse(`${window.start}T00:00:00.000Z`));
+    } else if (tab === "WEEKLY") {
+      start.setDate(start.getDate() - 7);
+    } else {
+      start.setFullYear(start.getFullYear() - 1);
+    }
     const created = await generate(tab, start.toISOString(), now.toISOString());
     if (!created) {
       showToast(
@@ -305,14 +341,29 @@ export default function Reports() {
       </View>
 
       <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
+        // O RN não aceita `numColumns` mudando em voo: a chave remonta a lista
+        // quando a janela cruza o breakpoint
+        key={`grade-${columns}`}
+        data={rows}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? { gap: spacing[3] } : undefined}
+        keyExtractor={(item, index) => item?.id ?? `vago-${index}`}
         contentContainerStyle={{
           padding: spacing[5],
-          paddingBottom: insets.bottom + 120,
+          // O rodapé só precisa caber o que flutua sobre a lista: o FAB do
+          // assistente. Os 120 fixos vinham da época em que essa reserva era
+          // chutada — no desktop sobrava meio card de nada no fim da grade
+          paddingBottom:
+            insets.bottom + spacing[5] + ASSISTANT_FAB_HEIGHT + spacing[4],
         }}
         renderItem={({ item, index }) => (
-          <ReportCard item={item} index={index} />
+          // O buraco da última linha ocupa a coluna sem desenhar nada — sem
+          // ele, um relatório sozinho no fim esticaria por toda a largura.
+          // O `flex: 1` só existe na grade: numa coluna só, ele seria um filho
+          // flexível dentro de um contêiner de rolagem sem altura definida.
+          <View style={columns > 1 ? { flex: 1 } : undefined}>
+            {item && <ReportCard item={item} index={index} />}
+          </View>
         )}
         refreshControl={
           <RefreshControl

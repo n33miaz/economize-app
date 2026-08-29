@@ -14,7 +14,7 @@ import { motion } from "./ds";
 // Duas formas da mesma curva `soft` do ds: a factory alimenta withTiming e a
 // função-worklet alimenta os builders de entrada (que exigem EasingFunction)
 export const softEasing = Easing.bezier(...motion.easing.soft);
-const softEasingFn = Easing.bezierFn(...motion.easing.soft);
+export const softEasingFn = Easing.bezierFn(...motion.easing.soft);
 
 // Stagger de lista: incremento curto com teto no 6º item — a entrada orienta
 // o olho no que está visível sem atrasar o resto de listas longas

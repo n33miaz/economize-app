@@ -1,33 +1,31 @@
 import React from "react";
 import { View } from "react-native";
-import {
-  ArrowLeftRight,
-  Banknote,
-  Briefcase,
-  Car,
-  CircleEllipsis,
-  Coffee,
-  Dumbbell,
-  Fuel,
-  Gamepad2,
-  Gift,
-  GraduationCap,
-  HandCoins,
-  HeartPulse,
-  House,
-  Music,
-  PawPrint,
-  PiggyBank,
-  Plane,
-  PlugZap,
-  Shield,
-  Shirt,
-  ShoppingBag,
-  Smartphone,
-  Tag,
-  Utensils,
-  Wrench,
-} from "lucide-react-native";
+import ArrowLeftRight from "lucide-react-native/dist/esm/icons/arrow-left-right";
+import Banknote from "lucide-react-native/dist/esm/icons/banknote";
+import Briefcase from "lucide-react-native/dist/esm/icons/briefcase";
+import Car from "lucide-react-native/dist/esm/icons/car";
+import CircleEllipsis from "lucide-react-native/dist/esm/icons/circle-ellipsis";
+import Coffee from "lucide-react-native/dist/esm/icons/coffee";
+import Dumbbell from "lucide-react-native/dist/esm/icons/dumbbell";
+import Fuel from "lucide-react-native/dist/esm/icons/fuel";
+import Gamepad2 from "lucide-react-native/dist/esm/icons/gamepad-2";
+import Gift from "lucide-react-native/dist/esm/icons/gift";
+import GraduationCap from "lucide-react-native/dist/esm/icons/graduation-cap";
+import HandCoins from "lucide-react-native/dist/esm/icons/hand-coins";
+import HeartPulse from "lucide-react-native/dist/esm/icons/heart-pulse";
+import House from "lucide-react-native/dist/esm/icons/house";
+import Music from "lucide-react-native/dist/esm/icons/music";
+import PawPrint from "lucide-react-native/dist/esm/icons/paw-print";
+import PiggyBank from "lucide-react-native/dist/esm/icons/piggy-bank";
+import Plane from "lucide-react-native/dist/esm/icons/plane";
+import PlugZap from "lucide-react-native/dist/esm/icons/plug-zap";
+import Shield from "lucide-react-native/dist/esm/icons/shield";
+import Shirt from "lucide-react-native/dist/esm/icons/shirt";
+import ShoppingBag from "lucide-react-native/dist/esm/icons/shopping-bag";
+import Smartphone from "lucide-react-native/dist/esm/icons/smartphone";
+import Tag from "lucide-react-native/dist/esm/icons/tag";
+import Utensils from "lucide-react-native/dist/esm/icons/utensils";
+import Wrench from "lucide-react-native/dist/esm/icons/wrench";
 import type { LucideIcon } from "lucide-react-native";
 
 import type { Category } from "../services/api";

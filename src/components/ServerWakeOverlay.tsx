@@ -1,6 +1,6 @@
 import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
-import { CloudMoon } from "lucide-react-native";
+import CloudMoon from "lucide-react-native/dist/esm/icons/cloud-moon";
 
 import { useServerStore } from "../store/serverStore";
 import { useTheme } from "../theme/ThemeProvider";
@@ -29,9 +29,10 @@ export default function ServerWakeOverlay() {
         justifyContent: "center",
         padding: spacing[5],
         zIndex: 9998,
+        // Não é diálogo de decisão: só informa, e some sozinho quando a API
+        // responde. No estilo porque `props.pointerEvents` está depreciado
+        pointerEvents: "auto",
       }}
-      // Não é diálogo de decisão: só informa, e some sozinho quando a API responde
-      pointerEvents="auto"
       accessibilityLiveRegion="polite"
     >
       <View

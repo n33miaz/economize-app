@@ -120,7 +120,12 @@ export default function CustomModal({
         </Animated.View>
 
         {/* Modal Content */}
-        <View className="flex-1 justify-end" pointerEvents="box-none">
+        {/* `pointerEvents` no estilo: a prop está depreciada e avisa no
+            console da web */}
+        <View
+          className="flex-1 justify-end"
+          style={{ pointerEvents: "box-none" }}
+        >
           <Animated.View
             style={[
               {

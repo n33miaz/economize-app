@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { WifiOff } from "lucide-react-native";
+import WifiOff from "lucide-react-native/dist/esm/icons/wifi-off";
 
 import { useTheme } from "../theme/ThemeProvider";
 

@@ -3,28 +3,25 @@ import { ScrollView, Text, TouchableOpacity } from "react-native";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
+import { formatMonthLabel } from "../utils/cycleWindow";
 
-/**
- * "2026-08" → "ago 2026". O Intl pt-BR abrevia com ponto ("ago.");
- * removemos o ponto para o rótulo curto dos chips e comparações.
- */
-export function formatMonthLabel(month: string): string {
-  const [year, m] = month.split("-").map(Number);
-  if (!year || !m) return month;
-  const name = new Intl.DateTimeFormat("pt-BR", { month: "short" })
-    .format(new Date(year, m - 1, 1))
-    .replace(".", "");
-  return `${name} ${year}`;
-}
+// Reexportado porque as telas já o consomem daqui; a implementação mora no
+// util da janela, junto do resto da aritmética de período (EC-092)
+export { formatMonthLabel };
 
 interface MonthSelectorProps {
+  /** Chaves `yyyy-MM`. Em modo janela, o mês em que cada ciclo começa. */
   months: string[];
   selected: string | null;
   onSelect: (month: string) => void;
+  /** Rótulo do chip; por padrão, o mês. Em modo janela, o ciclo. */
+  formatLabel?: (month: string) => string;
+  /** Descrição falada do chip — em modo janela, o recorte por extenso. */
+  describeOption?: (month: string) => string;
 }
 
 /**
- * Linha horizontal de chips com os meses que têm movimento. O chip
+ * Linha horizontal de chips com os períodos que têm movimento. O chip
  * selecionado veste o accent; os demais ficam em surface. Ao trocar a
  * seleção, a linha rola sozinha até deixar o chip ativo visível.
  */
@@ -32,6 +29,8 @@ export default function MonthSelector({
   months,
   selected,
   onSelect,
+  formatLabel,
+  describeOption,
 }: MonthSelectorProps) {
   const t = useTheme();
   const scrollRef = useRef<ScrollView>(null);
@@ -66,7 +65,10 @@ export default function MonthSelector({
     >
       {months.map((month) => {
         const active = month === selected;
-        const label = formatMonthLabel(month);
+        const label = formatLabel ? formatLabel(month) : formatMonthLabel(month);
+        const spoken = describeOption
+          ? describeOption(month)
+          : `Ver análise de ${label}`;
         return (
           <TouchableOpacity
             key={month}
@@ -79,7 +81,7 @@ export default function MonthSelector({
               if (!active) onSelect(month);
             }}
             activeOpacity={0.8}
-            accessibilityLabel={`Ver análise de ${label}`}
+            accessibilityLabel={spoken}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             style={{

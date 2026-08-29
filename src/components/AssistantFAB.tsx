@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { Sparkles } from "lucide-react-native";
+import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
@@ -23,6 +23,13 @@ interface AssistantFABProps {
   label?: string;
   bottomOffset?: number;
 }
+
+/**
+ * Altura do botão (ícone 18 + 12 de padding em cima e embaixo + as duas
+ * bordas de 2 do halo). Exportada para as listas reservarem rodapé pelo
+ * tamanho real do que flutua sobre elas, em vez de chutar um `pb-32`.
+ */
+export const ASSISTANT_FAB_HEIGHT = 52;
 
 const AnimatedBrandGradient = Animated.createAnimatedComponent(BrandGradient);
 
@@ -61,11 +68,13 @@ export default function AssistantFAB({
   return (
     <Animated.View
       entering={fabEntering}
-      pointerEvents="box-none"
       style={{
         position: "absolute",
         right: spacing[5],
         bottom: bottomOffset ?? insets.bottom + spacing[5],
+        // No estilo, não como prop: `props.pointerEvents` está depreciado e
+        // gritava no console da web a cada carga
+        pointerEvents: "box-none",
       }}
     >
       <TouchableOpacity

@@ -7,7 +7,12 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Check, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react-native";
+import Check from "lucide-react-native/dist/esm/icons/check";
+import ChevronLeft from "lucide-react-native/dist/esm/icons/chevron-left";
+import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
+import Plus from "lucide-react-native/dist/esm/icons/plus";
+import Search from "lucide-react-native/dist/esm/icons/search";
+import X from "lucide-react-native/dist/esm/icons/x";
 
 import type { Category } from "../services/api";
 import { useCategoriesStore } from "../store/categoriesStore";
@@ -31,6 +36,12 @@ interface CategoryPickerSheetProps {
   selectedId?: string | null;
   /** Chamado ao tocar numa categoria (ou criar uma nova); o sheet se fecha em seguida. */
   onSelect: (category: Category) => void;
+  /**
+   * Quando presente, a lista abre com "Sem categoria" no topo — para os fluxos
+   * em que ficar sem categoria é uma escolha válida (ex.: criação de
+   * agendamento). Ausente, o sheet se comporta como sempre.
+   */
+  onClear?: () => void;
 }
 
 /**
@@ -43,6 +54,7 @@ export default function CategoryPickerSheet({
   onClose,
   selectedId,
   onSelect,
+  onClear,
 }: CategoryPickerSheetProps) {
   // A superfície do CustomModal segue o tema — o conteúdo tem que seguir junto,
   // senão o claro fica com texto branco em fundo branco
@@ -277,8 +289,47 @@ export default function CategoryPickerSheet({
                   {drillRoot.children.map((child) => renderRow(child))}
                 </>
               ) : (
-                sections.map((section) => (
-                  <View key={section.title}>
+                <>
+                  {onClear && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        onClear();
+                        onClose();
+                      }}
+                      accessibilityLabel="Ficar sem categoria"
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: selectedId == null }}
+                      activeOpacity={0.8}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        minHeight: 52,
+                        paddingHorizontal: spacing[2],
+                        borderRadius: radius.lg,
+                        backgroundColor:
+                          selectedId == null ? t.accent.neonMuted : "transparent",
+                      }}
+                    >
+                      <CategoryIcon category={null} theme={t as AppTheme} size={36} />
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          flex: 1,
+                          marginLeft: spacing[3],
+                          color: t.text.primary,
+                          fontSize: 14,
+                          fontWeight: selectedId == null ? "700" : "500",
+                        }}
+                      >
+                        Sem categoria
+                      </Text>
+                      {selectedId == null && (
+                        <Check size={18} color={t.accent.neon} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  {sections.map((section) => (
+                    <View key={section.title}>
                     <Text
                       style={{
                         color: t.text.tertiary,
@@ -301,8 +352,9 @@ export default function CategoryPickerSheet({
                         drillInto: root.children.length > 0 ? root : undefined,
                       }),
                     )}
-                  </View>
-                ))
+                    </View>
+                  ))}
+                </>
               )}
             </ScrollView>
 

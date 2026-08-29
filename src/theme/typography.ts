@@ -64,4 +64,19 @@ export const typography = {
     letterSpacing: 0,
     fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
   },
+  /**
+   * Numérico de densidade dupla: para o valor que divide um card ao meio
+   * (Entradas × Saídas). Esse slot é o mais estreito do app — no card de 390px
+   * sobram ~140px por lado, e "R$ 99.999,99" mede 144px no corpo 24. Como o
+   * `adjustsFontSizeToFit` é ignorado pelo react-native-web, lá o valor
+   * simplesmente cortava; abreviar não resolvia porque o piso de abreviação é
+   * 100 mil, exatamente acima do pior caso por extenso.
+   */
+  numericMd: {
+    fontFamily: "Roboto_700Bold",
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: 0,
+    fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
+  },
 } as const;

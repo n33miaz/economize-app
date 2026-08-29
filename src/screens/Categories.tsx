@@ -6,13 +6,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  ArchiveRestore,
-  ChevronDown,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react-native";
+import ArchiveRestore from "lucide-react-native/dist/esm/icons/archive-restore";
+import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
+import Pencil from "lucide-react-native/dist/esm/icons/pencil";
+import Plus from "lucide-react-native/dist/esm/icons/plus";
+import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";

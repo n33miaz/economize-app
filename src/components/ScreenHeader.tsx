@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StatusBar } from "react-native";
-import { Info, User } from "lucide-react-native";
+import Info from "lucide-react-native/dist/esm/icons/info";
+import User from "lucide-react-native/dist/esm/icons/user";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 

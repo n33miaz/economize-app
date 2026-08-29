@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react-native";
+import ArrowDownRight from "lucide-react-native/dist/esm/icons/arrow-down-right";
+import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
 import type { LucideIcon } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";

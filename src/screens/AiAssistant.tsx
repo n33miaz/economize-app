@@ -11,7 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SendHorizontal, Sparkles, Trash2, X } from "lucide-react-native";
+import SendHorizontal from "lucide-react-native/dist/esm/icons/send-horizontal";
+import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
+import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import X from "lucide-react-native/dist/esm/icons/x";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
