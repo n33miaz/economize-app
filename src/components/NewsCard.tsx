@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from "react";
 import { View, Text, Image, TouchableOpacity, Linking } from "react-native";
-import { Newspaper } from "lucide-react-native";
+import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 
 import { NewsArticle } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
