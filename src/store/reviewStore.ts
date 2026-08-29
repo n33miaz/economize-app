@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import {
+  BankTransaction,
   ReviewApplyItem,
   ReviewGroup,
   applyReview,
   confirmAllReview,
   getReviewQueue,
 } from "../services/api";
+import { applyTransactionToGroups } from "../utils/transactions";
 
 interface ReviewState {
   groups: ReviewGroup[];
@@ -18,6 +20,8 @@ interface ReviewState {
   fetchQueue: (uploadId?: string) => Promise<void>;
   apply: (items: ReviewApplyItem[]) => Promise<number>;
   confirmAll: () => Promise<number>;
+  /** Aplica a versão que o servidor devolveu (ex.: rename) na fila carregada. */
+  applyTransaction: (updated: BankTransaction) => void;
   pendingTransactionsCount: () => number;
 }
 
@@ -83,6 +87,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       return 0;
     }
   },
+
+  applyTransaction: (updated) =>
+    set({ groups: applyTransactionToGroups(get().groups, updated) }),
 
   pendingTransactionsCount: () =>
     get().groups.reduce((sum, g) => sum + g.transactions.length, 0),

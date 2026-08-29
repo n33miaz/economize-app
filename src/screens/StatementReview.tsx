@@ -7,19 +7,25 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  BadgeCheck,
-  Check,
-  ChevronDown,
-  CircleHelp,
-  X,
-} from "lucide-react-native";
+import BadgeCheck from "lucide-react-native/dist/esm/icons/badge-check";
+import Check from "lucide-react-native/dist/esm/icons/check";
+import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
+import CircleHelp from "lucide-react-native/dist/esm/icons/circle-question-mark";
+import Tag from "lucide-react-native/dist/esm/icons/tag";
+import X from "lucide-react-native/dist/esm/icons/x";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
-import type { Category, CategorizedBy, ReviewGroup } from "../services/api";
+import type {
+  BankTransaction,
+  Category,
+  CategorizedBy,
+  ConnectorAccount,
+  ReviewGroup,
+} from "../services/api";
+import { useAccountsStore } from "../store/accountsStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { useReviewStore } from "../store/reviewStore";
 import { useToastStore } from "../store/toastStore";
@@ -27,45 +33,40 @@ import type { AppTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
 import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
+import { accountDisplayName, originLabel } from "../utils/accounts";
 import { categoryPath } from "../utils/categoryTree";
+// Data pelo formatador da casa: em UTC, para a fila não discordar da folha de
+// detalhes sobre o dia da mesma transação
+import { formatDayMonth } from "../utils/cycleWindow";
+import { formatBRL } from "../utils/money";
+import {
+  isRenamed,
+  reviewGroupKey,
+  transactionDisplayName,
+  transactionOriginalName,
+} from "../utils/transactions";
 import CategoryIcon from "../components/CategoryIcon";
 import CategoryPickerSheet from "../components/CategoryPickerSheet";
+import OriginBadge from "../components/OriginBadge";
 import ErrorState from "../components/ErrorState";
 import PageContainer from "../components/PageContainer";
 import ScreenHeader from "../components/ScreenHeader";
 import Skeleton from "../components/Skeleton";
-
-function formatBRL(value: number) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function formatDayMonth(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
+import TransactionDetailSheet from "../components/TransactionDetailSheet";
 
 function plural(n: number, one: string, many: string) {
   return n === 1 ? one : many;
 }
 
-// Identidade estável do grupo entre re-fetches: a fila não traz id próprio,
-// então repetimos aqui a chave que o backend usa para agrupar — descrição
-// normalizada MAIS a categoria sugerida. Só com a descrição, dois grupos da
-// mesma loja com sugestões diferentes colidiriam: a escolha feita num card
-// vazaria para o outro e a categoria (com a regra que ela ensina) cairia em
-// transações que o usuário nunca decidiu
-function groupKey(group: ReviewGroup) {
-  const description =
-    group.normalizedDescription ??
-    group.sampleDescription ??
-    group.transactions[0]?.id ??
-    "grupo";
-  return `${description}|${group.suggestedCategoryId ?? ""}`;
-}
+// A identidade do grupo virou util testável (`reviewGroupKey`): ela deixou de
+// poder cair em `sampleDescription`, que agora é texto de exibição e muda
+// quando o usuário apelida uma transação
+const groupKey = reviewGroupKey;
 
-function originLabel(by: CategorizedBy | null, overridden: boolean) {
+// De onde saiu a SUGESTÃO de categoria. Ganhou este nome quando a transação
+// passou a ter conta de origem (EC-113): "origem" virou palavra da procedência
+// do lançamento, e as duas não podem disputar o mesmo termo na mesma tela.
+function suggestionLabel(by: CategorizedBy | null, overridden: boolean) {
   if (overridden || by === "USER") return "escolhida";
   if (by === "USER_RULE" || by === "LEARNED_RULE") return "regra sua";
   if (by === "AI") return "sugerida por IA";
@@ -83,6 +84,15 @@ interface GroupCardProps {
   onToggle: () => void;
   onOpenPicker: () => void;
   onConfirm: () => void;
+  onOpenTransaction: (transaction: BankTransaction) => void;
+  /**
+   * Contas conhecidas. O grupo agrupa por descrição, então a MESMA loja pode
+   * trazer linhas do cartão e da conta corrente no mesmo card — e a decisão de
+   * categoria muda com isso (pagamento de fatura não é compra).
+   */
+  accountsById: Map<string, ConnectorAccount>;
+  /** Falso para quem nunca sincronizou: lá origem não é uma dimensão real. */
+  showOrigin: boolean;
 }
 
 function ReviewGroupCard({
@@ -95,6 +105,9 @@ function ReviewGroupCard({
   onToggle,
   onOpenPicker,
   onConfirm,
+  onOpenTransaction,
+  accountsById,
+  showOrigin,
 }: GroupCardProps) {
   const t = useTheme();
   const { listItemEntering } = useMotionPresets();
@@ -103,6 +116,11 @@ function ReviewGroupCard({
 
   const title = group.sampleDescription ?? "Sem descrição";
   const count = group.transactions.length;
+  // O título do grupo é texto de exibição: quando a primeira transação foi
+  // apelidada, o texto do banco vai junto para o usuário não perder a origem
+  const first = group.transactions[0];
+  const bankName =
+    first && isRenamed(first) ? transactionOriginalName(first) : null;
   const confirmDisabled = !resolved || isApplying;
   // O chip mostra o caminho ("Alimentação › Delivery") e a origem vai ao lado:
   // juntos num rótulo só, a elipse comeria justamente a origem
@@ -122,7 +140,12 @@ function ReviewGroupCard({
     >
       <TouchableOpacity
         onPress={onToggle}
-        accessibilityLabel={`Grupo ${title}, ${count} ${plural(count, "transação", "transações")}. Toque para ${expanded ? "recolher" : "ver as transações"}`}
+        // O texto do banco entra no label: é desta tela que sai a regra de
+        // categorização, e ela se aprende do nome verdadeiro. Quem usa leitor
+        // de tela decidiria pelo apelido sem esta parte
+        accessibilityLabel={`Grupo ${title}${
+          bankName ? `, no banco: ${bankName}` : ""
+        }, ${count} ${plural(count, "transação", "transações")}. Toque para ${expanded ? "recolher" : "ver as transações"}`}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         activeOpacity={0.85}
@@ -163,6 +186,14 @@ function ReviewGroupCard({
               {count} {plural(count, "transação", "transações")} ·{" "}
               {formatBRL(group.totalAmount)}
             </Text>
+            {bankName ? (
+              <Text
+                numberOfLines={1}
+                style={{ color: t.text.tertiary, fontSize: 11, marginTop: 1 }}
+              >
+                No banco: {bankName}
+              </Text>
+            ) : null}
           </View>
           <Animated.View style={confirmPress.pressStyle}>
             <TouchableOpacity
@@ -249,7 +280,7 @@ function ReviewGroupCard({
                 flexShrink: 1,
               }}
             >
-              {originLabel(group.categorizedBy, overridden)}
+              {suggestionLabel(group.categorizedBy, overridden)}
             </Text>
           )}
           <View style={{ flex: 1 }} />
@@ -272,12 +303,36 @@ function ReviewGroupCard({
         >
           {group.transactions.map((tx) => {
             const negative = tx.type === "DEBIT" || tx.amount < 0;
+            const renamed = isRenamed(tx);
+            const name = transactionDisplayName(tx);
+            const account = tx.accountId
+              ? accountsById.get(tx.accountId)
+              : undefined;
+            // Pelo helper, como no Extrato: `account.name` cru fazia o leitor
+            // de tela ouvir "origem ," onde o selo ao lado lê "Cartão de
+            // crédito"
+            const spokenOrigin = !showOrigin
+              ? ""
+              : account
+                ? `, origem ${accountDisplayName(account)}`
+                : `, ${originLabel(tx.accountId, account).toLowerCase()}`;
             return (
-              <View
+              <TouchableOpacity
                 key={tx.id}
+                onPress={() => onOpenTransaction(tx)}
+                accessibilityLabel={`${
+                  renamed
+                    ? `${name}, no banco: ${transactionOriginalName(tx)}`
+                    : name
+                }, ${formatDayMonth(tx.date)}, ${
+                  negative ? "saída" : "entrada"
+                } de ${formatBRL(Math.abs(tx.amount))}${spokenOrigin}. Abrir detalhes e apelido`}
+                accessibilityRole="button"
+                activeOpacity={0.7}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
+                  minHeight: 40,
                   paddingVertical: spacing[2],
                 }}
               >
@@ -286,17 +341,32 @@ function ReviewGroupCard({
                 >
                   {formatDayMonth(tx.date)}
                 </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    flex: 1,
-                    color: t.text.secondary,
-                    fontSize: 12,
-                    marginHorizontal: spacing[2],
-                  }}
-                >
-                  {tx.description}
-                </Text>
+                <View style={{ flex: 1, marginHorizontal: spacing[2] }}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {renamed && (
+                      <Tag
+                        size={11}
+                        color={t.text.tertiary}
+                        style={{ marginRight: 4 }}
+                      />
+                    )}
+                    <Text
+                      numberOfLines={1}
+                      style={{ flex: 1, color: t.text.secondary, fontSize: 12 }}
+                    >
+                      {name}
+                    </Text>
+                  </View>
+                  {showOrigin && (
+                    <View style={{ marginTop: 3 }}>
+                      <OriginBadge
+                        accountId={tx.accountId}
+                        account={account}
+                        maxLabelWidth={140}
+                      />
+                    </View>
+                  )}
+                </View>
                 <Text
                   style={{
                     color: negative ? t.chart.down : t.chart.up,
@@ -307,7 +377,7 @@ function ReviewGroupCard({
                   {negative ? "- " : "+ "}
                   {formatBRL(Math.abs(tx.amount))}
                 </Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -330,8 +400,14 @@ export default function StatementReview() {
 
   const { groups, isLoading, isApplying, error, fetchQueue, apply, confirmAll } =
     useReviewStore();
+  const applyTransaction = useReviewStore((s) => s.applyTransaction);
   const categories = useCategoriesStore((s) => s.items);
   const fetchCategories = useCategoriesStore((s) => s.fetch);
+  // Origem do lançamento na fila: saber que a linha é do cartão muda a decisão
+  // de categoria — é o que separa "compra" de "pagamento da fatura"
+  const accountsById = useAccountsStore((s) => s.byId);
+  const hasAccounts = useAccountsStore((s) => s.accounts.length > 0);
+  const fetchAccounts = useAccountsStore((s) => s.fetchAccounts);
   const { showToast } = useToastStore();
 
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -339,6 +415,10 @@ export default function StatementReview() {
   // backend quando o usuário toca no check (apply)
   const [choices, setChoices] = useState<Record<string, Category>>({});
   const [pickerKey, setPickerKey] = useState<string | null>(null);
+  // Transação aberta em detalhe (onde o apelido se edita). Guardamos o objeto,
+  // e não o id: a fila é recarregada com frequência e um id órfão fecharia a
+  // folha no meio da edição
+  const [detailTx, setDetailTx] = useState<BankTransaction | null>(null);
 
   // Recarregar troca os grupos da fila: escolha antiga guardada por chave
   // grudaria num grupo novo que o usuário nunca abriu
@@ -350,7 +430,9 @@ export default function StatementReview() {
   useEffect(() => {
     reloadQueue();
     fetchCategories();
-  }, [reloadQueue, fetchCategories]);
+    // Cacheado: se o Extrato já carregou as contas, isto não vira requisição
+    fetchAccounts();
+  }, [reloadQueue, fetchCategories, fetchAccounts]);
 
   useEffect(() => {
     if (error) showToast(error, "error");
@@ -562,7 +644,7 @@ export default function StatementReview() {
       <FlatList
         data={groups}
         keyExtractor={(group) => groupKey(group)}
-        extraData={{ choices, expandedKey, isApplying, catById }}
+        extraData={{ choices, expandedKey, isApplying, catById, accountsById }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           padding: spacing[5],
@@ -583,6 +665,9 @@ export default function StatementReview() {
               onToggle={() => handleToggle(key)}
               onOpenPicker={() => setPickerKey(key)}
               onConfirm={() => handleConfirmGroup(item)}
+              onOpenTransaction={setDetailTx}
+              accountsById={accountsById}
+              showOrigin={hasAccounts}
             />
           );
         }}
@@ -680,6 +765,13 @@ export default function StatementReview() {
             setChoices((prev) => ({ ...prev, [pickerKey]: category }));
           }
         }}
+      />
+
+      <TransactionDetailSheet
+        transaction={detailTx}
+        visible={detailTx !== null}
+        onClose={() => setDetailTx(null)}
+        onUpdated={applyTransaction}
       />
     </PageContainer>
   );

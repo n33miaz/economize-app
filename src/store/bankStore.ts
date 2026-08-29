@@ -8,6 +8,7 @@ import {
 import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { calculateBankMetrics } from "../utils/bankMetrics";
+import { replaceTransaction } from "../utils/transactions";
 
 const MIME_TYPES = [
   "application/x-ofx",
@@ -37,6 +38,8 @@ interface BankState {
 
   fetchTransactions: () => Promise<void>;
   importStatement: () => Promise<StatementUploadResult | null>;
+  /** Aplica a versão que o servidor devolveu (ex.: rename) sem refazer a lista. */
+  applyTransaction: (updated: BankTransaction) => void;
   calculateMetrics: () => { income: number; expense: number; total: number };
 }
 
@@ -85,6 +88,9 @@ export const useBankStore = create<BankState>((set, get) => ({
       throw e;
     }
   },
+
+  applyTransaction: (updated) =>
+    set({ transactions: replaceTransaction(get().transactions, updated) }),
 
   calculateMetrics: () => calculateBankMetrics(get().transactions),
 }));
