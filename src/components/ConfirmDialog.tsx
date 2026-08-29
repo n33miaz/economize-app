@@ -18,8 +18,9 @@ export default function ConfirmDialog() {
 
   const handleCancel = useCallback(() => {
     if (busy) return;
+    request?.onCancel?.();
     dismiss();
-  }, [busy, dismiss]);
+  }, [busy, request, dismiss]);
 
   const handleConfirm = useCallback(async () => {
     if (!request || busy) return;

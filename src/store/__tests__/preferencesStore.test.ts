@@ -1,5 +1,9 @@
 // O mock do AsyncStorage é global, em jest.setup.js
-import { usePreferencesStore } from "../preferencesStore";
+import {
+  getCycleAnchorDay,
+  selectCycleAnchorDay,
+  usePreferencesStore,
+} from "../preferencesStore";
 
 describe("preferencesStore", () => {
   beforeEach(() => {
@@ -34,5 +38,28 @@ describe("preferencesStore", () => {
     expect(usePreferencesStore.getState().theme).toBe("light");
     usePreferencesStore.getState().setTheme("system");
     expect(usePreferencesStore.getState().theme).toBe("system");
+  });
+
+  it("começa com o ciclo no dia 1 (mês de calendário)", () => {
+    expect(usePreferencesStore.getState().cycleAnchorDay).toBe(1);
+    expect(getCycleAnchorDay()).toBe(1);
+  });
+
+  it("guarda a âncora do ciclo", () => {
+    usePreferencesStore.getState().setCycleAnchorDay(12);
+    expect(usePreferencesStore.getState().cycleAnchorDay).toBe(12);
+  });
+
+  it("prende âncora fora da faixa em vez de gravar janela impossível", () => {
+    usePreferencesStore.getState().setCycleAnchorDay(0);
+    expect(usePreferencesStore.getState().cycleAnchorDay).toBe(1);
+    usePreferencesStore.getState().setCycleAnchorDay(99);
+    expect(usePreferencesStore.getState().cycleAnchorDay).toBe(31);
+  });
+
+  it("normaliza também na leitura — o valor pode vir corrompido do disco", () => {
+    usePreferencesStore.setState({ cycleAnchorDay: 0 });
+    expect(selectCycleAnchorDay(usePreferencesStore.getState())).toBe(1);
+    expect(getCycleAnchorDay()).toBe(1);
   });
 });

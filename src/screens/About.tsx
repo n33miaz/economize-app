@@ -10,7 +10,8 @@ import {
 import Constants from "expo-constants";
 // Lucide não traz logos de marcas: Code representa o repositório e Globe o
 // perfil na web, mantendo a família única de ícones do app
-import { Code, Globe } from "lucide-react-native";
+import Code from "lucide-react-native/dist/esm/icons/code";
+import Globe from "lucide-react-native/dist/esm/icons/globe";
 import Animated from "react-native-reanimated";
 
 import { useTheme } from "../theme/ThemeProvider";
