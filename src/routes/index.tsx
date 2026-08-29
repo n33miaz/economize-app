@@ -1,38 +1,60 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import {
+  createBottomTabNavigator,
+  type BottomTabBarProps,
+} from "@react-navigation/bottom-tabs";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import {
   DarkTheme,
   DefaultTheme,
   NavigationContainer,
+  useNavigationContainerRef,
+  type LinkingOptions,
 } from "@react-navigation/native";
-import { ChartCandlestick, House, Wallet as WalletTabIcon } from "lucide-react-native";
-import type { LucideIcon } from "lucide-react-native";
+import * as ExpoLinking from "expo-linking";
+import ChartCandlestick from "lucide-react-native/dist/esm/icons/chart-candlestick";
+import House from "lucide-react-native/dist/esm/icons/house";
+import WalletTabIcon from "lucide-react-native/dist/esm/icons/wallet";
 import { Platform, View, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from "react-native-reanimated";
+import { useReducedMotion } from "react-native-reanimated";
 
 import { lightTheme } from "../theme/colors";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
-import { motion, radius, spacing } from "../theme/ds";
-import { useBreakpoint } from "../hooks/useBreakpoint";
+import { radius, spacing } from "../theme/ds";
+import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
+import MarketNewsTicker from "../components/MarketNewsTicker";
 import {
   ephemeralTransition,
   fadeTransition,
   modalLikeTransition,
   slideRightTransition,
 } from "./transitions";
+import TabBarWithIndicator from "./TabBarWithIndicator";
+import AnimatedTabIcon from "./AnimatedTabIcon";
+import SideRail from "./SideRail";
+import {
+  railKeyForRoute,
+  type RailDestination,
+  type RailKey,
+} from "./railDestinations";
+import {
+  APP_ROUTES,
+  AUTH_ROUTES,
+  FINANCE_TAB_ROUTES,
+  MAIN_TAB_ROUTES,
+  MARKET_TAB_ROUTES,
+} from "./routeNames";
 
 // Telas
 import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
+import ForgotPassword from "../screens/auth/ForgotPassword";
+import ResetPassword from "../screens/auth/ResetPassword";
+import ChangePassword from "../screens/ChangePassword";
 import Home from "../screens/Home";
 import Currencies from "../screens/Currencies";
 import Indexes from "../screens/Indexes";
@@ -42,13 +64,15 @@ import Wallet from "../screens/Wallet";
 import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
-import Settings from "../screens/Settings";
+import AdvancedOptions from "../screens/AdvancedOptions";
 import Reports from "../screens/Reports";
-import Favorites from "../screens/Favorites";
 import Analytics from "../screens/Analytics";
 import Categories from "../screens/Categories";
+import CreditCards from "../screens/CreditCards";
 import StatementReview from "../screens/StatementReview";
-import UserInfo from "../screens/UserInfo";
+import Recurrences from "../screens/Recurrences";
+import RecurrenceForm from "../screens/RecurrenceForm";
+import BalanceForecast from "../screens/BalanceForecast";
 
 // Altura da barra inferior sem contar o inset da barra de gestos
 const BOTTOM_BAR_HEIGHT = 84;
@@ -57,23 +81,55 @@ const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
 const TopTab = createMaterialTopTabNavigator();
 
+// Fora do componente: como arrow inline, cada render do MainTabs entregava
+// uma função nova ao navigator e remontava a barra inteira
+const renderTabBar = (props: BottomTabBarProps) => (
+  <TabBarWithIndicator {...props} />
+);
+const renderNoTabBar = () => null;
+
 // Moedas e Índices
 function IndicatorsTabs() {
   const t = useTheme();
+  const reducedMotion = useReducedMotion();
+  // O mesmo teto do miolo das telas de pilha: sem ele, num monitor largo o
+  // título e a régua de abas correm até a borda enquanto as listas abaixo
+  // param em 1180 — dois eixos diferentes na mesma tela
+  const capStyle = useContentCapStyle();
   return (
-    <View className="flex-1 bg-background">
-      <ScreenHeader title="Indicadores" subtitle="Moedas e Índices Globais" />
+    <View className="flex-1 bg-background" style={capStyle}>
+      <ScreenHeader title="Mercado" subtitle="Moedas e Índices Globais" />
+      {/* EC-102: manchetes do momento antes das abas — contexto do mercado
+          que o usuário veio olhar, sem roubar espaço das listas */}
+      <MarketNewsTicker />
       <TopTab.Navigator
         screenOptions={{
+          // Deslizar entre Moedas e Índices é parte da navegação: o gesto
+          // fica explícito e a troca por toque no rótulo anima o deslize —
+          // salvo quando o sistema pede menos movimento (troca seca)
+          swipeEnabled: true,
+          animationEnabled: !reducedMotion,
           tabBarPressColor: "transparent",
           tabBarActiveTintColor: t.accent.neon,
           tabBarInactiveTintColor: t.text.tertiary,
           tabBarIndicatorStyle: { backgroundColor: t.accent.neon, height: 3 },
+          // Abas centradas com largura natural (visual do protótipo): o grupo
+          // encolhe via width auto e centraliza por alignSelf. Centralizar só
+          // o conteúdo interno desalinharia o indicador, que posiciona as
+          // abas a partir do x=0 da própria barra.
           tabBarStyle: {
-            backgroundColor: t.background.surface,
+            alignSelf: "center",
+            width: "auto",
+            backgroundColor: "transparent",
             elevation: 0,
             shadowOpacity: 0,
+            // a lib impõe um boxShadow próprio na web mesmo com sombra zerada
+            ...(Platform.OS === "web" ? { boxShadow: "none" } : null),
           },
+          // width auto + padding 0 por item: o indicador de 3px herda a
+          // largura medida do rótulo, em vez de esticar por meia tela
+          tabBarItemStyle: { width: "auto", paddingHorizontal: 0 },
+          tabBarGap: spacing[6],
           tabBarLabelStyle: {
             fontFamily: "Roboto_700Bold",
             fontSize: 12,
@@ -81,8 +137,8 @@ function IndicatorsTabs() {
           },
         }}
       >
-        <TopTab.Screen name="Moedas" component={Currencies} />
-        <TopTab.Screen name="Índices" component={Indexes} />
+        <TopTab.Screen name={MARKET_TAB_ROUTES.moedas} component={Currencies} />
+        <TopTab.Screen name={MARKET_TAB_ROUTES.indices} component={Indexes} />
       </TopTab.Navigator>
     </View>
   );
@@ -91,20 +147,38 @@ function IndicatorsTabs() {
 // Carteira e Extrato (Open Finance)
 function FinanceTabs() {
   const t = useTheme();
+  const reducedMotion = useReducedMotion();
+  // Mesmo teto do bloco de Mercado — ver comentário lá
+  const capStyle = useContentCapStyle();
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-background" style={capStyle}>
       <ScreenHeader title="Finanças" subtitle="Gestão de Patrimônio" />
       <TopTab.Navigator
         screenOptions={{
+          // Mesmo gate do bloco de Mercado: com "reduzir movimento" ativo a
+          // troca de aba é seca em todo o app
+          swipeEnabled: true,
+          animationEnabled: !reducedMotion,
           tabBarPressColor: "transparent",
           tabBarActiveTintColor: t.accent.neon,
           tabBarInactiveTintColor: t.text.tertiary,
           tabBarIndicatorStyle: { backgroundColor: t.accent.neon, height: 3 },
+          // Mesmo tratamento do bloco de Mercado: grupo de abas centrado com
+          // largura natural; centralizar só o conteúdo interno desalinharia o
+          // indicador, que posiciona as abas a partir do x=0 da própria barra
           tabBarStyle: {
-            backgroundColor: t.background.surface,
+            alignSelf: "center",
+            width: "auto",
+            backgroundColor: "transparent",
             elevation: 0,
             shadowOpacity: 0,
+            // a lib impõe um boxShadow próprio na web mesmo com sombra zerada
+            ...(Platform.OS === "web" ? { boxShadow: "none" } : null),
           },
+          // width auto + padding 0 por item: o indicador de 3px herda a
+          // largura medida do rótulo, em vez de esticar por meia tela
+          tabBarItemStyle: { width: "auto", paddingHorizontal: 0 },
+          tabBarGap: spacing[6],
           tabBarLabelStyle: {
             fontFamily: "Roboto_700Bold",
             fontSize: 12,
@@ -112,91 +186,14 @@ function FinanceTabs() {
           },
         }}
       >
-        <TopTab.Screen name="Carteira" component={Wallet} />
-        <TopTab.Screen name="Extrato" component={BankIntegration} />
+        <TopTab.Screen name={FINANCE_TAB_ROUTES.carteira} component={Wallet} />
+        <TopTab.Screen name={FINANCE_TAB_ROUTES.extrato} component={BankIntegration} />
+        {/* EC-097: o que se repete é a terceira leitura do mesmo dinheiro —
+            Carteira responde "o que eu tenho", Extrato "o que aconteceu" e
+            Recorrências "o que vai acontecer de novo". Os nomes das duas
+            primeiras são contrato de navigate() e ficam intactos. */}
+        <TopTab.Screen name={FINANCE_TAB_ROUTES.recorrencias} component={Recurrences} />
       </TopTab.Navigator>
-    </View>
-  );
-}
-
-// Lucide não tem variante preenchida: o estado ativo entra por cross-fade de
-// cor (camada inativa some enquanto a camada accent aparece)
-function AnimatedTabIcon({
-  Icon,
-  focused,
-  size,
-}: {
-  Icon: LucideIcon;
-  focused: boolean;
-  size: number;
-}) {
-  const t = useTheme();
-  const progress = useSharedValue(focused ? 1 : 0);
-
-  React.useEffect(() => {
-    progress.value = withTiming(focused ? 1 : 0, {
-      duration: motion.duration.base,
-    });
-  }, [focused, progress]);
-
-  const activeStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    position: "absolute",
-  }));
-
-  const inactiveStyle = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value,
-  }));
-
-  return (
-    <View className="justify-center items-center">
-      <Animated.View style={inactiveStyle}>
-        <Icon size={size} color={t.text.tertiary} />
-      </Animated.View>
-      <Animated.View style={activeStyle}>
-        <Icon size={size} color={t.accent.neon} />
-      </Animated.View>
-    </View>
-  );
-}
-
-function HomeTabIcon({ focused, size }: { focused: boolean; size: number }) {
-  const t = useTheme();
-  const progress = useSharedValue(focused ? 1 : 0);
-
-  React.useEffect(() => {
-    progress.value = withTiming(focused ? 1 : 0, {
-      duration: motion.duration.base,
-    });
-  }, [focused, progress]);
-
-  // Halo em camada própria animando só a opacidade: evita interpolar cor
-  // no worklet e mantém o token accentMuted como única fonte do tom
-  const bgStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-  }));
-
-  const activeStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    position: "absolute",
-  }));
-
-  const inactiveStyle = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value,
-  }));
-
-  return (
-    <View className="w-12 h-12 rounded-full justify-center items-center">
-      <Animated.View
-        className="absolute inset-0 rounded-full bg-accentMuted"
-        style={bgStyle}
-      />
-      <Animated.View style={inactiveStyle}>
-        <House size={size} color={t.text.tertiary} />
-      </Animated.View>
-      <Animated.View style={activeStyle}>
-        <House size={size} color={t.accent.neon} />
-      </Animated.View>
     </View>
   );
 }
@@ -205,8 +202,10 @@ function HomeTabIcon({ focused, size }: { focused: boolean; size: number }) {
 function MainTabs() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  // No desktop a navegação sai do rodapé e vira trilho lateral: é o que separa
-  // "site espremido no meio da tela" de layout de computador
+  // No desktop a navegação sai do rodapé e vira trilho lateral (montado na
+  // raiz, ao lado do stack): é o que separa "site espremido no meio da tela"
+  // de layout de computador. Aqui basta calar a barra — as duas nunca
+  // aparecem juntas.
   const { isWide } = useBreakpoint();
   // Web entra junto do iOS: no iPhone, tanto no Safari quanto instalado na tela
   // de início, a barra de gestos come o rodapé e Platform.OS lá é "web". No
@@ -216,7 +215,13 @@ function MainTabs() {
 
   return (
     <BottomTab.Navigator
-      initialRouteName="Principal"
+      initialRouteName={MAIN_TAB_ROUTES.principal}
+      // Voltar (Android) leva à Home; o default "firstRoute" cairia em Finanças
+      backBehavior="initialRoute"
+      // No celular a barra padrão ganha um wrap com o indicador deslizante na
+      // borda superior; no desktop quem navega é o trilho lateral, então a
+      // barra não renderiza nada em vez de virar uma segunda navegação
+      tabBar={isWide ? renderNoTabBar : renderTabBar}
       screenOptions={{
         // "shift" desliza + esmaece na troca de tab — mesma família de movimento
         // da entrada do assistente, no lugar do corte seco do fade
@@ -232,98 +237,71 @@ function MainTabs() {
             ? undefined
             : (props) => <TouchableOpacity {...(props as any)} activeOpacity={1} />,
         headerShown: false,
-        tabBarPosition: isWide ? "left" : "bottom",
-        tabBarLabelPosition: isWide ? "beside-icon" : "below-icon",
         tabBarActiveTintColor: t.accent.neon,
         tabBarInactiveTintColor: t.text.tertiary,
-        // No trilho lateral o item ativo ganha uma pílula de fundo. Sem definir
-        // a cor, ela herda o `primary` do tema (o dourado da marca) e o ícone
-        // dourado sumia dentro dela — dourado sobre dourado.
-        tabBarActiveBackgroundColor: isWide
-          ? t.accent.neonMuted
-          : "transparent",
-        tabBarStyle: isWide
-          ? {
-              backgroundColor: t.background.surface,
-              width: 232,
-              paddingTop: spacing[6],
-              paddingHorizontal: spacing[3],
-              // Trilho lateral separa por borda à direita, não em cima
-              borderTopWidth: 0,
-              borderRightWidth: 1,
-              borderRightColor: t.border.default,
-              elevation: 0,
-              shadowOpacity: 0,
-            }
-          : {
-              backgroundColor: t.background.surface,
-              // 84 é o mínimo para o halo da Home (48) + rótulo caberem dentro
-              // do `overflow: hidden` da barra. Com 70 o rótulo era cortado
-              // sempre que não havia inset de barra de gestos para dar folga
-              height: BOTTOM_BAR_HEIGHT + bottomInset,
-              paddingBottom: bottomInset > 0 ? bottomInset : 10,
-              paddingTop: 8,
-              // No dark, sombra é invisível — a borda superior faz a separação
-              borderTopWidth: 1,
-              borderTopColor: t.border.default,
-              // Cantos superiores arredondados: o fundo do navigator (base) fica
-              // visível atrás e a barra ganha a mesma geometria dos cards
-              borderTopLeftRadius: radius["2xl"],
-              borderTopRightRadius: radius["2xl"],
-              overflow: "hidden",
-              elevation: 0,
-              shadowOpacity: 0,
-            },
-        tabBarItemStyle: isWide
-          ? {
-              height: 52,
-              marginBottom: spacing[1],
-              justifyContent: "flex-start",
-              paddingHorizontal: spacing[4],
-              borderRadius: radius.full,
-            }
-          : undefined,
-        tabBarLabelStyle: isWide
-          ? {
-              fontFamily: "Roboto_700Bold",
-              fontSize: 14,
-              marginLeft: spacing[3],
-            }
-          : {
-              fontFamily: "Roboto_700Bold",
-              fontSize: 11,
-              marginTop: 4,
-            },
+        // Quando o trilho assume, a barra não renderiza nada — todo o estilo
+        // abaixo é do celular. A versão anterior desta tela mandava a MESMA
+        // barra para a esquerda no desktop; virava uma segunda navegação, de
+        // três destinos, encostada no trilho de doze.
+        tabBarStyle: {
+          backgroundColor: t.background.surface,
+          // 84 dá folga para o ícone da Home (28, ~30 no pico do pop) +
+          // rótulo dentro do `overflow: hidden` da barra. Com 70 o rótulo
+          // era cortado sempre que não havia inset de barra de gestos
+          height: BOTTOM_BAR_HEIGHT + bottomInset,
+          paddingBottom: bottomInset > 0 ? bottomInset : 10,
+          paddingTop: 8,
+          // No dark, sombra é invisível — a borda superior faz a separação
+          borderTopWidth: 1,
+          borderTopColor: t.border.default,
+          // Cantos superiores arredondados: o fundo do navigator (base) fica
+          // visível atrás e a barra ganha a mesma geometria dos cards
+          borderTopLeftRadius: radius["2xl"],
+          borderTopRightRadius: radius["2xl"],
+          overflow: "hidden",
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        tabBarLabelStyle: {
+          fontFamily: "Roboto_700Bold",
+          fontSize: 11,
+          marginTop: 4,
+        },
       }}
     >
+      {/* Os `name` são contrato de navegação (várias telas fazem navigate()
+          por eles); o que o usuário vê muda só pelo `title` */}
       <BottomTab.Screen
-        name="Indicadores"
+        name={MAIN_TAB_ROUTES.financas}
+        component={FinanceTabs}
+        options={{
+          title: "Finanças",
+          tabBarIcon: ({ focused }) => (
+            <AnimatedTabIcon Icon={WalletTabIcon} focused={focused} size={26} />
+          ),
+        }}
+      />
+      <BottomTab.Screen
+        name={MAIN_TAB_ROUTES.principal}
+        component={Home}
+        options={{
+          title: "Início",
+          tabBarIcon: ({ focused }) => (
+            <AnimatedTabIcon Icon={House} focused={focused} size={28} />
+          ),
+        }}
+      />
+      <BottomTab.Screen
+        name={MAIN_TAB_ROUTES.indicadores}
         component={IndicatorsTabs}
         options={{
+          title: "Mercado",
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
               Icon={ChartCandlestick}
               focused={focused}
-              size={22}
+              size={26}
             />
-          ),
-        }}
-      />
-      <BottomTab.Screen
-        name="Principal"
-        component={Home}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <HomeTabIcon focused={focused} size={24} />
-          ),
-        }}
-      />
-      <BottomTab.Screen
-        name="Finanças"
-        component={FinanceTabs}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon Icon={WalletTabIcon} focused={focused} size={22} />
           ),
         }}
       />
@@ -335,11 +313,36 @@ function MainTabs() {
 function AuthRoutes() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, ...fadeTransition }}>
-      <Stack.Screen name="Login" component={Login} />
-      <Stack.Screen name="Register" component={Register} />
+      <Stack.Screen name={AUTH_ROUTES.login} component={Login} />
+      <Stack.Screen name={AUTH_ROUTES.register} component={Register} />
+      <Stack.Screen name={AUTH_ROUTES.forgotPassword} component={ForgotPassword} />
+      <Stack.Screen name={AUTH_ROUTES.resetPassword} component={ResetPassword} />
     </Stack.Navigator>
   );
 }
+
+// Paths nomeados só para o stack de auth: o e-mail de redefinição aponta para
+// /reset-password?token=... e precisa cair direto na tela certa na web (o
+// token de query string vira param da rota). As rotas autenticadas ficam de
+// fora de propósito — um path sem match cai na rota inicial do navegador
+// ativo, preservando o comportamento atual do app.
+// Nomes de rota livres com params opcionais: o app nunca declarou o
+// `ReactNavigation.RootParamList` global, e o container precisa da MESMA lista
+// no `linking` e na ref — senão o TypeScript infere `{}` por um lado e o mapa
+// de paths por outro, e os dois deixam de conversar.
+type AppParamList = Record<string, object | undefined>;
+
+const linking: LinkingOptions<AppParamList> = {
+  prefixes: [ExpoLinking.createURL("/")],
+  config: {
+    screens: {
+      [AUTH_ROUTES.login]: "login",
+      [AUTH_ROUTES.register]: "register",
+      [AUTH_ROUTES.forgotPassword]: "forgot-password",
+      [AUTH_ROUTES.resetPassword]: "reset-password",
+    },
+  },
+};
 
 // Tema do container alinhado aos tokens: evita flashes brancos nas transições
 // e pinta o fundo atrás dos cantos arredondados da tab bar. Vira função porque
@@ -361,12 +364,129 @@ function buildNavigationTheme(t: Theme) {
   };
 }
 
+// Pilha autenticada isolada num componente: a raiz agora monta trilho e
+// miolo lado a lado, e deixar as 14 telas inline lá dentro empurrava tudo
+// para a direita sem ganhar nada em clareza.
+function AppStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, ...slideRightTransition }}
+    >
+      <Stack.Screen name={APP_ROUTES.main} component={MainTabs} />
+      <Stack.Screen
+        name={APP_ROUTES.noticias}
+        component={News}
+        options={ephemeralTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.assistente}
+        component={AiAssistant}
+        options={modalLikeTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.sobre}
+        component={About}
+        options={modalLikeTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.perfil}
+        component={Profile}
+        options={ephemeralTransition}
+      />
+      {/* EC-104: "Settings" e "Conta" foram absorvidas pelo hub Profile;
+          o que restou de avançado vive nesta rota */}
+      <Stack.Screen
+        name={APP_ROUTES.avancado}
+        component={AdvancedOptions}
+        options={ephemeralTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.relatorios}
+        component={Reports}
+        options={ephemeralTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.analise}
+        component={Analytics}
+        options={ephemeralTransition}
+      />
+      {/* EC-113: as faturas são um aprofundamento do Extrato, do mesmo jeito
+          que Análise — pilha, com o cartão vindo por parâmetro quando o
+          usuário chega pelo filtro de origem */}
+      <Stack.Screen
+        name={APP_ROUTES.cartoes}
+        component={CreditCards}
+        options={ephemeralTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.categorias}
+        component={Categories}
+        options={ephemeralTransition}
+      />
+      {/* EC-097: a projeção é um aprofundamento da aba Recorrências, do
+          mesmo jeito que Análise aprofunda o Extrato — pilha, não aba */}
+      <Stack.Screen
+        name={APP_ROUTES.previsao}
+        component={BalanceForecast}
+        options={ephemeralTransition}
+      />
+      {/* Formulário entra de baixo (é uma tarefa, não um destino) e é tela
+          de pilha porque o seletor de categoria já é um Modal próprio */}
+      <Stack.Screen
+        name={APP_ROUTES.agendamento}
+        component={RecurrenceForm}
+        options={modalLikeTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.revisao}
+        component={StatementReview}
+        options={modalLikeTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.alterarSenha}
+        component={ChangePassword}
+        options={ephemeralTransition}
+      />
+    </Stack.Navigator>
+  );
+}
+
 // --- ROOT NAVIGATOR ---
 export default function Routes() {
   const t = useTheme();
   const token = useAuthStore((state) => state.token);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const navigationTheme = React.useMemo(() => buildNavigationTheme(t), [t]);
+  // A decisão trilho × barra é do breakpoint, nunca do Platform.OS: um tablet
+  // Android deitado ganha o mesmo trilho que o navegador de mesa
+  const { isWide } = useBreakpoint();
+  const navigationRef = useNavigationContainerRef<AppParamList>();
+  // Guarda a CHAVE do trilho, não o nome da rota: telas de tarefa (revisar,
+  // agendar, trocar senha) não têm destino próprio e precisam do item que
+  // estava aceso antes delas — é o que mantém a pílula em "Início" quando a
+  // revisão foi aberta pelo card da Home
+  const [activeKey, setActiveKey] = React.useState<RailKey | undefined>();
+
+  // O trilho vive FORA do navigator (é layout, não navegação), então não tem
+  // como ler a rota por hook — quem responde é o container, a cada troca
+  const syncActiveRoute = React.useCallback(() => {
+    const routeName = navigationRef.getCurrentRoute()?.name;
+    setActiveKey((previous) => railKeyForRoute(routeName, previous));
+  }, [navigationRef]);
+
+  const handleRailNavigate = React.useCallback(
+    (destination: RailDestination) => {
+      // Aba do container de baixo exige navegação aninhada; tela de pilha vai
+      // direto. Os nomes vêm do mapa de destinos e são os MESMOS que todo
+      // navigate() já espalhado pelas telas usa.
+      if (destination.inMainTabs) {
+        navigationRef.navigate("Main", { screen: destination.route });
+        return;
+      }
+      navigationRef.navigate(destination.route);
+    },
+    [navigationRef],
+  );
 
   // Sem esperar a hidratação, o token persistido ainda não existe e o
   // cold start piscava a tela de Login antes de cair na Home
@@ -376,72 +496,33 @@ export default function Routes() {
     );
   }
 
+  // Login e cadastro nunca ganham trilho: sem sessão não há destino para onde
+  // ir, e a tela de auth é uma coluna centrada de propósito
+  const showRail = Boolean(token) && isWide;
+
   return (
-    <NavigationContainer theme={navigationTheme}>
-      {token ? (
-        <Stack.Navigator
-          screenOptions={{ headerShown: false, ...slideRightTransition }}
-        >
-          <Stack.Screen name="Main" component={MainTabs} />
-          <Stack.Screen
-            name="Notícias"
-            component={News}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="IA Assist"
-            component={AiAssistant}
-            options={modalLikeTransition}
-          />
-          <Stack.Screen
-            name="Sobre"
-            component={About}
-            options={modalLikeTransition}
-          />
-          <Stack.Screen
-            name="Profile"
-            component={Profile}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="Settings"
-            component={Settings}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="Relatórios"
-            component={Reports}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="Favoritos"
-            component={Favorites}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="Análise"
-            component={Analytics}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="Categorias"
-            component={Categories}
-            options={ephemeralTransition}
-          />
-          <Stack.Screen
-            name="Revisão"
-            component={StatementReview}
-            options={modalLikeTransition}
-          />
-          <Stack.Screen
-            name="Conta"
-            component={UserInfo}
-            options={ephemeralTransition}
-          />
-        </Stack.Navigator>
-      ) : (
-        <AuthRoutes />
-      )}
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navigationTheme}
+      linking={linking}
+      onReady={syncActiveRoute}
+      onStateChange={syncActiveRoute}
+    >
+      <View
+        style={{
+          flex: 1,
+          flexDirection: "row",
+          backgroundColor: t.background.base,
+        }}
+      >
+        {showRail && (
+          <SideRail activeKey={activeKey} onNavigate={handleRailNavigate} />
+        )}
+        {/* O miolo é quem estica: o trilho tem largura fixa e não encolhe */}
+        <View style={{ flex: 1 }}>
+          {token ? <AppStack /> : <AuthRoutes />}
+        </View>
+      </View>
     </NavigationContainer>
   );
 }
