@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ArrowDownRight, ArrowUpRight, Star } from "lucide-react-native";
+import ArrowDownRight from "lucide-react-native/dist/esm/icons/arrow-down-right";
+import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
+import Star from "lucide-react-native/dist/esm/icons/star";
 import * as Haptics from "../utils/haptics";
 
 import {
@@ -17,7 +19,10 @@ import {
   isIndexData,
 } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
-import { useFavoritesStore } from "../store/favoritesStore";
+import {
+  toggleFavoriteWithSnapshot,
+  useFavoritesStore,
+} from "../store/favoritesStore";
 import CustomModal from "./CustomModal";
 import HistoricalChart from "./HistoricalChart";
 
@@ -29,7 +34,8 @@ interface IndicatorDetailSheetProps {
 
 /**
  * Sheet único de detalhes de indicador — substitui os três modais divergentes
- * que existiam em Home, AssetListScreen e Favorites (via DetailsModal).
+ * que existiam em Home, AssetListScreen e na antiga tela de favoritos
+ * (via DetailsModal), aposentada no EC-105.
  *
  * As classes do NativeWind ficam só no layout: as de cor são espelho estático
  * do dark, e o CustomModal já pinta a superfície com o tema resolvido.
@@ -40,7 +46,7 @@ export default function IndicatorDetailSheet({
   onClose,
 }: IndicatorDetailSheetProps) {
   const t = useTheme();
-  const { favorites, toggleFavorite } = useFavoritesStore();
+  const { favorites } = useFavoritesStore();
 
   const [amount, setAmount] = useState("100");
   const [conversionResult, setConversionResult] = useState<number | null>(null);
@@ -66,7 +72,9 @@ export default function IndicatorDetailSheet({
 
   const handleToggleFavorite = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleFavorite(indicator.id);
+    // Este sheet é onde um resultado de busca remota é favoritado: o retrato
+    // guardado aqui é o que faz o ativo aparecer na faixa e no bloco da Home
+    toggleFavoriteWithSnapshot(indicator);
   };
 
   const handleConvert = async () => {

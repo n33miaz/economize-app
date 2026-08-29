@@ -20,6 +20,7 @@ export default function Indexes() {
     <AssetListScreen
       data={filteredIndexes}
       emptyMessage="Nenhum índice disponível no momento."
+      tab="indexes"
     />
   );
 }

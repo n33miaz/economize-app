@@ -1,6 +1,9 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { ArrowDownRight, ArrowUpRight, Banknote, Star } from "lucide-react-native";
+import ArrowDownRight from "lucide-react-native/dist/esm/icons/arrow-down-right";
+import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
+import Banknote from "lucide-react-native/dist/esm/icons/banknote";
+import Star from "lucide-react-native/dist/esm/icons/star";
 import Animated from "react-native-reanimated";
 import * as Haptics from "../utils/haptics";
 import { useTheme } from "../theme/ThemeProvider";
