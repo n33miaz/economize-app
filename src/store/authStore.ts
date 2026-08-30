@@ -109,6 +109,12 @@ export const useAuthStore = create(
         // store, e trazer o módulo no topo fecharia o ciclo na inicialização.
         const { useAccountsStore } = require("./accountsStore");
         useAccountsStore.getState().reset();
+
+        // Mesma razão e mesmo import tardio: as opções de IA guardam provedor,
+        // modelo e os 4 últimos dígitos da chave do dono anterior, e o
+        // `hasLoadedOnce` impediria a tela de perguntar de novo
+        const { useAiSettingsStore } = require("./aiSettingsStore");
+        useAiSettingsStore.getState().reset();
       },
 
       clearError: () => set({ error: null }),

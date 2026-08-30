@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAccountsStore } from "../store/accountsStore";
+import { useAiSettingsStore } from "../store/aiSettingsStore";
 import { useAuthStore } from "../store/authStore";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { useFavoritesStore } from "../store/favoritesStore";
@@ -47,6 +48,8 @@ export async function clearLocalData(): Promise<void> {
   // que não passam por aqui; a chamada explícita fica porque esta lista é o
   // inventário auditável do que morre com o aparelho.
   useAccountsStore.getState().reset();
+  // opções de IA: provedor, modelo e os 4 últimos dígitos da chave do usuário
+  useAiSettingsStore.getState().reset();
 
   useAuthStore.getState().logout();
 }

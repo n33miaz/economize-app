@@ -9,6 +9,7 @@ import { useIndicatorStore } from "../../store/indicatorStore";
 import { useAiStore } from "../../store/aiStore";
 import { useUserStore } from "../../store/userStore";
 import { useAccountsStore } from "../../store/accountsStore";
+import { useAiSettingsStore } from "../../store/aiSettingsStore";
 import { useBankStore } from "../../store/bankStore";
 import { useWalletStore } from "../../store/walletStore";
 import { useReportsStore } from "../../store/reportsStore";
@@ -160,6 +161,30 @@ describe("clearLocalData", () => {
     expect(contas.invoices).toEqual({});
     expect(contas.hasLoadedOnce).toBe(false);
   });
+
+  it("apaga as opções de IA, inclusive os 4 dígitos da chave do dono", async () => {
+    // Não é a chave inteira, mas é rastro do dono anterior — e o
+    // `hasLoadedOnce` impediria a tela de perguntar de novo à API
+    useAiSettingsStore.setState({
+      settings: {
+        source: "USER",
+        provider: "OPENROUTER",
+        model: "openai/gpt-4o-mini",
+        keyLast4: "a3c6",
+        keyStatus: "OK",
+        byokAvailable: true,
+        updatedAt: "2026-08-29T00:00:00Z",
+      },
+      hasLoadedOnce: true,
+    });
+
+    await clearLocalData();
+
+    const ia = useAiSettingsStore.getState();
+    expect(ia.settings).toBeNull();
+    expect(ia.catalog).toBeNull();
+    expect(ia.hasLoadedOnce).toBe(false);
+  });
 });
 
 describe("logout — as saídas que não passam pelo clearLocalData", () => {
@@ -178,5 +203,25 @@ describe("logout — as saídas que não passam pelo clearLocalData", () => {
     expect(useAccountsStore.getState().accounts).toEqual([]);
     expect(useAccountsStore.getState().byId.size).toBe(0);
     expect(useAccountsStore.getState().hasLoadedOnce).toBe(false);
+  });
+
+  it("sair pelo Perfil também zera as opções de IA", () => {
+    useAiSettingsStore.setState({
+      settings: {
+        source: "USER",
+        provider: "ANTHROPIC",
+        model: "claude-haiku-4-5",
+        keyLast4: "9f2a",
+        keyStatus: "OK",
+        byokAvailable: true,
+        updatedAt: "2026-08-29T00:00:00Z",
+      },
+      hasLoadedOnce: true,
+    });
+
+    useAuthStore.getState().logout();
+
+    expect(useAiSettingsStore.getState().settings).toBeNull();
+    expect(useAiSettingsStore.getState().hasLoadedOnce).toBe(false);
   });
 });
