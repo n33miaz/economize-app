@@ -1,22 +1,29 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   View,
   Text,
   FlatList,
+  Platform,
   TouchableOpacity,
   RefreshControl,
   Linking,
   ScrollView,
   useWindowDimensions,
 } from "react-native";
+// O `Linking` do react-native abre URL e escuta evento, mas não tem
+// `createURL` — o destino por plataforma (deep link no aparelho, origem na
+// web) só sai do expo-linking. Os dois convivem, com nomes distintos
+import * as ExpoLinking from "expo-linking";
 import ArrowDownLeft from "lucide-react-native/dist/esm/icons/arrow-down-left";
 import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
 import FileText from "lucide-react-native/dist/esm/icons/file-text";
 import Link2 from "lucide-react-native/dist/esm/icons/link-2";
+import Plus from "lucide-react-native/dist/esm/icons/plus";
 import RefreshCw from "lucide-react-native/dist/esm/icons/refresh-cw";
+import Unlink from "lucide-react-native/dist/esm/icons/unlink";
 import Tag from "lucide-react-native/dist/esm/icons/tag";
 import Upload from "lucide-react-native/dist/esm/icons/upload";
 import { PieChart } from "react-native-gifted-charts";
@@ -28,8 +35,9 @@ import type { BankTransaction } from "../services/api";
 import { useAccountsStore } from "../store/accountsStore";
 import { useBankStore } from "../store/bankStore";
 import { useCategoriesStore } from "../store/categoriesStore";
-import { useConnectorStore } from "../store/connectorStore";
+import { parsePluggyReturn, useConnectorStore } from "../store/connectorStore";
 import { useToastStore } from "../store/toastStore";
+import { askConfirm } from "../store/confirmStore";
 import PageContainer from "../components/PageContainer";
 import ActionRow from "../components/ActionRow";
 import AssistantFAB from "../components/AssistantFAB";
@@ -224,6 +232,12 @@ export default function BankIntegration() {
   const isSyncing = useConnectorStore((s) => s.isSyncing);
   const checkPluggy = useConnectorStore((s) => s.checkPluggy);
   const runPluggySync = useConnectorStore((s) => s.runPluggySync);
+  const pluggyItems = useConnectorStore((s) => s.items);
+  const fetchItems = useConnectorStore((s) => s.fetchItems);
+  const buildConnectUrl = useConnectorStore((s) => s.buildConnectUrl);
+  const finishConnect = useConnectorStore((s) => s.finishConnect);
+  const unlink = useConnectorStore((s) => s.unlink);
+  const isLinking = useConnectorStore((s) => s.isLinking);
   // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
   const { width: windowWidth } = useWindowDimensions();
   const chartWidth = Math.min(windowWidth - 80, MAX_CHART_WIDTH);
@@ -299,8 +313,96 @@ export default function BankIntegration() {
       // contas em cache: a chamada só sai na primeira tela que precisar do
       // mapa — o extrato devolve `accountId`, nunca o nome do cartão
       fetchAccounts();
-    }, [fetchTransactions, fetchCategories, checkPluggy, fetchAccounts]),
+      // conexões do usuário: a guarda de `enabled` mora no próprio store
+      fetchItems();
+    }, [
+      fetchTransactions,
+      fetchCategories,
+      checkPluggy,
+      fetchAccounts,
+      fetchItems,
+    ]),
   );
+
+  // EC-106: retorno da ponte do Pluggy Connect. O id vem no fragmento da URL —
+  // no aparelho pelo deep link `economize://`, na web pelo hash da própria
+  // página. Um caminho só de leitura para as duas plataformas.
+  const registrarRetorno = useCallback(
+    async (url: string | null | undefined) => {
+      const retorno = parsePluggyReturn(url);
+      if (!retorno) return;
+      if ("cancelado" in retorno) return; // fechar o widget não é erro
+      if ("erro" in retorno) {
+        showToast(retorno.erro, "error");
+        return;
+      }
+      if (await finishConnect(retorno.itemId)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast("Banco conectado. Sincronize para trazer as transações.", "success");
+      } else {
+        showToast(
+          useConnectorStore.getState().error || "Não foi possível conectar.",
+          "error",
+        );
+      }
+    },
+    [finishConnect, showToast],
+  );
+
+  useEffect(() => {
+    // Duas entradas: o app já estava aberto (evento) ou foi aberto pelo link
+    const sub = Linking.addEventListener("url", ({ url }) =>
+      registrarRetorno(url),
+    );
+    Linking.getInitialURL().then(registrarRetorno);
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      // Na web não há deep link: a ponte devolve para a própria origem e o
+      // id chega no hash. Limpo depois de ler para o F5 não reprocessar
+      const href = window.location.href;
+      if (href.includes("pluggy_item") || href.includes("pluggy_cancelado")) {
+        registrarRetorno(href);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+    return () => sub.remove();
+  }, [registrarRetorno]);
+
+  const handleConectarBanco = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // `createURL` resolve o destino por plataforma: deep link no aparelho,
+    // URL da origem na web
+    const destino = ExpoLinking.createURL("/");
+    const url = await buildConnectUrl(destino);
+    if (!url) {
+      showToast(
+        useConnectorStore.getState().error || "Não foi possível iniciar.",
+        "error",
+      );
+      return;
+    }
+    Linking.openURL(url);
+  };
+
+  const handleDesconectar = (id: string, nome: string | null) => {
+    askConfirm({
+      title: "Desconectar este banco?",
+      message: `O Economize! para de buscar novos lançamentos de ${
+        nome || "esta conexão"
+      }. O que já foi importado continua no seu extrato.`,
+      confirmLabel: "Desconectar",
+      destructive: true,
+      onConfirm: async () => {
+        if (await unlink(id)) {
+          showToast("Banco desconectado.", "success");
+        } else {
+          showToast(
+            useConnectorStore.getState().error || "Não foi possível desconectar.",
+            "error",
+          );
+        }
+      },
+    });
+  };
 
   const handlePluggySync = async () => {
     try {
@@ -799,36 +901,82 @@ export default function BankIntegration() {
                   </Text>
                 </View>
 
-                {pluggy.configured ? (
-                  <>
-                    <Text className="text-xs text-textSecondary mb-3">
-                      {`${pluggy.itemCount} ${plural(pluggy.itemCount, "conexão ativa", "conexões ativas")}. A sincronização traz os últimos 90 dias e passa pelo mesmo pipeline do extrato — nada duplica.`}
-                    </Text>
-                    <TouchableOpacity
-                      className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3"
-                      onPress={handlePluggySync}
-                      disabled={isSyncing}
-                      accessibilityLabel="Sincronizar contas do Meu Pluggy"
-                      accessibilityRole="button"
-                      activeOpacity={0.85}
-                      style={{ opacity: isSyncing ? 0.6 : 1 }}
-                    >
-                      {isSyncing ? (
-                        <ActivityIndicator size="small" color={t.accent.neon} />
-                      ) : (
-                        <RefreshCw size={16} color={t.accent.neon} />
-                      )}
-                      <Text className="text-accent font-bold text-sm ml-2">
-                        {isSyncing ? "Sincronizando…" : "Sincronizar agora"}
+                <Text className="text-xs text-textSecondary mb-3">
+                  {pluggyItems.length > 0
+                    ? `${pluggyItems.length} ${plural(pluggyItems.length, "banco conectado", "bancos conectados")}. A sincronização traz os últimos 90 dias e passa pelo mesmo pipeline do extrato — nada duplica.`
+                    : "Conecte seu banco e o Economize! busca os lançamentos sozinho, sem você baixar extrato."}
+                </Text>
+
+                {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
+                    conectar deixou de ser configuração de servidor */}
+                {pluggyItems.map((conexao) => (
+                  <View
+                    key={conexao.id}
+                    className="flex-row items-center justify-between bg-elevated border border-border rounded-2xl px-3 py-3 mb-2"
+                  >
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-bold text-textPrimary" numberOfLines={1}>
+                        {conexao.connectorName || "Conexão bancária"}
                       </Text>
+                      <Text className="text-xs text-textTertiary mt-0.5">
+                        {conexao.lastSyncedAt
+                          ? `Sincronizado em ${formatDayMonthShort(conexao.lastSyncedAt)}`
+                          : "Ainda não sincronizado"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleDesconectar(conexao.id, conexao.connectorName)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Desconectar ${conexao.connectorName || "conexão bancária"}`}
+                      hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                    >
+                      <Unlink size={16} color={t.text.tertiary} />
                     </TouchableOpacity>
-                  </>
-                ) : (
-                  <Text className="text-xs text-textSecondary">
-                    {pluggy.owner === false
-                      ? "As credenciais do conector pertencem a outra conta."
-                      : "Conector ligado, mas sem credenciais. Configure PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET e PLUGGY_ITEM_IDS no servidor."}
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3 mt-1"
+                  onPress={handleConectarBanco}
+                  disabled={isLinking}
+                  accessibilityLabel="Conectar um banco pelo Open Finance"
+                  accessibilityRole="button"
+                  activeOpacity={0.85}
+                  style={{ opacity: isLinking ? 0.6 : 1 }}
+                >
+                  {isLinking ? (
+                    <ActivityIndicator size="small" color={t.accent.neon} />
+                  ) : (
+                    <Plus size={16} color={t.accent.neon} />
+                  )}
+                  <Text className="text-accent font-bold text-sm ml-2">
+                    {isLinking
+                      ? "Abrindo…"
+                      : pluggyItems.length > 0
+                        ? "Conectar outro banco"
+                        : "Conectar meu banco"}
                   </Text>
+                </TouchableOpacity>
+
+                {pluggyItems.length > 0 && (
+                  <TouchableOpacity
+                    className="flex-row items-center justify-center border border-border rounded-full px-4 py-3 mt-2"
+                    onPress={handlePluggySync}
+                    disabled={isSyncing}
+                    accessibilityLabel="Sincronizar contas do Meu Pluggy"
+                    accessibilityRole="button"
+                    activeOpacity={0.85}
+                    style={{ opacity: isSyncing ? 0.6 : 1 }}
+                  >
+                    {isSyncing ? (
+                      <ActivityIndicator size="small" color={t.text.secondary} />
+                    ) : (
+                      <RefreshCw size={16} color={t.text.secondary} />
+                    )}
+                    <Text className="text-textPrimary font-bold text-sm ml-2">
+                      {isSyncing ? "Sincronizando…" : "Sincronizar agora"}
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </View>
             )}
