@@ -422,6 +422,52 @@ export const syncPluggy = async (
   return response.data;
 };
 
+/** Uma conexão de banco do usuário. `itemId` é o id no agregador. */
+export interface PluggyItem {
+  id: string;
+  itemId: string;
+  connectorId: number | null;
+  connectorName: string | null;
+  createdAt: string;
+  lastSyncedAt: string | null;
+}
+
+/**
+ * Token de sessão do Pluggy Connect, com validade curta. Ele NÃO dá acesso a
+ * dados de outros usuários e nasce amarrado a esta conta — por isso pode
+ * trafegar até o navegador que abre o widget.
+ */
+export const createPluggyConnectToken = async (): Promise<string> => {
+  const response = await api.post<{ accessToken: string }>(
+    "/connectors/pluggy/connect-token",
+  );
+  return response.data.accessToken;
+};
+
+export const listPluggyItems = async (): Promise<PluggyItem[]> => {
+  const response = await api.get<PluggyItem[]>("/connectors/pluggy/items");
+  return response.data;
+};
+
+/**
+ * Registra a conexão recém-criada no Pluggy Connect. O servidor confere que o
+ * item pertence a esta sessão antes de gravar: item de outra sessão responde
+ * 404 e item já registrado responde 409.
+ */
+export const registerPluggyItem = async (
+  itemId: string,
+): Promise<PluggyItem> => {
+  const response = await api.post<PluggyItem>("/connectors/pluggy/items", {
+    itemId,
+  });
+  return response.data;
+};
+
+/** Desvincula do app. Não apaga o histórico já importado nem o item no agregador. */
+export const unlinkPluggyItem = async (id: string): Promise<void> => {
+  await api.delete(`/connectors/pluggy/items/${id}`);
+};
+
 // --- Contas de origem e faturas (EC-113) ---
 
 /**
