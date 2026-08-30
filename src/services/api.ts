@@ -890,3 +890,92 @@ export const updateUserMe = async (name: string): Promise<UserMe> => {
   const response = await api.patch<UserMe>("/users/me", { name });
   return response.data;
 };
+
+// --- IA: provedor e chave própria do usuário (EC-107) ---
+
+export type AiProviderId = "GEMINI" | "OPENAI" | "ANTHROPIC" | "OPENROUTER";
+
+/** OK: chave própria legível · UNREADABLE: cadastrada mas ilegível com a
+ *  chave-mestra atual (recadastrar) · SERVER_KEY: a conta usa a do servidor. */
+export type AiKeyStatus = "OK" | "UNREADABLE" | "SERVER_KEY";
+
+/** Nulo quando o teste passa. Classificado pela API — o app decide o texto. */
+export type AiTestReason = "AUTH" | "MODEL" | "RATE_LIMIT" | "NETWORK" | "PROVIDER";
+
+export interface AiProviderOption {
+  id: AiProviderId;
+  label: string;
+  defaultModel: string;
+  models: string[];
+  /** Página onde o usuário emite a própria chave. */
+  apiKeyUrl: string;
+}
+
+export interface AiProviderCatalog {
+  /** Falso quando o servidor está sem chave-mestra: a opção some da tela. */
+  byokAvailable: boolean;
+  providers: AiProviderOption[];
+}
+
+export interface AiSettings {
+  source: "USER" | "SERVER";
+  provider: AiProviderId;
+  model: string;
+  /** Só os 4 últimos caracteres. A chave nunca volta da API. */
+  keyLast4: string | null;
+  keyStatus: AiKeyStatus;
+  byokAvailable: boolean;
+  updatedAt: string | null;
+}
+
+export interface AiKeyTestResult {
+  ok: boolean;
+  provider: AiProviderId;
+  model: string;
+  reason: AiTestReason | null;
+  /** Texto pronto para exibir, escrito pela API — nunca o corpo do provedor. */
+  message: string;
+  latencyMs: number;
+}
+
+export const getAiProviders = async (): Promise<AiProviderCatalog> => {
+  const response = await api.get<AiProviderCatalog>("/ai/providers");
+  return response.data;
+};
+
+export const getAiSettings = async (): Promise<AiSettings> => {
+  const response = await api.get<AiSettings>("/ai/settings");
+  return response.data;
+};
+
+export const saveAiSettings = async (
+  provider: AiProviderId,
+  model: string,
+  apiKey: string,
+): Promise<AiSettings> => {
+  const response = await api.put<AiSettings>("/ai/settings", {
+    provider,
+    model,
+    apiKey,
+  });
+  return response.data;
+};
+
+/** Remove a chave própria; a conta volta para a chave do servidor. */
+export const deleteAiSettings = async (): Promise<void> => {
+  await api.delete("/ai/settings");
+};
+
+/**
+ * Testa uma chave SEM gravá-la. `ok: false` chega com HTTP 200 — é resultado de
+ * teste, não erro de transporte, e tratar como exceção esconderia a mensagem
+ * que explica o motivo. Sem `apiKey`, testa a chave já cadastrada.
+ */
+export const testAiKey = async (params: {
+  provider?: AiProviderId;
+  model?: string;
+  apiKey?: string;
+}): Promise<AiKeyTestResult> => {
+  const response = await api.post<AiKeyTestResult>("/ai/settings/test", params);
+  return response.data;
+};
