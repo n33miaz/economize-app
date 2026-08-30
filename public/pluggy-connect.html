@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conectar banco — Economize!</title>
+<!--
+  Ponte para o Pluggy Connect (EC-106).
+
+  POR QUE UMA PÁGINA, E NÃO UM SDK NO APP. O Pluggy Connect não tem versão
+  hospedada: só existe como SDK (React, ReactNative, Flutter, HTML+JS). Trazer o
+  SDK nativo para dentro do app significaria código nativo novo num projeto que
+  já sangrou com NativeWind, css-interop e Reanimated — e que ainda carrega o
+  `mock-worklets` como bomba-relógio. Esta página isola a dependência: o script
+  do Pluggy roda AQUI, num documento separado, e o bundle do app não muda.
+
+  Ela é publicada junto do site (o Expo copia `public/` para a raiz do build),
+  então mora no mesmo domínio já liberado no CORS.
+
+  O TOKEN VIAJA NO FRAGMENTO (#), NUNCA NA QUERY. Fragmento não é enviado ao
+  servidor, não entra em log de acesso e não vaza no cabeçalho Referer. O token
+  é de sessão, tem validade curta e é amarrado a uma conta só — mas isso é
+  motivo para cuidar dele, não para relaxar.
+-->
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    background:#0F0E0B;color:#EAE7DE;
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:24px;text-align:center}
+  .caixa{max-width:380px}
+  h1{font-size:19px;margin:0 0 8px;font-weight:650}
+  p{color:#948F82;font-size:14px;margin:0 0 18px}
+  .erro{color:#F87171}
+  a.btn{display:inline-block;background:#F2C14E;color:#0F0E0B;text-decoration:none;
+    padding:12px 22px;border-radius:14px;font-weight:700;font-size:14px}
+  .pote{width:56px;height:56px;margin:0 auto 18px;display:block}
+</style>
+</head>
+<body>
+<div class="caixa">
+  <svg class="pote" viewBox="0 0 64 64" aria-hidden="true">
+    <rect fill="none" stroke="#F2C14E" stroke-width="4" stroke-linejoin="round"
+          x="14" y="18" width="36" height="38" rx="11"/>
+    <path fill="none" stroke="#F2C14E" stroke-width="4" stroke-linecap="round" d="M23 15h18"/>
+  </svg>
+  <h1 id="titulo">Abrindo a conexão segura…</h1>
+  <p id="msg">Escolha seu banco e autorize o acesso. O Economize! recebe só a leitura das transações.</p>
+  <a id="voltar" class="btn" style="display:none" href="#">Voltar ao aplicativo</a>
+</div>
+
+<script src="https://cdn.pluggy.ai/pluggy-connect/v2.8.2/pluggy-connect.js"></script>
+<script>
+(function () {
+  var titulo = document.getElementById("titulo");
+  var msg = document.getElementById("msg");
+  var voltar = document.getElementById("voltar");
+
+  // Fragmento, não query — ver o comentário do topo
+  var p = new URLSearchParams(location.hash.replace(/^#/, ""));
+  var token = p.get("token");
+  var destino = p.get("redirect");
+
+  function falhar(texto) {
+    titulo.textContent = "Não deu para conectar";
+    titulo.className = "erro";
+    msg.textContent = texto;
+    if (destino) mostrarVolta("erro=" + encodeURIComponent(texto));
+  }
+
+  // O retorno também vai no fragmento: o id do item identifica uma conexão
+  // bancária e não tem por que aparecer em log de servidor nenhum
+  function mostrarVolta(frag) {
+    voltar.href = destino + "#" + frag;
+    voltar.style.display = "inline-block";
+  }
+
+  function concluir(frag) {
+    if (!destino) {
+      titulo.textContent = "Conta conectada";
+      msg.textContent = "Pode fechar esta janela e voltar ao aplicativo.";
+      return;
+    }
+    mostrarVolta(frag);
+    // Tenta sozinho; o botão fica como plano B quando o navegador bloqueia
+    // a navegação automática para esquema de app
+    location.href = voltar.href;
+  }
+
+  if (!token) {
+    falhar("Faltou o token da sessão. Volte ao aplicativo e tente de novo.");
+    return;
+  }
+  if (typeof PluggyConnect === "undefined") {
+    falhar("Não foi possível carregar o conector. Verifique sua conexão.");
+    return;
+  }
+
+  var widget = new PluggyConnect({
+    connectToken: token,
+    includeSandbox: false,
+    onSuccess: function (dados) {
+      // O SDK entrega o item criado; o id é o que o servidor precisa para
+      // amarrar a conexão a esta conta
+      var id = (dados && dados.item && dados.item.id) || (dados && dados.itemId);
+      if (!id) {
+        falhar("O conector não devolveu a identificação da conexão.");
+        return;
+      }
+      titulo.textContent = "Conta conectada";
+      msg.textContent = "Voltando ao aplicativo…";
+      concluir("pluggy_item=" + encodeURIComponent(id));
+    },
+    onError: function (erro) {
+      falhar((erro && erro.message) || "O banco recusou a conexão.");
+    },
+    onClose: function () {
+      // Fechar sem concluir é escolha do usuário, não erro: volta em silêncio
+      if (destino) concluir("pluggy_cancelado=1");
+    },
+  });
+  widget.init();
+})();
+</script>
+</body>
+</html>
