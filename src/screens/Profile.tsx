@@ -22,6 +22,7 @@ import Mail from "lucide-react-native/dist/esm/icons/mail";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
 import ReceiptText from "lucide-react-native/dist/esm/icons/receipt-text";
 import SlidersHorizontal from "lucide-react-native/dist/esm/icons/sliders-horizontal";
+import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import SunMoon from "lucide-react-native/dist/esm/icons/sun-moon";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
 import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
@@ -689,6 +690,12 @@ export default function Profile() {
             label="Alterar senha"
             description="Atualize sua senha de acesso"
             onPress={() => navigation.navigate("Alterar Senha" as never)}
+          />
+          <ActionRow
+            Icon={Sparkles}
+            label="Opções de IA"
+            description="Provedor do assistente e sua própria chave"
+            onPress={() => navigation.navigate("Opções de IA" as never)}
           />
           <ActionRow
             Icon={SlidersHorizontal}

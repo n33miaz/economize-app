@@ -65,6 +65,7 @@ import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
 import AdvancedOptions from "../screens/AdvancedOptions";
+import AiSettings from "../screens/AiSettings";
 import Reports from "../screens/Reports";
 import Analytics from "../screens/Analytics";
 import Categories from "../screens/Categories";
@@ -398,6 +399,13 @@ function AppStack() {
       <Stack.Screen
         name={APP_ROUTES.avancado}
         component={AdvancedOptions}
+        options={ephemeralTransition}
+      />
+      {/* EC-107: chave própria de IA. Fica fora do trilho lateral de propósito
+          — é ajuste de conta, não destino de navegação do dia a dia */}
+      <Stack.Screen
+        name={APP_ROUTES.opcoesIa}
+        component={AiSettings}
         options={ephemeralTransition}
       />
       <Stack.Screen

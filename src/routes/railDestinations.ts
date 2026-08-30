@@ -249,6 +249,9 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   [APP_ROUTES.revisao]: null,
   [APP_ROUTES.agendamento]: null,
   [APP_ROUTES.alterarSenha]: null,
+  // Ajuste de conta, aberto pelo Perfil — não é destino do trilho, então a
+  // pílula fica com o destino de onde o usuário veio
+  [APP_ROUTES.opcoesIa]: null,
 };
 
 /**
