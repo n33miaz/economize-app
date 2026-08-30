@@ -27,7 +27,8 @@ interface ReportsState {
     startDate: string,
     endDate: string,
   ) => Promise<Report | null>;
-  remove: (id: string) => Promise<void>;
+  /** `true` quando o servidor confirmou a exclusão; a tela decide o que dizer. */
+  remove: (id: string) => Promise<boolean>;
 }
 
 export const useReportsStore = create<ReportsState>((set, get) => ({
@@ -70,9 +71,14 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   remove: async (id) => {
     try {
       await api.delete(`/reports/${id}`);
-      set({ items: get().items.filter((r) => r.id !== id) });
+      // Limpar o erro no sucesso não é detalhe: sem isso, uma falha antiga
+      // ficava grudada no estado e qualquer tela que lesse `error` para decidir
+      // o que dizer continuava anunciando fracasso depois de dar certo
+      set({ items: get().items.filter((r) => r.id !== id), error: null });
+      return true;
     } catch (e: any) {
       set({ error: "Falha ao remover relatório" });
+      return false;
     }
   },
 }));

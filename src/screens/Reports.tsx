@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import FileText from "lucide-react-native/dist/esm/icons/file-text";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
+import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
@@ -22,6 +23,7 @@ import {
   useReportsStore,
 } from "../store/reportsStore";
 import { useToastStore } from "../store/toastStore";
+import { askConfirm } from "../store/confirmStore";
 import {
   usePreferencesStore,
   selectCycleAnchorDay,
@@ -51,8 +53,37 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
   const t = useTheme();
   // Entrada em cascata acompanha a posição do card na lista
   const { listItemEntering } = useMotionPresets();
+  const remove = useReportsStore((s) => s.remove);
+  const showToast = useToastStore((s) => s.showToast);
   const saldo = item.totalIncome - item.totalExpense;
   const positivo = saldo >= 0;
+
+  // EC-038: o endpoint com dono validado e o `remove` do store existiam desde
+  // 2026-08-10; faltava só quem chamasse. Excluir é destrutivo e sem desfazer,
+  // então passa pelo diálogo — nunca direto no toque
+  const excluir = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    askConfirm({
+      title: "Excluir este relatório?",
+      message: `O relatório de ${formatDayMonthShort(item.startDate)} a ${formatDayMonthShort(
+        item.endDate,
+      )} será apagado. Não dá para desfazer, mas você pode gerar de novo.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+      onConfirm: async () => {
+        // O retorno é a resposta do servidor, não a leitura de um estado que
+        // pode carregar erro de uma tentativa anterior
+        if (await remove(item.id)) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast("Relatório excluído.", "success");
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          showToast("Não foi possível excluir o relatório.", "error");
+        }
+      },
+    });
+  };
+
   return (
     <Animated.View
       entering={listItemEntering(index)}
@@ -83,13 +114,28 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
         >
           {PERIOD_LABELS[item.period]}
         </Text>
-        <Text style={{ color: t.text.secondary, fontSize: 12 }}>
-          {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
-              pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
-              ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
-          {formatDayMonthShort(item.startDate)} →{" "}
-          {formatDayMonthShort(item.endDate)}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={{ color: t.text.secondary, fontSize: 12 }}>
+            {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
+                pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
+                ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
+            {formatDayMonthShort(item.startDate)} →{" "}
+            {formatDayMonthShort(item.endDate)}
+          </Text>
+          <TouchableOpacity
+            onPress={excluir}
+            accessibilityRole="button"
+            accessibilityLabel={`Excluir relatório de ${formatDayMonthShort(
+              item.startDate,
+            )} a ${formatDayMonthShort(item.endDate)}`}
+            // O ícone tem 16 px para não competir com os números do card; o
+            // hitSlop leva a área de toque aos 44 px que a a11y exige
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            style={{ marginLeft: spacing[3] }}
+          >
+            <Trash2 size={16} color={t.text.tertiary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Três valores dividem a largura do card, e o card já pode estar numa
