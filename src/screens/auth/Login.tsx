@@ -1,15 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
+import Animated, { FadeIn } from "react-native-reanimated";
 
+import BrandOpening from "../../components/BrandOpening";
 import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore } from "../../store/authStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
@@ -25,6 +26,25 @@ export default function Login({ navigation }: any) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login, completeLogin, isLoading, error, clearError } = useAuthStore();
+
+  // EC-148: a abertura roda enquanto o app termina de se preparar. Aqui não há
+  // métrica para buscar (ninguém entrou ainda), então o "pronto" é o próprio
+  // fim do preparo — e o teto de tempo garante que a animação jamais vire a
+  // razão da espera, que é a restrição dura do pedido.
+  const [pronto, setPronto] = useState(false);
+  const [revelado, setRevelado] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setPronto(true), 420);
+    // Rede de segurança: conteúdo NUNCA pode depender só de a animação
+    // terminar. Se o callback não vier — quadro perdido, teste, plataforma que
+    // não anima —, a tela aparece do mesmo jeito
+    const resgate = setTimeout(() => setRevelado(true), 2600);
+    return () => {
+      clearTimeout(id);
+      clearTimeout(resgate);
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) return;
@@ -108,22 +128,25 @@ export default function Login({ navigation }: any) {
       style={{ width: "100%", maxWidth: AUTH_MAX_WIDTH, alignSelf: "center" }}
     >
       <View className="items-center mb-10">
-        <View className="w-24 h-24 bg-accentMuted rounded-3xl justify-center items-center mb-4 overflow-hidden">
-          <Image
-            // logo-512 e não logo.png: o original é 2048² com 6 MB, baixado
-            // inteiro na primeira tela do site para exibir 64px
-            source={require("../../../assets/logo-512.png")}
-            // Dimensão em style, não em className: na web o NativeWind não
-            // aplica largura/altura em <Image> e ela vinha no tamanho natural
-            // (512px), cobrindo o título inteiro
-            style={{ width: 64, height: 64 }}
-            resizeMode="contain"
+        {/* O pote deixou de ser um PNG: é a própria marca desenhada, e o nível
+            dela passa a contar o resultado do ciclo depois do login */}
+        <View className="w-24 h-24 bg-accentMuted rounded-3xl justify-center items-center mb-4">
+          <BrandOpening
+            ready={pronto}
+            size={64}
+            onSettled={() => setRevelado(true)}
           />
         </View>
-        <Text className="text-3xl font-bold text-textPrimary">Economize!</Text>
-        <Text className="text-textSecondary mt-2">
-          Acesse sua conta para continuar
-        </Text>
+        {revelado && (
+          <Animated.View entering={FadeIn.duration(280)} className="items-center">
+            <Text className="text-3xl font-bold text-textPrimary">
+              Economize!
+            </Text>
+            <Text className="text-textSecondary mt-2">
+              Acesse sua conta para continuar
+            </Text>
+          </Animated.View>
+        )}
       </View>
 
       {error && (
