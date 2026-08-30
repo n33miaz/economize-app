@@ -5,11 +5,11 @@
     "scheme": "economize",
     "version": "2.1.0",
     "orientation": "portrait",
-    "icon": "./assets/logo-splash.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "jsEngine": "hermes",
     "splash": {
-      "image": "./assets/logo-splash.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#0F0E0B"
     },
@@ -20,7 +20,7 @@
     "android": {
       "package": "com.n33miaz.economize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo-splash.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F0E0B"
       }
     },
