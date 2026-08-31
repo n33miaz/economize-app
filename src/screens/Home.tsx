@@ -42,6 +42,8 @@ import { useWalletStore } from "../store/walletStore";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { useRecurrenceStore } from "../store/recurrenceStore";
+import { useWishStore } from "../store/wishStore";
+import { describeSalaryTiming } from "../utils/wishes";
 import { useReviewStore } from "../store/reviewStore";
 
 import BlockGrid from "../components/BlockGrid";
@@ -137,6 +139,10 @@ export default function Home() {
   const recurringSeries = useRecurrenceStore((s) => s.series);
   const forecast = useRecurrenceStore((s) => s.forecast);
   const fetchRecurrences = useRecurrenceStore((s) => s.fetchSeries);
+  // EC-136: o mesmo cartão de comprometimento ganha a leitura ancorada no
+  // salário. Dois cartões seriam dois números sobre a mesma coisa
+  const committed = useWishStore((s) => s.committed);
+  const fetchCommitted = useWishStore((s) => s.fetchCommitted);
 
   useEffect(() => {
     fetchIndicators();
@@ -151,7 +157,8 @@ export default function Home() {
       fetchQueue();
       fetchHomeMonthly();
       fetchRecurrences();
-    }, [fetchQueue, fetchHomeMonthly, fetchRecurrences]),
+      fetchCommitted();
+    }, [fetchQueue, fetchHomeMonthly, fetchRecurrences, fetchCommitted]),
   );
 
   const onRefresh = useCallback(async () => {
@@ -797,6 +804,30 @@ export default function Home() {
                       }}
                     >
                       A próxima é {commitment.nextName}
+                    </Text>
+                  ) : null}
+                  {/* A leitura que faltava: não "em 30 dias", mas "do dinheiro
+                      que ainda vai entrar". É a pergunta do fim do mês */}
+                  {committed?.salaryKnown && committed.salaryDate ? (
+                    <Text
+                      style={{
+                        color: t.text.secondary,
+                        fontSize: 12,
+                        marginTop: spacing[1],
+                      }}
+                    >
+                      {describeSalaryTiming(
+                        committed.daysUntilSalary,
+                        committed.salaryDate,
+                      )}
+                      {": "}
+                      {showBalance
+                        ? formatBRL(committed.committedAfterSalary)
+                        : HIDDEN}{" "}
+                      já têm dono
+                      {committed.free != null
+                        ? ` · sobram ${showBalance ? formatBRL(committed.free) : HIDDEN}`
+                        : ""}
                     </Text>
                   ) : null}
                   {riskMonth ? (
