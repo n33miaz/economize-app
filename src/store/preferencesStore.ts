@@ -36,6 +36,11 @@ interface PreferencesState {
    * conhecido é que a escolha não acompanha a troca de aparelho.
    */
   cycleAnchorDay: number;
+  /**
+   * Se o anúncio do pote vivo (EC-147) já foi mostrado. Mudança silenciosa em
+   * ícone lê como bug: ninguém descobre sozinho que o pote conta o mês.
+   */
+  potAnnouncementSeen: boolean;
   hasHydrated: boolean;
 
   setTheme: (theme: ThemeMode) => void;
@@ -50,6 +55,7 @@ interface PreferencesState {
   setNewsRegion: (region: NewsRegion) => void;
   setNewsCategory: (category: NewsCategory) => void;
   setCycleAnchorDay: (day: number) => void;
+  setPotAnnouncementSeen: (seen: boolean) => void;
   reset: () => void;
 }
 
@@ -65,6 +71,7 @@ const initialState = {
   newsRegion: "all" as NewsRegion,
   newsCategory: "all" as NewsCategory,
   cycleAnchorDay: DEFAULT_CYCLE_ANCHOR_DAY,
+  potAnnouncementSeen: false,
 };
 
 export const usePreferencesStore = create(
@@ -89,6 +96,7 @@ export const usePreferencesStore = create(
       setNewsCategory: (newsCategory) => set({ newsCategory }),
       // Clampa na entrada: valor fora de 1..31 viraria janela sem sentido
       setCycleAnchorDay: (day) => set({ cycleAnchorDay: clampAnchorDay(day) }),
+      setPotAnnouncementSeen: (potAnnouncementSeen) => set({ potAnnouncementSeen }),
       reset: () => set({ ...initialState }),
     }),
     {
