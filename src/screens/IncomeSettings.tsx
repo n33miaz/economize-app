@@ -12,7 +12,7 @@ import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import { formatBRL } from "../utils/money";
-import { incomeKindLabel } from "../utils/wishes";
+import { formatHours, incomeKindLabel } from "../utils/wishes";
 import type { IncomeSource, IncomeSourceKind } from "../services/api";
 
 import ScreenHeader from "../components/ScreenHeader";
@@ -22,6 +22,14 @@ import CustomModal from "../components/CustomModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
+
+// O CustomModal entrega só a folha; o respiro lateral é de quem usa, como em
+// Categorias e Carteira. Sem ele o conteúdo cola nas duas bordas.
+const SHEET_PADDING = {
+  paddingHorizontal: spacing[5],
+  paddingTop: spacing[3],
+  paddingBottom: spacing[6],
+} as const;
 
 const KINDS: IncomeSourceKind[] = [
   "SALARY",
@@ -229,7 +237,7 @@ export default function IncomeSettings() {
                   </Text>
                   <Text className="text-xs text-textSecondary mt-0.5">
                     {perfil
-                      ? `${perfil.daysPerWeek} dias por semana · ${perfil.hoursPerDay} h por dia · ${perfil.hoursPerMonth} h por mês`
+                      ? `${perfil.daysPerWeek} dias por semana · ${formatHours(perfil.hoursPerDay)} por dia · ${formatHours(perfil.hoursPerMonth)} por mês`
                       : "Sem a jornada não dá para dizer quanto vale a sua hora"}
                   </Text>
                 </View>
@@ -384,98 +392,102 @@ export default function IncomeSettings() {
 
       {/* -------------------------------------------------- nova fonte */}
       <CustomModal visible={formOpen} onClose={() => setFormOpen(false)}>
-        <Text className="text-xl font-bold text-textPrimary mb-1">
-          Nova fonte de renda
-        </Text>
-        <Text className="text-xs text-textSecondary mb-4">
-          O dia importa: o vale cai antes do salário, e o app precisa saber disso
-          para fechar o mês certo.
-        </Text>
-
-        <View className="flex-row flex-wrap mb-2">
-          {KINDS.map((k) => (
-            <KindChip
-              key={k}
-              kind={k}
-              selected={kind === k}
-              onPress={() => setKind(k)}
-            />
-          ))}
-        </View>
-
-        <View className="mb-4">
-          <FloatingLabelInput label="Nome" value={nome} onChangeText={setNome} />
-        </View>
-        <View className="mb-4">
-          <FloatingLabelInput
-            label="Quanto costuma cair"
-            value={valor}
-            onChangeText={setValor}
-            keyboardType="decimal-pad"
-          />
-        </View>
-        <View className="mb-5">
-          <FloatingLabelInput
-            label="Dia do mês (opcional)"
-            value={dia}
-            onChangeText={setDia}
-            keyboardType="number-pad"
-          />
-        </View>
-
-        <Pressable
-          onPress={salvarFonte}
-          disabled={isSaving}
-          accessibilityRole="button"
-          accessibilityLabel="Salvar fonte de renda"
-          className="h-14 rounded-xl items-center justify-center"
-          style={{ backgroundColor: t.accent.neon, opacity: isSaving ? 0.6 : 1 }}
-        >
-          <Text className="font-bold text-base" style={{ color: t.text.inverse }}>
-            Salvar
+        <View style={SHEET_PADDING}>
+          <Text className="text-xl font-bold text-textPrimary mb-1">
+            Nova fonte de renda
           </Text>
-        </Pressable>
+          <Text className="text-xs text-textSecondary mb-4">
+            O dia importa: o vale cai antes do salário, e o app precisa saber disso
+            para fechar o mês certo.
+          </Text>
+
+          <View className="flex-row flex-wrap mb-2">
+            {KINDS.map((k) => (
+              <KindChip
+                key={k}
+                kind={k}
+                selected={kind === k}
+                onPress={() => setKind(k)}
+              />
+            ))}
+          </View>
+
+          <View className="mb-4">
+            <FloatingLabelInput label="Nome" value={nome} onChangeText={setNome} />
+          </View>
+          <View className="mb-4">
+            <FloatingLabelInput
+              label="Quanto costuma cair"
+              value={valor}
+              onChangeText={setValor}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          <View className="mb-5">
+            <FloatingLabelInput
+              label="Dia do mês (opcional)"
+              value={dia}
+              onChangeText={setDia}
+              keyboardType="number-pad"
+            />
+          </View>
+
+          <Pressable
+            onPress={salvarFonte}
+            disabled={isSaving}
+            accessibilityRole="button"
+            accessibilityLabel="Salvar fonte de renda"
+            className="h-14 rounded-xl items-center justify-center"
+            style={{ backgroundColor: t.accent.neon, opacity: isSaving ? 0.6 : 1 }}
+          >
+            <Text className="font-bold text-base" style={{ color: t.text.inverse }}>
+              Salvar
+            </Text>
+          </Pressable>
+        </View>
       </CustomModal>
 
       {/* ----------------------------------------------------- jornada */}
       <CustomModal visible={jornadaOpen} onClose={() => setJornadaOpen(false)}>
-        <Text className="text-xl font-bold text-textPrimary mb-1">
-          Sua jornada
-        </Text>
-        <Text className="text-xs text-textSecondary mb-5">
-          É o que transforma o seu salário em valor por hora — e o preço de um
-          desejo em tempo de vida.
-        </Text>
-
-        <View className="mb-4">
-          <FloatingLabelInput
-            label="Dias por semana"
-            value={dias}
-            onChangeText={setDias}
-            keyboardType="number-pad"
-          />
-        </View>
-        <View className="mb-5">
-          <FloatingLabelInput
-            label="Horas por dia"
-            value={horas}
-            onChangeText={setHoras}
-            keyboardType="decimal-pad"
-          />
-        </View>
-
-        <Pressable
-          onPress={salvarJornada}
-          disabled={isSaving}
-          accessibilityRole="button"
-          accessibilityLabel="Salvar jornada"
-          className="h-14 rounded-xl items-center justify-center"
-          style={{ backgroundColor: t.accent.neon, opacity: isSaving ? 0.6 : 1 }}
-        >
-          <Text className="font-bold text-base" style={{ color: t.text.inverse }}>
-            Salvar
+        <View style={SHEET_PADDING}>
+          <Text className="text-xl font-bold text-textPrimary mb-1">
+            Sua jornada
           </Text>
-        </Pressable>
+          <Text className="text-xs text-textSecondary mb-5">
+            É o que transforma o seu salário em valor por hora — e o preço de um
+            desejo em tempo de vida.
+          </Text>
+
+          <View className="mb-4">
+            <FloatingLabelInput
+              label="Dias por semana"
+              value={dias}
+              onChangeText={setDias}
+              keyboardType="number-pad"
+            />
+          </View>
+          <View className="mb-5">
+            <FloatingLabelInput
+              label="Horas por dia"
+              value={horas}
+              onChangeText={setHoras}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          <Pressable
+            onPress={salvarJornada}
+            disabled={isSaving}
+            accessibilityRole="button"
+            accessibilityLabel="Salvar jornada"
+            className="h-14 rounded-xl items-center justify-center"
+            style={{ backgroundColor: t.accent.neon, opacity: isSaving ? 0.6 : 1 }}
+          >
+            <Text className="font-bold text-base" style={{ color: t.text.inverse }}>
+              Salvar
+            </Text>
+          </Pressable>
+        </View>
       </CustomModal>
     </View>
   );

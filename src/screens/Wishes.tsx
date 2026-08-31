@@ -33,6 +33,14 @@ import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import WishCard from "../components/WishCard";
 
+// O CustomModal entrega só a folha; o respiro lateral é de quem usa, como em
+// Categorias e Carteira. Sem ele o conteúdo cola nas duas bordas.
+const SHEET_PADDING = {
+  paddingHorizontal: spacing[5],
+  paddingTop: spacing[3],
+  paddingBottom: spacing[6],
+} as const;
+
 /** Aceita "18.000,50" e "18000.50" — ninguém digita moeda de um jeito só. */
 function parseAmount(raw: string): number | null {
   const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
@@ -191,7 +199,9 @@ export default function Wishes({ navigation }: any) {
                 {formatBRL(baseline!.hourlyRate!)}
               </Text>
               <Text className="text-xs text-textSecondary mt-1">
-                {baseline!.hoursPerMonth} h por mês
+                {/* pelo formatador, e não interpolado cru: número solto sai
+                    "173.33" com ponto, num app inteiro em pt-BR */}
+                {formatHours(baseline!.hoursPerMonth)} por mês
                 {baseline!.monthlyLeftover != null
                   ? ` · sobra típica de ${formatBRL(baseline!.monthlyLeftover)}`
                   : ""}
@@ -285,55 +295,60 @@ export default function Wishes({ navigation }: any) {
 
       {/* ------------------------------------------------------ cadastro */}
       <CustomModal visible={formOpen} onClose={() => setFormOpen(false)}>
-        <Text className="text-xl font-bold text-textPrimary mb-1">
-          Novo desejo
-        </Text>
-        <Text className="text-xs text-textSecondary mb-5">
-          Vamos dizer quanto isso custa em horas de trabalho.
-        </Text>
-
-        <View className="mb-4">
-          <FloatingLabelInput
-            label="O que você quer"
-            value={nome}
-            onChangeText={setNome}
-          />
-        </View>
-        <View className="mb-4">
-          <FloatingLabelInput
-            label="Quanto custa"
-            value={valor}
-            onChangeText={setValor}
-            keyboardType="decimal-pad"
-          />
-        </View>
-        <View className="mb-5">
-          <FloatingLabelInput
-            label="Já guardei (opcional)"
-            value={guardado}
-            onChangeText={setGuardado}
-            keyboardType="decimal-pad"
-          />
-        </View>
-
-        <Pressable
-          onPress={salvar}
-          disabled={isSaving}
-          accessibilityRole="button"
-          accessibilityLabel="Salvar desejo"
-          className="h-14 rounded-xl items-center justify-center"
-          style={{ backgroundColor: t.accent.neon, opacity: isSaving ? 0.6 : 1 }}
-        >
-          <Text className="font-bold text-base" style={{ color: t.text.inverse }}>
-            Salvar
+        <View style={SHEET_PADDING}>
+          <Text className="text-xl font-bold text-textPrimary mb-1">
+            Novo desejo
           </Text>
-        </Pressable>
+          <Text className="text-xs text-textSecondary mb-5">
+            Vamos dizer quanto isso custa em horas de trabalho.
+          </Text>
+
+          <View className="mb-4">
+            <FloatingLabelInput
+              label="O que você quer"
+              value={nome}
+              onChangeText={setNome}
+            />
+          </View>
+          <View className="mb-4">
+            <FloatingLabelInput
+              label="Quanto custa"
+              value={valor}
+              onChangeText={setValor}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          <View className="mb-5">
+            <FloatingLabelInput
+              label="Já guardei (opcional)"
+              value={guardado}
+              onChangeText={setGuardado}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          <Pressable
+            onPress={salvar}
+            disabled={isSaving}
+            accessibilityRole="button"
+            accessibilityLabel="Salvar desejo"
+            className="h-14 rounded-xl items-center justify-center"
+            style={{ backgroundColor: t.accent.neon, opacity: isSaving ? 0.6 : 1 }}
+          >
+            <Text className="font-bold text-base" style={{ color: t.text.inverse }}>
+              Salvar
+            </Text>
+          </Pressable>
+        </View>
       </CustomModal>
 
       {/* -------------------------------------------------------- detalhe */}
       <CustomModal visible={!!detalheVivo} onClose={() => setDetalhe(null)}>
         {detalheVivo && (
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={SHEET_PADDING}
+          >
             <Text className="text-xl font-bold text-textPrimary">
               {detalheVivo.name}
             </Text>
