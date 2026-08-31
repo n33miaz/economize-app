@@ -44,6 +44,9 @@ import { usePreferencesStore } from "../store/preferencesStore";
 import { useRecurrenceStore } from "../store/recurrenceStore";
 import { useWishStore } from "../store/wishStore";
 import { describeSalaryTiming } from "../utils/wishes";
+import { cyclePerformance } from "../utils/pot";
+import PotIcon, { potStateFor } from "../components/PotIcon";
+import PotStatesSheet from "../components/PotStatesSheet";
 import { useReviewStore } from "../store/reviewStore";
 
 import BlockGrid from "../components/BlockGrid";
@@ -108,6 +111,10 @@ export default function Home() {
   // Preferência persistida: o "olhinho" sobrevive ao fechamento do app
   const hideBalance = usePreferencesStore((s) => s.hideBalance);
   const toggleHideBalance = usePreferencesStore((s) => s.toggleHideBalance);
+  const potAnnouncementSeen = usePreferencesStore((s) => s.potAnnouncementSeen);
+  const setPotAnnouncementSeen = usePreferencesStore(
+    (s) => s.setPotAnnouncementSeen,
+  );
   const showBalance = !hideBalance;
   const { userName } = useAuthStore();
 
@@ -143,6 +150,32 @@ export default function Home() {
   // salário. Dois cartões seriam dois números sobre a mesma coisa
   const committed = useWishStore((s) => s.committed);
   const fetchCommitted = useWishStore((s) => s.fetchCommitted);
+
+  // EC-146: o pote conta o ciclo. `null` enquanto não há dado — e aí ele
+  // aparece no estado neutro, nunca no vermelho
+  const performance = useMemo(() => cyclePerformance(monthly), [monthly]);
+  const potState = useMemo(
+    () =>
+      performance
+        ? potStateFor(performance.kept, performance.income)
+        : potStateFor(0, 0),
+    [performance],
+  );
+  const [potSheetOpen, setPotSheetOpen] = useState(false);
+
+  // EC-147: o anúncio acontece UMA vez, e só quando já há ciclo para mostrar —
+  // explicar os estados do pote sobre uma tela vazia não ensina nada, e queimar
+  // o anúncio no primeiro acesso desperdiça a única chance de contar isso
+  useEffect(() => {
+    if (potAnnouncementSeen || potSheetOpen) return;
+    if (!performance || performance.income <= 0) return;
+    setPotSheetOpen(true);
+  }, [potAnnouncementSeen, potSheetOpen, performance]);
+
+  const fecharAnuncioDoPote = useCallback(() => {
+    setPotSheetOpen(false);
+    if (!potAnnouncementSeen) setPotAnnouncementSeen(true);
+  }, [potAnnouncementSeen, setPotAnnouncementSeen]);
 
   useEffect(() => {
     fetchIndicators();
@@ -557,28 +590,42 @@ export default function Home() {
                       `adjustsFontSizeToFit` fica como rede — e na web ele é
                       ignorado pelo react-native-web, então lá a abreviação é a
                       única defesa contra o corte */}
-                  <Text
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    // O que a tela abrevia, o leitor de tela fala por extenso:
-                    // "R$ 123,4 mil" é resumo de leitura, não o número
-                    accessibilityLabel={
-                      showBalance
-                        ? `${
-                            isWindowMode
-                              ? `Sobrou no ciclo ${periodLabel}`
-                              : `Sobrou em ${periodLabel}`
-                          }: ${formatBRL(monthly.net)}`
-                        : HIDDEN_SPOKEN
-                    }
-                    style={{
-                      ...typography.numericDisplay,
-                      color: monthly.net >= 0 ? t.text.primary : t.chart.down,
-                      marginTop: spacing[1],
-                    }}
-                  >
-                    {showBalance ? formatBRLCompact(monthly.net) : HIDDEN}
-                  </Text>
+                  {/* EC-146: o pote ao lado do número que ele representa. Solto
+                      em outro canto da tela ele seria enfeite; aqui a relação
+                      entre o desenho e o resultado se explica sozinha */}
+                  <View className="flex-row items-center" style={{ gap: spacing[3] }}>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      // O que a tela abrevia, o leitor de tela fala por extenso:
+                      // "R$ 123,4 mil" é resumo de leitura, não o número
+                      accessibilityLabel={
+                        showBalance
+                          ? `${
+                              isWindowMode
+                                ? `Sobrou no ciclo ${periodLabel}`
+                                : `Sobrou em ${periodLabel}`
+                            }: ${formatBRL(monthly.net)}`
+                          : HIDDEN_SPOKEN
+                      }
+                      style={{
+                        ...typography.numericDisplay,
+                        color: monthly.net >= 0 ? t.text.primary : t.chart.down,
+                        marginTop: spacing[1],
+                        flexShrink: 1,
+                      }}
+                    >
+                      {showBalance ? formatBRLCompact(monthly.net) : HIDDEN}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setPotSheetOpen(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Seu pote: ${potState.label}. Entender os estados`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <PotIcon size={44} level={potState.level} tone={potState.tone} />
+                    </TouchableOpacity>
+                  </View>
 
                   <View
                     style={{
@@ -1242,6 +1289,12 @@ export default function Home() {
       <CycleAnchorSheet
         visible={anchorSheetOpen}
         onClose={() => setAnchorSheetOpen(false)}
+      />
+
+      <PotStatesSheet
+        visible={potSheetOpen}
+        onClose={fecharAnuncioDoPote}
+        performance={performance}
       />
 
       <AssistantFAB />
