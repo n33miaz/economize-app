@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BadgeCheck from "lucide-react-native/dist/esm/icons/badge-check";
 import Banknote from "lucide-react-native/dist/esm/icons/banknote";
+import CalendarClock from "lucide-react-native/dist/esm/icons/calendar-clock";
 import Clock from "lucide-react-native/dist/esm/icons/clock";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
@@ -12,8 +13,17 @@ import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import { formatBRL } from "../utils/money";
-import { formatHours, incomeKindLabel } from "../utils/wishes";
-import type { IncomeSource, IncomeSourceKind } from "../services/api";
+import {
+  describeSalaryTiming,
+  formatDueDate,
+  formatHours,
+  incomeKindLabel,
+} from "../utils/wishes";
+import type {
+  CommittedItem,
+  IncomeSource,
+  IncomeSourceKind,
+} from "../services/api";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
@@ -79,6 +89,37 @@ function KindChip({
 }
 
 /**
+ * Uma conta a vencer. O "~" marca conta de consumo: o valor é a média do
+ * histórico, não um boleto fechado, e sem essa marca o total parece mais exato
+ * do que é.
+ */
+function DueRow({ item }: { item: CommittedItem }) {
+  const t = useTheme();
+  return (
+    <View className="flex-row items-center justify-between py-1.5">
+      <View className="flex-row items-center flex-1 pr-2">
+        <Text
+          className="text-[11px] w-10"
+          style={{ color: t.text.tertiary, fontVariant: ["tabular-nums"] }}
+        >
+          {formatDueDate(item.dueDate)}
+        </Text>
+        <Text className="text-xs text-textPrimary flex-1" numberOfLines={1}>
+          {item.name}
+        </Text>
+      </View>
+      <Text
+        className="text-xs font-bold text-textPrimary"
+        style={{ fontVariant: ["tabular-nums"] }}
+      >
+        {item.estimated ? "~" : ""}
+        {formatBRL(item.amount)}
+      </Text>
+    </View>
+  );
+}
+
+/**
  * De onde vem o dinheiro e quanto se trabalha por ele.
  *
  * <p>Duas coisas moram aqui porque se explicam juntas: a renda confirmada é o
@@ -90,11 +131,14 @@ export default function IncomeSettings() {
   const showToast = useToastStore((s) => s.showToast);
   const {
     income,
+    committed,
     isIncomeLoading,
     hasLoadedIncomeOnce,
+    hasLoadedCommittedOnce,
     isSaving,
     incomeError,
     fetchIncome,
+    fetchCommitted,
     addIncome,
     editIncome,
     removeIncome,
@@ -114,7 +158,8 @@ export default function IncomeSettings() {
 
   useEffect(() => {
     if (!hasLoadedIncomeOnce) fetchIncome();
-  }, [hasLoadedIncomeOnce, fetchIncome]);
+    if (!hasLoadedCommittedOnce) fetchCommitted();
+  }, [hasLoadedIncomeOnce, fetchIncome, hasLoadedCommittedOnce, fetchCommitted]);
 
   // Abrir a jornada já preenchida com o que existe evita redigitar para mudar
   // meia hora — e deixa claro que é edição, não cadastro do zero
@@ -248,6 +293,68 @@ export default function IncomeSettings() {
                   {perfil ? "Editar" : "Informar"}
                 </Text>
               </Pressable>
+
+              {/* ------------------------------------- o que já tem dono */}
+              {committed && (
+                <View className="bg-cardBackground rounded-2xl p-4 border border-border mt-3">
+                  <View className="flex-row items-center mb-2">
+                    <CalendarClock size={16} color={t.text.secondary} />
+                    <Text className="text-xs text-textSecondary ml-2">
+                      {committed.salaryKnown
+                        ? (describeSalaryTiming(
+                            committed.daysUntilSalary,
+                            committed.salaryDate,
+                          ) ?? "Próximo salário")
+                        : "Próximos 30 dias"}
+                    </Text>
+                  </View>
+
+                  {committed.salaryKnown ? (
+                    <>
+                      <Text className="text-2xl font-bold text-textPrimary">
+                        {formatBRL(committed.committedAfterSalary)}
+                      </Text>
+                      <Text className="text-xs text-textSecondary mt-0.5">
+                        já têm dono
+                        {committed.free != null
+                          ? ` · sobram ${formatBRL(committed.free)}`
+                          : ""}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text className="text-xs text-textSecondary">
+                      Cadastre seu salário com o dia de pagamento para ver quanto
+                      dele já está comprometido.
+                    </Text>
+                  )}
+
+                  {/* Antes do salário: a parte aflitiva do fim do mês — o que
+                      ainda sai do que a pessoa tem HOJE */}
+                  {committed.beforeSalary.length > 0 && (
+                    <View className="mt-4">
+                      <Text className="text-[11px] font-bold text-textSecondary mb-2">
+                        {committed.salaryKnown
+                          ? "ANTES DO SALÁRIO CAIR"
+                          : "A PAGAR"}
+                      </Text>
+                      {committed.beforeSalary.map((item) => (
+                        <DueRow key={`${item.seriesId}-${item.dueDate}`} item={item} />
+                      ))}
+                    </View>
+                  )}
+
+                  {committed.afterSalary.length > 0 && (
+                    <View className="mt-4">
+                      <Text className="text-[11px] font-bold text-textSecondary mb-2">
+                        DEPOIS QUE CAIR
+                      </Text>
+                      {committed.afterSalary.map((item) => (
+                        <DueRow key={`${item.seriesId}-${item.dueDate}`} item={item} />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* --------------------------------------------- sugestões */}
               {(income?.suggestions.length ?? 0) > 0 && (
