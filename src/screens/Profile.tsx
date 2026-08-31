@@ -25,6 +25,8 @@ import SlidersHorizontal from "lucide-react-native/dist/esm/icons/sliders-horizo
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import SunMoon from "lucide-react-native/dist/esm/icons/sun-moon";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
+import Target from "lucide-react-native/dist/esm/icons/target";
+import Clock from "lucide-react-native/dist/esm/icons/clock";
 import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import X from "lucide-react-native/dist/esm/icons/x";
 import type { LucideIcon } from "lucide-react-native";
@@ -55,6 +57,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import Skeleton from "../components/Skeleton";
 import ActionRow from "../components/ActionRow";
+import { APP_ROUTES } from "../routes/routeNames";
 import CycleAnchorSheet from "../components/CycleAnchorSheet";
 import SectionTitle from "../components/SectionTitle";
 import SegmentedControl from "../components/SegmentedControl";
@@ -583,6 +586,20 @@ export default function Profile() {
             label="Minhas categorias"
             description="Organize como seus gastos são agrupados"
             onPress={() => navigation.navigate("Categorias" as never)}
+          />
+          {/* EC-140/141: no desktop as duas telas vivem no trilho; no celular
+              não há trilho, e sem estas linhas o produto ficaria inalcançável */}
+          <ActionRow
+            Icon={Target}
+            label="Desejos"
+            description="Quanto custa, em horas da sua vida"
+            onPress={() => navigation.navigate(APP_ROUTES.desejos as never)}
+          />
+          <ActionRow
+            Icon={Clock}
+            label="Renda e jornada"
+            description="O que entra e quanto você trabalha por isso"
+            onPress={() => navigation.navigate(APP_ROUTES.renda as never)}
           />
         </Animated.View>
 
