@@ -23,6 +23,7 @@ import {
   toggleFavoriteWithSnapshot,
   useFavoritesStore,
 } from "../store/favoritesStore";
+import { formatDecimal, formatPercent } from "../utils/money";
 import CustomModal from "./CustomModal";
 import HistoricalChart from "./HistoricalChart";
 
@@ -213,7 +214,7 @@ export default function IndicatorDetailSheet({
                 color: isPositive ? t.semantic.success : t.semantic.danger,
               }}
             >
-              {Math.abs(indicator.variation).toFixed(2)}% (Hoje)
+              {formatPercent(Math.abs(indicator.variation))} (Hoje)
             </Text>
           </View>
         </View>
@@ -304,7 +305,7 @@ export default function IndicatorDetailSheet({
                   className="text-3xl font-bold"
                   style={{ color: t.semantic.success }}
                 >
-                  {indicator.code} {conversionResult.toFixed(2)}
+                  {indicator.code} {formatDecimal(conversionResult)}
                 </Text>
               </View>
             )}

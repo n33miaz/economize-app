@@ -7,6 +7,7 @@ import Animated from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
+import { formatPercent } from "../utils/money";
 
 interface HighlightCardProps {
   title: string;
@@ -115,7 +116,7 @@ export default function HighlightCard({
               },
             ]}
           >
-            {variation.toFixed(2)}%
+            {formatPercent(variation)}
           </Text>
         </View>
       </TouchableOpacity>

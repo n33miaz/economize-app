@@ -19,12 +19,14 @@ describe("IndicatorCard Component", () => {
 
     expect(getByText("Dólar Americano")).toBeTruthy();
 
-    expect(getByText("R$ 5.25")).toBeTruthy();
+    // vírgula, não ponto: o app inteiro é pt-BR e o cartão mostrava
+    // "R$ 5.25" ao lado de valores formatados com vírgula
+    expect(getByText("R$ 5,25")).toBeTruthy();
   });
 
   it("deve exibir a variação com a cor correta (verde para positivo)", () => {
     const { getByText } = render(<IndicatorCard {...mockProps} />);
-    const variationText = getByText("+1.50%");
+    const variationText = getByText("+1,50%");
 
     expect(variationText).toBeTruthy();
   });

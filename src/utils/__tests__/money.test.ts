@@ -1,4 +1,9 @@
-import { formatBRL, formatBRLCompact } from "../money";
+import {
+  formatBRL,
+  formatBRLCompact,
+  formatDecimal,
+  formatPercent,
+} from "../money";
 
 // O Intl separa "R$" do número com espaço não separável (U+00A0); normalizar
 // para espaço comum deixa os asserts legíveis sem depender desse detalhe
@@ -60,5 +65,53 @@ describe("formatBRLCompact", () => {
 
   it("uses the same non-breaking space as Intl after R$", () => {
     expect(formatBRLCompact(100_000)).toBe("R$\u00A0100,0 mil");
+  });
+});
+
+describe("formatPercent", () => {
+  it("usa vírgula, como todo o resto do app", () => {
+    // era "-0.01%" ao lado de "R$ 5,18" no MESMO cartão da Home
+    expect(formatPercent(-0.01)).toBe("-0,01%");
+    expect(formatPercent(1.5)).toBe("1,50%");
+  });
+
+  it("marca o positivo só quando o sinal é o dado", () => {
+    expect(formatPercent(2.35, { signed: true })).toBe("+2,35%");
+    expect(formatPercent(-2.35, { signed: true })).toBe("-2,35%");
+    // sem `signed`, nada de "+": a variação já vem com o ícone ao lado
+    expect(formatPercent(2.35)).toBe("2,35%");
+  });
+
+  it("zero não ganha sinal", () => {
+    expect(formatPercent(0, { signed: true })).toBe("0,00%");
+  });
+
+  it("respeita o número de casas pedido", () => {
+    expect(formatPercent(12.34, { decimals: 1 })).toBe("12,3%");
+    expect(formatPercent(12.34, { decimals: 0 })).toBe("12%");
+  });
+
+  it("agrupa o milhar", () => {
+    expect(formatPercent(1234.5, { decimals: 1 })).toBe("1.234,5%");
+  });
+
+  it("NaN e Infinity viram zero em vez de assustar na tela", () => {
+    expect(formatPercent(NaN)).toBe("0,00%");
+    expect(formatPercent(Infinity)).toBe("0,00%");
+  });
+});
+
+describe("formatDecimal", () => {
+  it("número solto também sai em pt-BR", () => {
+    expect(formatDecimal(5.18)).toBe("5,18");
+    expect(formatDecimal(1234.5)).toBe("1.234,50");
+  });
+
+  it("aceita outra precisão", () => {
+    expect(formatDecimal(5.185, 1)).toBe("5,2");
+  });
+
+  it("valor inválido vira zero", () => {
+    expect(formatDecimal(NaN)).toBe("0,00");
   });
 });

@@ -55,3 +55,40 @@ export function formatBRLCompact(value: number): string {
   });
   return `${sign}R$${NBSP}${digits} ${suffix}`;
 }
+
+/**
+ * Percentual em pt-BR — "-0,01%", "+1,5%".
+ *
+ * Existe pelo MESMO motivo que tirou o `toFixed(2)` do dinheiro, no topo deste
+ * arquivo: `toFixed` devolve ponto decimal. O app mostrava "R$ 5,18" e
+ * "-0.01%" lado a lado no mesmo cartão, com dois separadores diferentes.
+ *
+ * @param signed prefixa "+" no positivo, para variação onde o sinal é o dado
+ */
+export function formatPercent(
+  value: number,
+  opts?: { decimals?: number; signed?: boolean },
+): string {
+  const decimals = opts?.decimals ?? 2;
+  // NaN/Infinity viram 0: um "NaN%" na tela assusta mais do que informa
+  const safe = Number.isFinite(value) ? value : 0;
+  const digits = safe.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  // o negativo já vem do Intl; só o "+" precisa ser posto à mão
+  const sign = opts?.signed && safe > 0 ? "+" : "";
+  return `${sign}${digits}%`;
+}
+
+/**
+ * Número solto em pt-BR, para o que não é moeda nem porcentagem (cotação com
+ * símbolo à parte, resultado de conversão). Mesma razão do `formatPercent`.
+ */
+export function formatDecimal(value: number, decimals = 2): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return safe.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}

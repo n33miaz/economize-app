@@ -55,7 +55,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import IndicatorDetailSheet from "../components/IndicatorDetailSheet";
 import AssistantFAB from "../components/AssistantFAB";
 import { useBreakpoint } from "../hooks/useBreakpoint";
-import { formatBRL, formatBRLCompact } from "../utils/money";
+import { formatBRL, formatBRLCompact, formatDecimal, formatPercent } from "../utils/money";
 import { formatMonthLabel, formatWindowLabel } from "../utils/cycleWindow";
 import { favoriteDisplayItems } from "../utils/indicatorList";
 import { firstRiskMonth, upcomingCommitment } from "../utils/recurrence";
@@ -1038,9 +1038,10 @@ export default function Home() {
                   showBalance
                     ? `Investido: ${formatBRL(walletBalance)}${
                         walletPerformance !== null
-                          ? `, rentabilidade de ${walletPerformance
-                              .toFixed(1)
-                              .replace(".", ",")} por cento`
+                          ? `, rentabilidade de ${formatDecimal(
+                              walletPerformance,
+                              1,
+                            )} por cento`
                           : ""
                       }. Abrir a carteira`
                     : `Investido: ${HIDDEN_SPOKEN}. Abrir a carteira`
@@ -1094,8 +1095,10 @@ export default function Home() {
                       marginRight: spacing[1],
                     }}
                   >
-                    {walletPerformance >= 0 ? "+" : ""}
-                    {walletPerformance.toFixed(1)}%
+                    {formatPercent(walletPerformance, {
+                      decimals: 1,
+                      signed: true,
+                    })}
                   </Text>
                 )}
                 <ChevronRight size={18} color={t.text.tertiary} />

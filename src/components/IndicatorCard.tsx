@@ -9,6 +9,7 @@ import * as Haptics from "../utils/haptics";
 import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
+import { formatDecimal, formatPercent } from "../utils/money";
 
 interface IndicatorCardProps {
   name: string;
@@ -50,7 +51,7 @@ const IndicatorCard = React.memo(
           ? t.semantic.successMuted
           : t.semantic.dangerMuted,
         Icon: isPositive ? ArrowUpRight : ArrowDownRight,
-        formatted: `${isPositive ? "+" : ""}${safeVariation.toFixed(2)}%`,
+        formatted: formatPercent(safeVariation, { signed: true }),
       };
       // `t` na lista: sem ele as cores ficavam presas ao tema da montagem
     }, [safeVariation, t]);
@@ -72,7 +73,7 @@ const IndicatorCard = React.memo(
           maximumFractionDigits: 0,
         })} pts`;
       }
-      return `${symbol} ${safeValue.toFixed(2)}`;
+      return `${symbol} ${formatDecimal(safeValue)}`;
     }, [symbol, safeValue]);
 
     const VariationIcon = variationInfo.Icon;
