@@ -1025,3 +1025,218 @@ export const testAiKey = async (params: {
   const response = await api.post<AiKeyTestResult>("/ai/settings/test", params);
   return response.data;
 };
+
+// ---------------------------------------------------------------- Desejos
+
+/** Estágios de um desejo. GOAL é o que compete pela sobra do mês. */
+export type WishStatus = "WISH" | "GOAL" | "PURCHASED" | "ARCHIVED";
+
+export type IncomeSourceKind =
+  | "SALARY"
+  | "MEAL_VOUCHER"
+  | "FOOD_VOUCHER"
+  | "ADVANCE"
+  | "OTHER";
+
+/**
+ * O que muda a data de um desejo. `monthsEarlier` chega nulo quando não havia
+ * prazo para comparar — quem não tem sobra nenhuma vê o cenário como o único
+ * caminho de saída, sem "antes" de referência.
+ */
+export interface WishWhatIf {
+  percentOfExpense: number;
+  monthlyCut: number;
+  months: number | null;
+  estimatedDate: string | null;
+  monthsEarlier: number | null;
+}
+
+/**
+ * Campo nulo aqui é "ainda não dá para saber", NUNCA zero. A tela transforma
+ * cada nulo num convite ("me diga sua jornada"), e é por isso que o servidor
+ * prefere omitir a responder um número inventado.
+ */
+export interface WishProjection {
+  remaining: number;
+  hoursOfWork: number | null;
+  workDays: number | null;
+  monthsToAfford: number | null;
+  estimatedDate: string | null;
+  installments: number | null;
+  maxInstallment: number | null;
+  achieved: boolean;
+  whatIfs: WishWhatIf[];
+}
+
+export interface Wish {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  categoryId: string | null;
+  status: WishStatus;
+  targetDate: string | null;
+  note: string | null;
+  purchasedAt: string | null;
+  purchaseTransactionId: string | null;
+  projection: WishProjection;
+}
+
+/** O que falta para o cálculo fechar — cada código vira um botão na tela. */
+export type WishGap =
+  | "WORK_PROFILE"
+  | "CONFIRMED_INCOME"
+  | "HISTORY"
+  | "NO_LEFTOVER";
+
+export interface WishBaseline {
+  workIncome: number;
+  hourlyRate: number | null;
+  hoursPerMonth: number | null;
+  monthlyLeftover: number | null;
+  monthlyExpense: number | null;
+  cyclesConsidered: number;
+  gaps: WishGap[];
+}
+
+export interface WishList {
+  baseline: WishBaseline;
+  wishes: Wish[];
+}
+
+export interface IncomeSource {
+  id: string;
+  kind: IncomeSourceKind;
+  name: string;
+  expectedAmount: number | null;
+  anchorDay: number | null;
+  confirmed: boolean;
+  active: boolean;
+  seriesId: string | null;
+}
+
+export interface WorkProfile {
+  daysPerWeek: number;
+  hoursPerDay: number;
+  hoursPerMonth: number;
+}
+
+/** Fonte que o extrato provou e que ainda espera confirmação do usuário. */
+export interface IncomeSuggestion {
+  seriesId: string;
+  suggestedKind: IncomeSourceKind;
+  name: string;
+  expectedAmount: number | null;
+  anchorDay: number | null;
+}
+
+export interface IncomeOverview {
+  sources: IncomeSource[];
+  workProfile: WorkProfile | null;
+  suggestions: IncomeSuggestion[];
+}
+
+export interface CreateWishPayload {
+  name: string;
+  targetAmount: number;
+  savedAmount?: number;
+  categoryId?: string | null;
+  targetDate?: string | null;
+  note?: string | null;
+}
+
+export type UpdateWishPayload = Partial<CreateWishPayload> & {
+  status?: WishStatus;
+};
+
+export const getWishes = async (): Promise<WishList> => {
+  const response = await api.get<WishList>("/wishes");
+  return response.data;
+};
+
+export const createWish = async (payload: CreateWishPayload): Promise<Wish> => {
+  const response = await api.post<Wish>("/wishes", payload);
+  return response.data;
+};
+
+export const updateWish = async (
+  id: string,
+  payload: UpdateWishPayload,
+): Promise<Wish> => {
+  const response = await api.patch<Wish>(`/wishes/${id}`, payload);
+  return response.data;
+};
+
+export const deleteWish = async (id: string): Promise<void> => {
+  await api.delete(`/wishes/${id}`);
+};
+
+/** Confirma que o desejo virou compra; o guardado é preservado no histórico. */
+export const purchaseWish = async (
+  id: string,
+  payload?: { purchasedAt?: string; transactionId?: string },
+): Promise<Wish> => {
+  const response = await api.post<Wish>(`/wishes/${id}/purchase`, payload ?? {});
+  return response.data;
+};
+
+export const getIncomeOverview = async (): Promise<IncomeOverview> => {
+  const response = await api.get<IncomeOverview>("/income");
+  return response.data;
+};
+
+export const createIncomeSource = async (payload: {
+  kind: IncomeSourceKind;
+  name: string;
+  expectedAmount?: number | null;
+  anchorDay?: number | null;
+}): Promise<IncomeSource> => {
+  const response = await api.post<IncomeSource>("/income/sources", payload);
+  return response.data;
+};
+
+export const updateIncomeSource = async (
+  id: string,
+  payload: {
+    name?: string;
+    expectedAmount?: number | null;
+    anchorDay?: number | null;
+    confirmed?: boolean;
+    active?: boolean;
+  },
+): Promise<IncomeSource> => {
+  const response = await api.patch<IncomeSource>(
+    `/income/sources/${id}`,
+    payload,
+  );
+  return response.data;
+};
+
+export const deleteIncomeSource = async (id: string): Promise<void> => {
+  await api.delete(`/income/sources/${id}`);
+};
+
+/** Aceita a sugestão do extrato; sem corpo, valem os dados da própria série. */
+export const acceptIncomeSuggestion = async (
+  seriesId: string,
+  payload?: {
+    kind?: IncomeSourceKind;
+    name?: string;
+    expectedAmount?: number | null;
+    anchorDay?: number | null;
+  },
+): Promise<IncomeSource> => {
+  const response = await api.post<IncomeSource>(
+    `/income/suggestions/${seriesId}/accept`,
+    payload ?? {},
+  );
+  return response.data;
+};
+
+export const saveWorkProfile = async (payload: {
+  daysPerWeek: number;
+  hoursPerDay: number;
+}): Promise<WorkProfile> => {
+  const response = await api.put<WorkProfile>("/income/work-profile", payload);
+  return response.data;
+};
