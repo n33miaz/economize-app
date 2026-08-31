@@ -31,6 +31,8 @@ export const APP_ROUTES = {
   revisao: "Revisão",
   alterarSenha: "Alterar Senha",
   opcoesIa: "Opções de IA",
+  desejos: "Desejos",
+  renda: "Renda e jornada",
 } as const;
 
 /** Abas da barra inferior (o container "Main"). */

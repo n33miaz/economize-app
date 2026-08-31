@@ -8,6 +8,7 @@ import Info from "lucide-react-native/dist/esm/icons/info";
 import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 import Settings2 from "lucide-react-native/dist/esm/icons/settings-2";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
+import Target from "lucide-react-native/dist/esm/icons/target";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
 import User from "lucide-react-native/dist/esm/icons/user";
 import Wallet from "lucide-react-native/dist/esm/icons/wallet";
@@ -36,6 +37,7 @@ export type RailKey =
   | "analise"
   | "relatorios"
   | "previsao"
+  | "desejos"
   | "categorias"
   | "noticias"
   | "assistente"
@@ -120,6 +122,16 @@ export const RAIL_GROUPS: RailGroup[] = [
         route: APP_ROUTES.cartoes,
         inMainTabs: false,
         Icon: CreditCard,
+        primary: false,
+      },
+      {
+        // EC-140: pergunta inteira, não tarefa — "quanto da minha vida custa o
+        // que eu quero". O usuário volta a ela, então é destino
+        key: "desejos",
+        label: "Desejos",
+        route: APP_ROUTES.desejos,
+        inMainTabs: false,
+        Icon: Target,
         primary: false,
       },
       {
@@ -252,6 +264,10 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   // Ajuste de conta, aberto pelo Perfil — não é destino do trilho, então a
   // pílula fica com o destino de onde o usuário veio
   [APP_ROUTES.opcoesIa]: null,
+  [APP_ROUTES.desejos]: "desejos",
+  // Cadastro que alimenta os Desejos, alcançado de dentro deles: a pílula
+  // continua em "Desejos" para o usuário não perder de vista de onde veio
+  [APP_ROUTES.renda]: "desejos",
 };
 
 /**

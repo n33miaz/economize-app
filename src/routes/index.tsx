@@ -66,6 +66,8 @@ import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
 import AdvancedOptions from "../screens/AdvancedOptions";
 import AiSettings from "../screens/AiSettings";
+import Wishes from "../screens/Wishes";
+import IncomeSettings from "../screens/IncomeSettings";
 import Reports from "../screens/Reports";
 import Analytics from "../screens/Analytics";
 import Categories from "../screens/Categories";
@@ -406,6 +408,20 @@ function AppStack() {
       <Stack.Screen
         name={APP_ROUTES.opcoesIa}
         component={AiSettings}
+        options={ephemeralTransition}
+      />
+      {/* EC-140/141: o desejo medido em horas de vida, e a renda/jornada que
+          dão o valor da hora. São duas telas porque uma é o objetivo e a outra
+          é o cadastro que o alimenta — mas a segunda só é alcançada pela
+          primeira, quando falta o dado */}
+      <Stack.Screen
+        name={APP_ROUTES.desejos}
+        component={Wishes}
+        options={ephemeralTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.renda}
+        component={IncomeSettings}
         options={ephemeralTransition}
       />
       <Stack.Screen
