@@ -238,3 +238,48 @@ export function translateWishError(error: unknown, fallback: string): string {
     ? (problem.detail as string)
     : fallback;
 }
+
+/** "10/09" — dia e mês bastam: a lista cabe num mês. */
+export function formatDueDate(iso: string): string {
+  const [, month, day] = iso.split("-");
+  return `${day}/${month}`;
+}
+
+/**
+ * Quando o próximo pagamento cai, na voz de quem espera por ele.
+ *
+ * <p>"Cai hoje" importa: no dia do pagamento, dizer "faltam 30 dias" (a próxima
+ * ocorrência) seria o oposto da verdade.
+ */
+export function describeSalaryTiming(
+  daysUntilSalary: number | null,
+  salaryDate: string | null,
+): string | null {
+  if (daysUntilSalary == null || salaryDate == null) return null;
+  const quando = formatDueDate(salaryDate);
+  if (daysUntilSalary <= 0) return `Cai hoje (${quando})`;
+  if (daysUntilSalary === 1) return `Cai amanhã (${quando})`;
+  return `Cai em ${daysUntilSalary} dias (${quando})`;
+}
+
+/**
+ * A frase-resumo do salário que ainda não chegou.
+ *
+ * <p>É a pergunta do fim do mês inteira em uma linha: do que vem, quanto já
+ * está prometido e quanto sobra de verdade.
+ */
+export function describeCommitted(overview: {
+  salaryKnown: boolean;
+  expectedSalary: number | null;
+  committedAfterSalary: number;
+  free: number | null;
+}): string {
+  if (!overview.salaryKnown) {
+    return "Cadastre seu salário para ver quanto dele já tem dono";
+  }
+  const comprometido = formatBRL(overview.committedAfterSalary);
+  if (overview.free == null) {
+    return `${comprometido} já têm dono`;
+  }
+  return `${comprometido} já têm dono · sobram ${formatBRL(overview.free)}`;
+}

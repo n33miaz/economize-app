@@ -1,8 +1,11 @@
 import {
+  describeCommitted,
   describeHourlyRate,
   describeLifeCost,
   describePace,
   describeWhatIf,
+  describeSalaryTiming,
+  formatDueDate,
   formatHours,
   formatWorkDays,
   gapPrompt,
@@ -240,5 +243,66 @@ describe("translateWishError", () => {
     expect(translateWishError(new Error("Network Error"), "Falhou")).toBe(
       "Falhou",
     );
+  });
+});
+
+describe("formatDueDate", () => {
+  it("mostra dia e mês, que é o que cabe na lista", () => {
+    expect(formatDueDate("2026-09-10")).toBe("10/09");
+  });
+});
+
+describe("describeSalaryTiming", () => {
+  it("no dia do pagamento diz que cai hoje", () => {
+    // dizer "faltam 30 dias" (a próxima ocorrência) seria o oposto da verdade
+    expect(describeSalaryTiming(0, "2026-09-05")).toBe("Cai hoje (05/09)");
+  });
+
+  it("concorda o singular de amanhã", () => {
+    expect(describeSalaryTiming(1, "2026-09-05")).toBe("Cai amanhã (05/09)");
+  });
+
+  it("conta os dias que faltam", () => {
+    expect(describeSalaryTiming(5, "2026-09-05")).toBe("Cai em 5 dias (05/09)");
+  });
+
+  it("sem salário conhecido não inventa data", () => {
+    expect(describeSalaryTiming(null, null)).toBeNull();
+  });
+});
+
+describe("describeCommitted", () => {
+  it("resume o fim do mês numa linha", () => {
+    const texto = describeCommitted({
+      salaryKnown: true,
+      expectedSalary: 4400,
+      committedAfterSalary: 2010,
+      free: 2390,
+    });
+    expect(texto).toContain("2.010,00");
+    expect(texto).toContain("2.390,00");
+  });
+
+  it("sem valor de salário fala só do comprometido", () => {
+    // "sobram X" exigiria saber quanto entra; sem isso não há resposta honesta
+    const texto = describeCommitted({
+      salaryKnown: true,
+      expectedSalary: null,
+      committedAfterSalary: 1800,
+      free: null,
+    });
+    expect(texto).toContain("1.800,00");
+    expect(texto).not.toContain("sobram");
+  });
+
+  it("sem salário cadastrado vira convite", () => {
+    expect(
+      describeCommitted({
+        salaryKnown: false,
+        expectedSalary: null,
+        committedAfterSalary: 0,
+        free: null,
+      }),
+    ).toContain("Cadastre seu salário");
   });
 });

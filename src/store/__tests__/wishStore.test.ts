@@ -12,6 +12,7 @@ jest.mock("../../services/api", () => ({
   deleteIncomeSource: jest.fn(),
   acceptIncomeSuggestion: jest.fn(),
   saveWorkProfile: jest.fn(),
+  getCommittedOverview: jest.fn(),
 }));
 
 const api = jest.requireMock("../../services/api");
@@ -65,6 +66,17 @@ beforeEach(() => {
     sources: [],
     workProfile: null,
     suggestions: [],
+  });
+  api.getCommittedOverview.mockResolvedValue({
+    salaryKnown: true,
+    salaryDate: "2026-09-05",
+    daysUntilSalary: 5,
+    expectedSalary: 4400,
+    committedBeforeSalary: 39.9,
+    beforeSalary: [],
+    committedAfterSalary: 2049.9,
+    afterSalary: [],
+    free: 2350.1,
   });
 });
 
@@ -255,5 +267,77 @@ describe("reset", () => {
     expect(state.income).toBeNull();
     expect(state.hasLoadedOnce).toBe(false);
     expect(state.hasLoadedIncomeOnce).toBe(false);
+  });
+});
+
+describe("o que já tem dono", () => {
+  it("guarda o panorama do salário que ainda não caiu", async () => {
+    await useWishStore.getState().fetchCommitted();
+
+    const state = useWishStore.getState();
+    expect(state.committed?.free).toBe(2350.1);
+    expect(state.hasLoadedCommittedOnce).toBe(true);
+    expect(state.committedError).toBeNull();
+  });
+
+  it("falha vira mensagem própria, sem contaminar a lista de desejos", async () => {
+    api.getCommittedOverview.mockRejectedValue(new Error("boom"));
+
+    await useWishStore.getState().fetchCommitted();
+
+    expect(useWishStore.getState().committedError).toContain("comprometido");
+    // o erro dos desejos é outro campo: uma falha aqui não pode apagar a lista
+    expect(useWishStore.getState().error).toBeNull();
+  });
+
+  it("mudar a renda recalcula o que tem dono — a âncora e o valor mudaram", async () => {
+    await useWishStore.getState().fetchCommitted();
+    api.createIncomeSource.mockResolvedValue({});
+    jest.clearAllMocks();
+    api.getIncomeOverview.mockResolvedValue({
+      sources: [],
+      workProfile: null,
+      suggestions: [],
+    });
+    api.getWishes.mockResolvedValue({ baseline: baseline(), wishes: [] });
+    api.getCommittedOverview.mockResolvedValue({
+      salaryKnown: true,
+      salaryDate: "2026-09-10",
+      daysUntilSalary: 10,
+      expectedSalary: 6000,
+      committedBeforeSalary: 0,
+      beforeSalary: [],
+      committedAfterSalary: 1000,
+      afterSalary: [],
+      free: 5000,
+    });
+
+    await useWishStore
+      .getState()
+      .addIncome({ kind: "SALARY", name: "Salário", expectedAmount: 6000 });
+
+    // sem esta terceira recarga o cartão do salário seguiria falando da fonte
+    // antiga, ao lado de uma renda que acabou de mudar
+    expect(api.getCommittedOverview).toHaveBeenCalledTimes(1);
+    expect(useWishStore.getState().committed?.free).toBe(5000);
+  });
+
+  it("quem nunca abriu o comprometido não paga por ele ao mexer na renda", async () => {
+    api.createIncomeSource.mockResolvedValue({});
+
+    await useWishStore
+      .getState()
+      .addIncome({ kind: "SALARY", name: "Salário", expectedAmount: 6000 });
+
+    // a recarga extra só faz sentido para quem já tinha o dado na tela
+    expect(api.getCommittedOverview).not.toHaveBeenCalled();
+  });
+
+  it("reset apaga também o comprometido", async () => {
+    await useWishStore.getState().fetchCommitted();
+    useWishStore.getState().reset();
+
+    expect(useWishStore.getState().committed).toBeNull();
+    expect(useWishStore.getState().hasLoadedCommittedOnce).toBe(false);
   });
 });

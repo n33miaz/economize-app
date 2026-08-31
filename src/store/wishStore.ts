@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import {
+  type CommittedOverview,
   type CreateWishPayload,
   type IncomeOverview,
   type IncomeSourceKind,
@@ -12,6 +13,7 @@ import {
   createWish,
   deleteIncomeSource,
   deleteWish,
+  getCommittedOverview,
   getIncomeOverview,
   getWishes,
   purchaseWish,
@@ -32,18 +34,24 @@ interface WishState {
   baseline: WishBaseline | null;
   wishes: Wish[];
   income: IncomeOverview | null;
+  /** O que já tem dono do próximo salário (EC-136). */
+  committed: CommittedOverview | null;
 
   isLoading: boolean;
   hasLoadedOnce: boolean;
   isSaving: boolean;
   isIncomeLoading: boolean;
   hasLoadedIncomeOnce: boolean;
+  isCommittedLoading: boolean;
+  hasLoadedCommittedOnce: boolean;
 
   error: string | null;
   incomeError: string | null;
+  committedError: string | null;
 
   fetch: () => Promise<void>;
   fetchIncome: () => Promise<void>;
+  fetchCommitted: () => Promise<void>;
 
   create: (payload: CreateWishPayload) => Promise<WishOutcome>;
   update: (id: string, payload: UpdateWishPayload) => Promise<WishOutcome>;
@@ -83,13 +91,17 @@ const EMPTY = {
   baseline: null,
   wishes: [],
   income: null,
+  committed: null,
   isLoading: false,
   hasLoadedOnce: false,
   isSaving: false,
   isIncomeLoading: false,
   hasLoadedIncomeOnce: false,
+  isCommittedLoading: false,
+  hasLoadedCommittedOnce: false,
   error: null,
   incomeError: null,
+  committedError: null,
 };
 
 export const useWishStore = create<WishState>((set, get) => ({
@@ -129,6 +141,26 @@ export const useWishStore = create<WishState>((set, get) => ({
           "Não foi possível carregar suas fontes de renda.",
         ),
         isIncomeLoading: false,
+      });
+    }
+  },
+
+  fetchCommitted: async () => {
+    set({ isCommittedLoading: true, committedError: null });
+    try {
+      const data = await getCommittedOverview();
+      set({
+        committed: data,
+        isCommittedLoading: false,
+        hasLoadedCommittedOnce: true,
+      });
+    } catch (e) {
+      set({
+        committedError: translateWishError(
+          e,
+          "Não foi possível ver o que já está comprometido.",
+        ),
+        isCommittedLoading: false,
       });
     }
   },
@@ -306,4 +338,7 @@ export const useWishStore = create<WishState>((set, get) => ({
 async function refreshAfterIncomeChange(get: () => WishState): Promise<void> {
   await get().fetchIncome();
   await get().fetch();
+  // A âncora e o valor do salário decidem "quando cai" e "quanto sobra": sem
+  // esta terceira recarga, o cartão do salário ficaria falando da fonte antiga
+  if (get().hasLoadedCommittedOnce) await get().fetchCommitted();
 }

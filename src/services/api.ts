@@ -1240,3 +1240,42 @@ export const saveWorkProfile = async (payload: {
   const response = await api.put<WorkProfile>("/income/work-profile", payload);
   return response.data;
 };
+
+/**
+ * Uma conta que já tem dono. `estimated` marca conta de consumo (luz, água):
+ * o valor é a média do histórico, não um boleto fechado — a tela precisa
+ * dizer isso, senão o total parece mais exato do que é.
+ */
+export interface CommittedItem {
+  seriesId: string;
+  name: string;
+  categoryId: string | null;
+  dueDate: string;
+  amount: number;
+  estimated: boolean;
+}
+
+/**
+ * "Quando o salário cair, R$ X já têm dono."
+ *
+ * Com `salaryKnown: false` não há salário confirmado com dia de pagamento:
+ * `beforeSalary` vira simplesmente as contas dos próximos 30 dias e os campos
+ * de salário chegam nulos.
+ */
+export interface CommittedOverview {
+  salaryKnown: boolean;
+  salaryDate: string | null;
+  daysUntilSalary: number | null;
+  expectedSalary: number | null;
+  committedBeforeSalary: number;
+  beforeSalary: CommittedItem[];
+  committedAfterSalary: number;
+  afterSalary: CommittedItem[];
+  /** O que realmente sobra do próximo pagamento. */
+  free: number | null;
+}
+
+export const getCommittedOverview = async (): Promise<CommittedOverview> => {
+  const response = await api.get<CommittedOverview>("/income/committed");
+  return response.data;
+};
