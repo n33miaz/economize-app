@@ -115,6 +115,11 @@ export const useAuthStore = create(
         // `hasLoadedOnce` impediria a tela de perguntar de novo
         const { useAiSettingsStore } = require("./aiSettingsStore");
         useAiSettingsStore.getState().reset();
+
+        // Idem: os desejos guardam o salário confirmado e a jornada do dono
+        // anterior — o dado mais pessoal que o app tem. Sair tem de apagar.
+        const { useWishStore } = require("./wishStore");
+        useWishStore.getState().reset();
       },
 
       clearError: () => set({ error: null }),
