@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import {
+  DebtOverview,
   MonthlyAnalytics,
   getAnalyticsMonths,
+  getDebtOverview,
   getMonthlyAnalytics,
 } from "../services/api";
 import { getCycleAnchorDay } from "./preferencesStore";
@@ -39,6 +41,12 @@ interface AnalyticsState {
   selectedMonth: string | null;
   isLoading: boolean;
   error: string | null;
+  /**
+   * Quanto do período é dívida (EC-139). Viaja junto do consolidado porque é o
+   * MESMO recorte: buscá-lo à parte abriria espaço para a tela mostrar a
+   * quebra de um período e a dívida de outro.
+   */
+  debt: DebtOverview | null;
 
   // A Home responde sempre pelo período corrente do usuário; a Análise navega
   // pelo histórico. Consolidação e carregamento separados para que o recorte
@@ -63,6 +71,7 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
   selectedMonth: null,
   isLoading: false,
   error: null,
+  debt: null,
   homeData: null,
   isHomeLoading: false,
 
@@ -100,13 +109,30 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
     const requestId = ++monthlyRequestId;
     set({ isLoading: true, error: null, selectedMonth: target });
     try {
-      const data = await getMonthlyAnalytics(
-        analysisRangeForMonth(anchorDay, target),
-      );
+      const range = analysisRangeForMonth(anchorDay, target);
+      // Em paralelo porque são duas LEITURAS do mesmo recorte, sem ordem entre
+      // si — diferente do caso em que uma escrita precisa terminar antes da
+      // leitura. A quebra de dívida falhando sozinha não pode derrubar a tela:
+      // por isso ela vem com `catch` próprio devolvendo null
+      const [data, debt] = await Promise.all([
+        getMonthlyAnalytics(range),
+        // O `catch` mora DENTRO de uma função assíncrona, e não pendurado na
+        // promise: assim nem uma falha síncrona daqui escapa antes de o
+        // `Promise.all` pendurar tratador na primeira chamada — quando isso
+        // acontecia, a rejeição do consolidado ficava órfã e derrubava o
+        // processo em vez de virar o erro tratado da tela
+        (async () => {
+          try {
+            return await getDebtOverview(range);
+          } catch {
+            return null;
+          }
+        })(),
+      ]);
       if (requestId !== monthlyRequestId) return;
       // `selectedMonth` não é reescrito com `data.month`: em modo janela ele
       // volta null e a seleção do chip se perderia
-      set({ data, isLoading: false });
+      set({ data, debt, isLoading: false });
     } catch {
       if (requestId !== monthlyRequestId) return;
       set({ error: "Falha ao carregar a análise do período.", isLoading: false });

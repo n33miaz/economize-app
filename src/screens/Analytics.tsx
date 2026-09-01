@@ -21,6 +21,7 @@ import Animated from "react-native-reanimated";
 
 import type { CategorySlice, MonthlyAnalytics } from "../services/api";
 import { useAnalyticsStore } from "../store/analyticsStore";
+import DebtBreakdown from "../components/DebtBreakdown";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -793,6 +794,7 @@ export default function Analytics() {
 
   const {
     data,
+    debt,
     months,
     selectedMonth,
     isLoading,
@@ -995,6 +997,11 @@ export default function Analytics() {
             {/* As duas listas de categoria respondem à mesma pergunta por
                 lados opostos (para onde foi × de onde veio): no desktop elas
                 ficam lado a lado e a comparação deixa de exigir rolagem */}
+            {/* EC-139: antes da quebra por categoria, porque responde uma
+                pergunta anterior — quanto do que saiu é compromisso de outro
+                mês, e não escolha deste */}
+            <DebtBreakdown debt={debt} />
+
             <BlockGrid columns={columns}>
               {[
             expenseSlices.length > 0 && (

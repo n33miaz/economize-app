@@ -683,6 +683,62 @@ export const getMonthlyAnalytics = async (
   return response.data;
 };
 
+
+/**
+ * Tipos de dívida que o extrato revela (EC-139). Sem essa distinção o app soma
+ * a parcela do carro com o mercado e chama tudo de despesa.
+ */
+export type DebtKind =
+  | "FINANCING"
+  | "INSTALLMENT"
+  | "CONSORTIUM"
+  | "LOAN"
+  | "REVOLVING";
+
+export interface DebtEntry {
+  transactionId: string;
+  description: string;
+  amount: number;
+  date: string | null;
+  installment: number | null;
+  total: number | null;
+  /** Quantas faltam — por quanto tempo esse compromisso ainda vai pesar. */
+  remaining: number | null;
+}
+
+export interface DebtGroup {
+  kind: DebtKind;
+  total: number;
+  count: number;
+  items: DebtEntry[];
+}
+
+/**
+ * `shareOfExpense` vem nulo quando não houve despesa no período: 0/0 não é 0%,
+ * e "0% do seu mês é dívida" num mês sem extrato seria uma boa notícia que
+ * ninguém apurou.
+ */
+export interface DebtOverview {
+  month: string | null;
+  start: string;
+  end: string;
+  totalExpense: number;
+  totalDebt: number;
+  shareOfExpense: number | null;
+  groups: DebtGroup[];
+  /** Rotativo ou parcelamento de fatura no período: o alarme mais caro. */
+  revolvingAlert: boolean;
+}
+
+export const getDebtOverview = async (
+  range?: AnalysisRange,
+): Promise<DebtOverview> => {
+  const response = await api.get<DebtOverview>("/analytics/debt", {
+    params: rangeParams(range),
+  });
+  return response.data;
+};
+
 /**
  * Meses com movimento, do mais recente para o mais antigo. Continua sendo a
  * espinha do seletor mesmo em modo janela: cada mês vira o mês-âncora de um

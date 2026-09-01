@@ -1,5 +1,9 @@
 import type { MonthlyAnalytics, MonthTotals } from "../../services/api";
-import { getAnalyticsMonths, getMonthlyAnalytics } from "../../services/api";
+import {
+  getAnalyticsMonths,
+  getDebtOverview,
+  getMonthlyAnalytics,
+} from "../../services/api";
 import {
   hasMovement,
   reloadAnalyticsForAnchorChange,
@@ -10,6 +14,9 @@ import { usePreferencesStore } from "../preferencesStore";
 jest.mock("../../services/api", () => ({
   getAnalyticsMonths: jest.fn(),
   getMonthlyAnalytics: jest.fn(),
+  // A quebra de dívida viaja junto do consolidado (EC-139): sem declarar aqui,
+  // a função vinha `undefined` e o store estourava antes de tratar o erro
+  getDebtOverview: jest.fn().mockResolvedValue(null),
 }));
 
 const mockedMonths = getAnalyticsMonths as jest.MockedFunction<
@@ -18,6 +25,7 @@ const mockedMonths = getAnalyticsMonths as jest.MockedFunction<
 const mockedMonthly = getMonthlyAnalytics as jest.MockedFunction<
   typeof getMonthlyAnalytics
 >;
+const mockedDebt = getDebtOverview as jest.MockedFunction<typeof getDebtOverview>;
 
 function totals(overrides?: Partial<MonthTotals>): MonthTotals {
   return {
@@ -160,6 +168,22 @@ describe("fetchMonthly — recorte enviado à API", () => {
       start: "2026-07-12",
       end: "2026-08-11",
     });
+  });
+
+  it("a dívida falhando sozinha não derruba a análise", async () => {
+    // A quebra de dívida é informação ADICIONAL sobre o mesmo recorte: perder
+    // ela não pode custar a tela inteira, que é o que acontecia quando a
+    // rejeição escapava sem tratador
+    setAnchor(1);
+    mockedMonthly.mockResolvedValue(analytics());
+    mockedDebt.mockRejectedValueOnce(new Error("offline"));
+
+    await useAnalyticsStore.getState().fetchMonthly("2026-07");
+
+    const state = useAnalyticsStore.getState();
+    expect(state.data).not.toBeNull();
+    expect(state.error).toBeNull();
+    expect(state.debt).toBeNull();
   });
 
   it("sem mês escolhido, o alvo é o ciclo que contém hoje", async () => {
