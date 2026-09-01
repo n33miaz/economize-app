@@ -285,6 +285,23 @@ export interface MonthlyAnalytics {
   previous: MonthTotals;
   categories: CategorySlice[];
   pendingReviewCount: number;
+  /**
+   * O que o total NÃO diz (EC-138). Opcional porque o servidor pode ser mais
+   * velho que o app; a tela trata ausência como "nenhuma ressalva".
+   */
+  caveats?: CycleCaveat[];
+}
+
+/**
+ * Ressalva sobre o período: nota de rodapé, nunca número escondido. O valor
+ * continua sendo o que é — a ressalva explica por que ele não é comparável.
+ */
+export interface CycleCaveat {
+  kind: "LATE_INCOME" | "PARTIAL_PERIOD" | "NO_PREVIOUS_DATA";
+  title: string;
+  detail: string;
+  /** Valor envolvido, quando a ressalva é sobre dinheiro e não sobre o período. */
+  amount: number | null;
 }
 
 export interface UserMe {
