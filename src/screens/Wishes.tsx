@@ -14,10 +14,9 @@ import { useToastStore } from "../store/toastStore";
 import { formatBRL } from "../utils/money";
 import {
   describeHourlyRate,
-  describeLifeCost,
   describeWhatIf,
   formatHours,
-  formatWorkDays,
+  formatWorkTime,
   gapPrompt,
 } from "../utils/wishes";
 import * as Haptics from "../utils/haptics";
@@ -269,7 +268,6 @@ export default function Wishes({ navigation }: any) {
               <WishCard
                 key={wish.id}
                 wish={wish}
-                hoursPerMonth={baseline?.hoursPerMonth ?? null}
                 onPress={() => setDetalhe(wish)}
               />
             ))
@@ -374,15 +372,7 @@ export default function Wishes({ navigation }: any) {
                   {formatHours(detalheVivo.projection.hoursOfWork)}
                 </Text>
                 <Text className="text-xs text-textSecondary mt-1">
-                  {[
-                    formatWorkDays(detalheVivo.projection.workDays),
-                    describeLifeCost(
-                      detalheVivo.projection.hoursOfWork,
-                      baseline?.hoursPerMonth ?? null,
-                    ),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {formatWorkTime(detalheVivo.projection)}
                 </Text>
               </View>
             )}

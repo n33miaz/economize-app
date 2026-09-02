@@ -10,6 +10,7 @@ import {
   useAnalyticsStore,
 } from "../analyticsStore";
 import { usePreferencesStore } from "../preferencesStore";
+import { useRecurrenceStore } from "../recurrenceStore";
 
 jest.mock("../../services/api", () => ({
   getAnalyticsMonths: jest.fn(),
@@ -311,5 +312,23 @@ describe("reloadAnalyticsForAnchorChange", () => {
     await reloadAnalyticsForAnchorChange();
 
     expect(useAnalyticsStore.getState().selectedMonth).toBe("2026-07");
+  });
+
+  it("esquece a previsão de saldo, que também é recortada pela âncora", async () => {
+    // A Home lê `forecast` para alertar saldo negativo; sem isto ela mostraria
+    // o período calculado com a âncora velha até alguém reabrir a previsão
+    useRecurrenceStore.setState({
+      forecast: { startingBalance: 0, anchorDay: 1, months: [] },
+      hasLoadedForecastOnce: true,
+    });
+    useAnalyticsStore.setState({ months: ["2026-08"], selectedMonth: "2026-08" });
+    setAnchor(12);
+    mockedMonths.mockResolvedValue(["2026-08"]);
+    mockedMonthly.mockResolvedValue(analytics({ month: null }));
+
+    await reloadAnalyticsForAnchorChange();
+
+    expect(useRecurrenceStore.getState().forecast).toBeNull();
+    expect(useRecurrenceStore.getState().hasLoadedForecastOnce).toBe(false);
   });
 });

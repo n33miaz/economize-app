@@ -1,13 +1,12 @@
 import {
   describeCommitted,
   describeHourlyRate,
-  describeLifeCost,
   describePace,
   describeWhatIf,
   describeSalaryTiming,
   formatDueDate,
   formatHours,
-  formatWorkDays,
+  formatWorkTime,
   gapPrompt,
   incomeKindLabel,
   statusLabel,
@@ -21,6 +20,8 @@ const projecao = (over: Partial<WishProjection> = {}): WishProjection => ({
   remaining: 18000,
   hoursOfWork: null,
   workDays: null,
+  workMonths: null,
+  workYears: null,
   monthsToAfford: null,
   estimatedDate: null,
   installments: null,
@@ -71,35 +72,37 @@ describe("formatHours", () => {
   });
 });
 
-describe("formatWorkDays", () => {
-  it("concorda o plural", () => {
-    expect(formatWorkDays(1)).toBe("1 dia de trabalho");
-    expect(formatWorkDays(88.6)).toBe("88,6 dias de trabalho");
+describe("formatWorkTime", () => {
+  const tempo = (
+    workDays: number | null,
+    workMonths: number | null,
+    workYears: number | null,
+  ) => formatWorkTime({ workDays, workMonths, workYears });
+
+  it("sobe a escada até onde a unidade ainda diz algo", () => {
+    // A moto de R$ 18.000 de quem ganha R$ 4.400
+    expect(tempo(88.6, 4.1, 0.3)).toBe("88,6 dias · 4,1 meses de trabalho");
   });
 
-  it("nulo continua nulo", () => {
-    expect(formatWorkDays(null)).toBeNull();
-  });
-});
-
-describe("describeLifeCost", () => {
-  it("traduz horas em pedaço do ano", () => {
-    // 709 h / 173,33 h por mês = 4,1 meses
-    expect(describeLifeCost(709.1, 173.33)).toBe("4,1 meses do seu ano");
+  it("um desejo que atravessa anos passa a contá-los", () => {
+    // A casa de R$ 320.000 de quem ganha R$ 4.400, conforme o servidor
+    // responde: aqui o ano é a única unidade que ainda comunica
+    expect(tempo(1575.7, 72.7, 6.1)).toBe(
+      "1.576 dias · 72,7 meses · 6,1 anos de trabalho",
+    );
   });
 
-  it("passa a falar em anos quando ultrapassa doze meses", () => {
-    expect(describeLifeCost(173.33 * 18, 173.33)).toBe("1,5 anos de trabalho");
+  it("desejo pequeno fica só nos dias", () => {
+    // "0,1 meses" ao lado de "1,5 dias" não informa, atrapalha
+    expect(tempo(1.5, 0.1, 0)).toBe("1,5 dias de trabalho");
   });
 
-  it("cala abaixo de meio mês, onde os dias explicam melhor", () => {
-    // "0,2 meses do seu ano" confunde mais do que "8 dias de trabalho"
-    expect(describeLifeCost(30, 173.33)).toBeNull();
+  it("concorda o singular em cada unidade", () => {
+    expect(tempo(1, 1, 1)).toBe("1 dia · 1 mês · 1 ano de trabalho");
   });
 
-  it("sem jornada não inventa a comparação", () => {
-    expect(describeLifeCost(709, null)).toBeNull();
-    expect(describeLifeCost(709, 0)).toBeNull();
+  it("sem jornada declarada não inventa tempo nenhum", () => {
+    expect(tempo(null, null, null)).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@ import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
 
 import { useTheme } from "../theme/ThemeProvider";
+import { useAdvancedView } from "../store/preferencesStore";
 import { spacing } from "../theme/ds";
 import { formatBRL, formatPercent } from "../utils/money";
 import { debtKindLabel, debtKindMeaning, describeInstallment } from "../utils/debt";
@@ -19,6 +20,7 @@ import type { DebtOverview } from "../services/api";
  */
 export default function DebtBreakdown({ debt }: { debt: DebtOverview | null }) {
   const t = useTheme();
+  const avancado = useAdvancedView();
   const [aberto, setAberto] = useState<string | null>(null);
 
   // Sem dívida nenhuma o bloco não aparece: um card dizendo "R$ 0,00 em
@@ -81,78 +83,91 @@ export default function DebtBreakdown({ debt }: { debt: DebtOverview | null }) {
           </View>
         )}
 
-        <View className="mt-4">
-          {debt.groups.map((group) => {
-            const expandido = aberto === group.kind;
-            return (
-              <View key={group.kind} className="mb-2">
-                <Pressable
-                  onPress={() => setAberto(expandido ? null : group.kind)}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: expandido }}
-                  accessibilityLabel={`${debtKindLabel(group.kind)}: ${formatBRL(
-                    group.total,
-                  )} em ${group.count} ${group.count === 1 ? "lançamento" : "lançamentos"}`}
-                  className="flex-row items-center py-2"
-                >
-                  <View className="flex-1 pr-2">
-                    <Text className="text-sm font-bold text-textPrimary">
-                      {debtKindLabel(group.kind)}
-                    </Text>
-                    <Text className="text-[11px] text-textSecondary mt-0.5">
-                      {debtKindMeaning(group.kind)}
-                    </Text>
-                  </View>
-                  <Text
-                    className="text-sm font-bold text-textPrimary mr-2"
-                    style={{ fontVariant: ["tabular-nums"] }}
+        {/* EC-142: a taxonomia (financiamento, consórcio, rotativo) é a
+            leitura avançada. Na simples ficam o total, o alarme de rotativo —
+            que é aviso e não detalhe — e a frase que diz o que o número é */}
+        {!avancado ? (
+          <Text
+            className="text-xs mt-3"
+            style={{ color: t.text.secondary, lineHeight: 18 }}
+          >
+            Isso não é escolha deste mês: é compromisso assumido antes, que
+            continua cobrando.
+          </Text>
+        ) : (
+          <View className="mt-4">
+            {debt.groups.map((group) => {
+              const expandido = aberto === group.kind;
+              return (
+                <View key={group.kind} className="mb-2">
+                  <Pressable
+                    onPress={() => setAberto(expandido ? null : group.kind)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: expandido }}
+                    accessibilityLabel={`${debtKindLabel(group.kind)}: ${formatBRL(
+                      group.total,
+                    )} em ${group.count} ${group.count === 1 ? "lançamento" : "lançamentos"}`}
+                    className="flex-row items-center py-2"
                   >
-                    {formatBRL(group.total)}
-                  </Text>
-                  <View
-                    style={{
-                      transform: [{ rotate: expandido ? "180deg" : "0deg" }],
-                    }}
-                  >
-                    <ChevronDown size={16} color={t.text.tertiary} />
-                  </View>
-                </Pressable>
-
-                {expandido &&
-                  group.items.map((item) => (
-                    <View
-                      key={item.transactionId}
-                      className="flex-row items-center justify-between py-1.5 pl-3"
-                    >
-                      <View className="flex-1 pr-2">
-                        <Text className="text-xs text-textPrimary" numberOfLines={1}>
-                          {item.description}
-                        </Text>
-                        {describeInstallment(item) && (
-                          <Text className="text-[11px] text-textSecondary mt-0.5">
-                            {describeInstallment(item)}
-                          </Text>
-                        )}
-                      </View>
-                      <Text
-                        className="text-xs text-textSecondary"
-                        style={{ fontVariant: ["tabular-nums"] }}
-                      >
-                        {formatBRL(item.amount)}
+                    <View className="flex-1 pr-2">
+                      <Text className="text-sm font-bold text-textPrimary">
+                        {debtKindLabel(group.kind)}
+                      </Text>
+                      <Text className="text-[11px] text-textSecondary mt-0.5">
+                        {debtKindMeaning(group.kind)}
                       </Text>
                     </View>
-                  ))}
+                    <Text
+                      className="text-sm font-bold text-textPrimary mr-2"
+                      style={{ fontVariant: ["tabular-nums"] }}
+                    >
+                      {formatBRL(group.total)}
+                    </Text>
+                    <View
+                      style={{
+                        transform: [{ rotate: expandido ? "180deg" : "0deg" }],
+                      }}
+                    >
+                      <ChevronDown size={16} color={t.text.tertiary} />
+                    </View>
+                  </Pressable>
 
-                {expandido && group.count > group.items.length && (
-                  <Text className="text-[11px] text-textSecondary pl-3 pt-1">
-                    e mais {group.count - group.items.length} lançamento
-                    {group.count - group.items.length === 1 ? "" : "s"}
-                  </Text>
-                )}
-              </View>
-            );
-          })}
-        </View>
+                  {expandido &&
+                    group.items.map((item) => (
+                      <View
+                        key={item.transactionId}
+                        className="flex-row items-center justify-between py-1.5 pl-3"
+                      >
+                        <View className="flex-1 pr-2">
+                          <Text className="text-xs text-textPrimary" numberOfLines={1}>
+                            {item.description}
+                          </Text>
+                          {describeInstallment(item) && (
+                            <Text className="text-[11px] text-textSecondary mt-0.5">
+                              {describeInstallment(item)}
+                            </Text>
+                          )}
+                        </View>
+                        <Text
+                          className="text-xs text-textSecondary"
+                          style={{ fontVariant: ["tabular-nums"] }}
+                        >
+                          {formatBRL(item.amount)}
+                        </Text>
+                      </View>
+                    ))}
+
+                  {expandido && group.count > group.items.length && (
+                    <Text className="text-[11px] text-textSecondary pl-3 pt-1">
+                      e mais {group.count - group.items.length} lançamento
+                      {group.count - group.items.length === 1 ? "" : "s"}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     </View>
   );

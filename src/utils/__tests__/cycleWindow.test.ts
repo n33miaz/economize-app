@@ -9,12 +9,14 @@ import {
   cycleWindowContaining,
   cycleWindowForMonth,
   daysInMonth,
+  describeDate,
   describeWindow,
   formatDayMonth,
   formatMonthLongLabel,
   formatWindowLabel,
   homeReferenceDate,
   isCalendarMonthAnchor,
+  isCalendarMonthWindow,
   shiftMonthKey,
   todayIso,
 } from "../cycleWindow";
@@ -169,6 +171,33 @@ describe("isCalendarMonthAnchor", () => {
   });
 });
 
+describe("isCalendarMonthWindow", () => {
+  it("dia 1 até o último dia do MESMO mês", () => {
+    expect(isCalendarMonthWindow("2026-08-01", "2026-08-31")).toBe(true);
+    expect(isCalendarMonthWindow("2026-02-01", "2026-02-28")).toBe(true);
+    expect(isCalendarMonthWindow("2028-02-01", "2028-02-29")).toBe(true);
+    // a janela da âncora 1 gerada pela própria aritmética do ciclo
+    const window = cycleWindowForMonth(1, "2026-09");
+    expect(isCalendarMonthWindow(window.start, window.end)).toBe(true);
+  });
+
+  it("qualquer outro recorte é janela", () => {
+    expect(isCalendarMonthWindow("2026-08-12", "2026-09-11")).toBe(false);
+    // abre no dia 1 mas fecha antes do fim
+    expect(isCalendarMonthWindow("2026-08-01", "2026-08-30")).toBe(false);
+    // dia 1 a dia 31, mas de meses diferentes
+    expect(isCalendarMonthWindow("2026-08-01", "2026-10-31")).toBe(false);
+    // fevereiro não bissexto não fecha no dia 29
+    expect(isCalendarMonthWindow("2026-02-01", "2026-02-29")).toBe(false);
+  });
+
+  it("sem uma das pontas não afirma nada", () => {
+    expect(isCalendarMonthWindow(undefined, "2026-08-31")).toBe(false);
+    expect(isCalendarMonthWindow("2026-08-01", null)).toBe(false);
+    expect(isCalendarMonthWindow("lixo", "2026-08-31")).toBe(false);
+  });
+});
+
 describe("homeReferenceDate", () => {
   it("usa hoje quando o mês corrente tem movimento", () => {
     expect(homeReferenceDate(["2026-08", "2026-07"], "2026-08-15")).toBe(
@@ -250,6 +279,14 @@ describe("rótulos", () => {
     expect(describeWindow("2026-07-12", "2026-08-11")).toContain(
       "11 de agosto de 2026",
     );
+  });
+
+  it("fala uma data sozinha, com ou sem ano — e lê a parte de data, não o fuso", () => {
+    expect(describeDate("2026-08-20")).toBe("20 de agosto");
+    expect(describeDate("2026-08-20", true)).toBe("20 de agosto de 2026");
+    // meia-noite UTC não pode virar "31 de julho" no aparelho em UTC−3
+    expect(describeDate("2026-08-01T00:00:00Z")).toBe("1 de agosto");
+    expect(describeDate("lixo")).toBe("lixo");
   });
 
   it("escreve o mês por extenso para o título da fatura", () => {

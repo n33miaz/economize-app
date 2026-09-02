@@ -126,8 +126,109 @@ export interface Indicator {
   sell: number | null;
   variation: number;
   location?: string;
-  points?: number;
+  /**
+   * O servidor manda 
+ull (não omite) para tudo que não é índice — e o
+   * próprio índice hoje chega com o valor em uy. Quem lê tem que usar
+   * ??: !== undefined deixava o null passar e a lista de Moedas
+   * mostrava R$ 0,00 com a variação certa ao lado.
+   */
+  points?: number | null;
 }
+
+/**
+ * Item do catálogo paginado (EC-099). Estende `Indicator`: o app já sabe
+ * renderizar esse shape, então a lista infinita reaproveita o card existente.
+ */
+export interface CatalogItem extends Indicator {
+  /** Recorte para a UI: acoes, fiis, etfs, bdrs, indices, moedas, cripto. */
+  segment: string;
+  /**
+   * Procedência do preço. `UNQUOTED` significa que `buy`/`sell` vêm nulos: o
+   * catálogo entrega identidade sem gastar cota do provedor, e o item nunca
+   * desaparece da lista por falta de preço.
+   */
+  quoteStatus: "LIVE" | "STALE" | "UNQUOTED";
+}
+
+export interface CatalogPageInfo {
+  limit: number;
+  returned: number;
+  hasMore: boolean;
+  /** Cursor da próxima página; nulo quando `hasMore` é falso. */
+  nextCursor: string | null;
+  totalMatched: number;
+  catalogVersion: string;
+  /**
+   * Janela de ordenação desta página. Páginas com o mesmo `rankEpoch` são
+   * fatias da MESMA ordem congelada; epoch diferente significa que a ordem foi
+   * recalculada e continuar paginando repetiria ou pularia item.
+   */
+  rankEpoch: number;
+  /** Quantas cotações novas ainda cabem na cota do dia. */
+  quoteBudgetRemaining: number;
+}
+
+export interface CatalogPage {
+  items: CatalogItem[];
+  page: CatalogPageInfo;
+}
+
+export interface CatalogQuery {
+  type?: string;
+  segment?: string;
+  q?: string;
+  sort?: "trending" | "name" | "code";
+  limit?: number;
+  /** Ids dos favoritos: são o componente "do usuário" da ordenação. */
+  favorites?: string;
+  cursor?: string;
+}
+
+export const getCatalog = async (query: CatalogQuery): Promise<CatalogPage> => {
+  const response = await api.get<CatalogPage>("/indicators/catalog", {
+    params: query,
+  });
+  return response.data;
+};
+
+/**
+ * Detalhe enriquecido de um ativo (EC-103). Uma requisição ao provedor entrega
+ * tudo: a faixa de 52 semanas já vinha na cotação, e a série do ano vem no
+ * mesmo corpo.
+ */
+export interface AssetChangeWindow {
+  key: "24h" | "7d" | "30d" | "ytd";
+  label: string;
+  /**
+   * `null` é resposta legítima: papel recém-listado não tem 30 dias de
+   * histórico, e zero ali afirmaria estabilidade onde não há dado.
+   */
+  changePct: number | null;
+  fromPrice: number | null;
+  fromDate: string | null;
+}
+
+export interface AssetDetail {
+  code: string;
+  name: string;
+  price: number | null;
+  dayChangePct: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  /** Posição do preço na faixa de 52 semanas, de 0 a 1; nula sem faixa. */
+  rangePosition: number | null;
+  windows: AssetChangeWindow[];
+  /** Preço de snapshot antigo: a cota do dia acabou ou o provedor falhou. */
+  stale: boolean;
+}
+
+export const getAssetDetail = async (code: string): Promise<AssetDetail> => {
+  const response = await api.get<AssetDetail>(
+    `/indicators/${encodeURIComponent(code)}/detail`,
+  );
+  return response.data;
+};
 
 export interface NewsArticle {
   source: { id: string | null; name: string };
@@ -290,6 +391,12 @@ export interface MonthlyAnalytics {
    * velho que o app; a tela trata ausência como "nenhuma ressalva".
    */
   caveats?: CycleCaveat[];
+  /**
+   * Até que dia o extrato do usuário alcança (EC-137), de qualquer período.
+   * Opcional porque o servidor pode ser mais velho que o app — e aí "não sei"
+   * não pode ser lido como "já chegou".
+   */
+  lastTransactionDate?: string | null;
 }
 
 /**
@@ -395,13 +502,12 @@ export const uploadBankStatement = async (
   return response.data;
 };
 
+// Falha PROPAGA: a versão que engolia o erro e devolvia [] fazia o Extrato
+// mostrar "Nenhum extrato importado" para quem tinha dois anos de histórico e
+// só perdeu a rede — o store trata o erro e a tela oferece "tentar de novo"
 export const getBankTransactions = async (): Promise<BankTransaction[]> => {
-  try {
-    const response = await api.get<BankTransaction[]>("/bank-statements");
-    return response.data;
-  } catch (error) {
-    return [];
-  }
+  const response = await api.get<BankTransaction[]>("/bank-statements");
+  return response.data;
 };
 
 // --- Conector Open Finance (Meu Pluggy) ---
@@ -814,14 +920,29 @@ export interface ForecastItem {
   flow: "EXPENSE" | "INCOME";
   /** null em cadência semanal, que não tem um dia único no mês */
   dueDay: number | null;
+  /**
+   * Data COMPLETA do vencimento (EC-116). Num ciclo ancorado o dia sozinho não
+   * ordena nem localiza: o ciclo 12/08→11/09 tem o dia 20 (de agosto) ANTES do
+   * dia 5 (de setembro), e só a data diz qual é qual. Os itens já vêm
+   * ordenados por ela. null em WEEKLY, pelo mesmo motivo do `dueDay`.
+   */
+  dueDate: string | null;
   amount: number;
   source: RecurrenceSource;
-  /** Ocorrência já conciliada no mês corrente: fica FORA das somas do mês */
+  /** Ocorrência já conciliada no período corrente: fica FORA das somas */
   settled: boolean;
 }
 
+/**
+ * Um período da previsão. `month` é o mês em que o período COMEÇA — identidade
+ * do período, não rótulo: em ciclo ancorado o "2026-08" é o ciclo que abre em
+ * 12/08 e vai até 11/09. Quem descreve o recorte são `start`/`end`.
+ */
 export interface ForecastMonth {
   month: string;
+  /** Recorte explícito do período (EC-116), inclusivo nas duas pontas */
+  start: string;
+  end: string;
   expectedIncome: number;
   expectedExpense: number;
   expectedNet: number;
@@ -832,6 +953,13 @@ export interface ForecastMonth {
 
 export interface ForecastResponse {
   startingBalance: number | null;
+  /**
+   * Dia em que o ciclo vira, lido pelo servidor a partir do recorte pedido; 1
+   * quando a projeção correu por mês do calendário (EC-116). É a única parte do
+   * recorte que o app não mandou escrita — está aqui para uma leitura errada da
+   * âncora aparecer na primeira resposta, e não três períodos adiante.
+   */
+  anchorDay: number;
   months: ForecastMonth[];
 }
 
@@ -908,13 +1036,20 @@ export const deleteRecurrence = async (
 /**
  * `startingBalance` não é opcional na prática: sem ele o acumulado parte de
  * zero e "saldo previsto" viraria só a soma das recorrências.
+ *
+ * `range` é o período corrente na MESMA gramática de `/analytics/monthly`
+ * (EC-116): `month` com âncora no dia 1, `start`/`end` fora dele — os períodos
+ * seguintes o servidor encadeia a partir desse recorte. Sem `range` ele projeta
+ * por mês do calendário a partir do mês corrente, que é o que o APK publicado
+ * ainda pede; por isso o parâmetro é opcional e fica por último.
  */
 export const getRecurrenceForecast = async (
   months: number,
   startingBalance: number,
+  range?: AnalysisRange,
 ): Promise<ForecastResponse> => {
   const response = await api.get<ForecastResponse>("/recurrences/forecast", {
-    params: { months, startingBalance },
+    params: { months, startingBalance, ...rangeParams(range) },
   });
   return response.data;
 };
@@ -1133,6 +1268,11 @@ export interface WishProjection {
   remaining: number;
   hoursOfWork: number | null;
   workDays: number | null;
+  // Meses e anos TRABALHADOS. Não confundir com `monthsToAfford`, que é
+  // espera guardando a sobra: a moto custa 4,1 meses de trabalho e leva 19
+  // meses para ser paga
+  workMonths: number | null;
+  workYears: number | null;
   monthsToAfford: number | null;
   estimatedDate: string | null;
   installments: number | null;
@@ -1350,5 +1490,212 @@ export interface CommittedOverview {
 
 export const getCommittedOverview = async (): Promise<CommittedOverview> => {
   const response = await api.get<CommittedOverview>("/income/committed");
+  return response.data;
+};
+
+// ---------------------------------------------------------- Grupo familiar
+
+/**
+ * A "Casa" (EC-149/150): um usuário pertence a no máximo um grupo. Quem cria é
+ * OWNER; quem entra pelo código é MEMBER. O papel decide quem convida, quem
+ * remove e quem apaga.
+ */
+export type FamilyRole = "OWNER" | "MEMBER";
+
+/**
+ * O que EU mostro para a casa. `TOTALS` é o padrão ao entrar: somas por
+ * categoria e do período, nenhuma linha. `NONE` continua na lista de membros
+ * — a casa sabe que a pessoa existe e escolheu não mostrar.
+ */
+export type FamilyShareScope = "NONE" | "TOTALS" | "TRANSACTIONS";
+
+export interface FamilyMember {
+  id: string;
+  userId: string;
+  name: string;
+  role: FamilyRole;
+  joinedAt: string;
+  shareScope: FamilyShareScope;
+  /** O próprio chamador, marcado pelo servidor — a tela não compara ids. */
+  isMe: boolean;
+}
+
+/**
+ * Parâmetros do que o chamador compartilha. `sharedAccountIds` vazio significa
+ * TODAS as contas; preenchido, só as listadas — e aí as transações sem conta
+ * (importadas por arquivo) só entram com `includeUnassigned`.
+ */
+export interface FamilySharing {
+  shareScope: FamilyShareScope;
+  hiddenCategoryIds: string[];
+  sharedAccountIds: string[];
+  includeUnassigned: boolean;
+}
+
+/**
+ * Convite vivo do grupo. O `code` só existe na resposta da emissão
+ * (`createFamilyInvite`); no `GET /family` ele volta nulo de propósito — quem
+ * perdeu o código emite outro, e o anterior morre.
+ */
+export interface FamilyInviteInfo {
+  code: string | null;
+  expiresAt: string;
+}
+
+export interface FamilyInvite {
+  code: string;
+  expiresAt: string;
+}
+
+export interface FamilyResponse {
+  id: string;
+  name: string;
+  /** Papel do CHAMADOR neste grupo. */
+  role: FamilyRole;
+  members: FamilyMember[];
+  mySharing: FamilySharing;
+  invite: FamilyInviteInfo | null;
+}
+
+export interface FamilyTotals {
+  income: number;
+  expense: number;
+  net: number;
+}
+
+/**
+ * Soma por categoria na visão da casa. `categoryName` viaja na resposta porque
+ * a categoria pessoal de OUTRO membro não existe no catálogo do chamador — sem
+ * o nome aqui a tela mostraria só um id.
+ */
+export interface FamilyCategoryTotal {
+  categoryId: string | null;
+  categoryName: string;
+  income: number;
+  expense: number;
+  txCount: number;
+}
+
+export interface FamilyMemberAnalytics {
+  memberId: string;
+  name: string;
+  isMe: boolean;
+  shareScope: FamilyShareScope;
+  /** Nulo para quem escolheu `NONE`: a pessoa aparece, o número não. */
+  totals: FamilyTotals | null;
+  categories: FamilyCategoryTotal[];
+}
+
+export interface FamilyAnalyticsResponse {
+  /** O recorte que o CHAMADOR pediu — a âncora é de quem está olhando. */
+  window: { start: string; end: string; month: string | null };
+  members: FamilyMemberAnalytics[];
+  combined: FamilyTotals & { categories: FamilyCategoryTotal[] };
+}
+
+/** Linha compartilhada: o lançamento como no extrato, mais de quem ele é. */
+export interface FamilyTransaction extends BankTransaction {
+  memberId: string;
+  memberName: string;
+}
+
+/**
+ * `null` quando o chamador não pertence a grupo nenhum. O servidor responde
+ * 404 nesse caso, e 404 aqui é ESTADO ("sem casa"), não falha — a tela mostra
+ * os cards de criar/entrar, nunca o ErrorState. Qualquer outro erro sobe.
+ */
+export const getFamily = async (): Promise<FamilyResponse | null> => {
+  try {
+    const response = await api.get<FamilyResponse>("/family");
+    return response.data;
+  } catch (error) {
+    if (getApiErrorStatus(error) === 404) return null;
+    throw error;
+  }
+};
+
+/** 201 com o grupo; 409 quando o chamador já pertence a um. */
+export const createFamily = async (name?: string): Promise<FamilyResponse> => {
+  const response = await api.post<FamilyResponse>(
+    "/family",
+    name ? { name } : {},
+  );
+  return response.data;
+};
+
+/** Só o OWNER. */
+export const renameFamily = async (name: string): Promise<FamilyResponse> => {
+  const response = await api.patch<FamilyResponse>("/family", { name });
+  return response.data;
+};
+
+/** Só o OWNER: apaga grupo, membros, convites e parâmetros — para todos. */
+export const deleteFamily = async (): Promise<void> => {
+  await api.delete("/family");
+};
+
+/**
+ * Só o OWNER. Emitir de novo invalida o convite anterior: há um convite vivo
+ * por grupo de cada vez. Esta é a ÚNICA resposta em que o código aparece.
+ */
+export const createFamilyInvite = async (): Promise<FamilyInvite> => {
+  const response = await api.post<FamilyInvite>("/family/invites");
+  return response.data;
+};
+
+/**
+ * 404 para código inválido, expirado ou já usado — a mesma resposta para os
+ * três, de propósito, para não dizer qual. 409 quando o chamador já pertence
+ * a um grupo. Entra no balde caro do limitador (10/min): 429 é possível.
+ */
+export const joinFamily = async (code: string): Promise<FamilyResponse> => {
+  const response = await api.post<FamilyResponse>("/family/join", { code });
+  return response.data;
+};
+
+/**
+ * OWNER remove qualquer outro; MEMBER só o próprio. `"me"` é aceito como id
+ * para "sair" — e sair apaga os parâmetros de compartilhamento do membro.
+ */
+export const removeFamilyMember = async (memberId: string): Promise<void> => {
+  await api.delete(`/family/members/${memberId}`);
+};
+
+/** 400 quando uma categoria ou conta listada não é do chamador. */
+export const updateFamilySharing = async (
+  sharing: FamilySharing,
+): Promise<FamilySharing> => {
+  const response = await api.put<FamilySharing>("/family/sharing", sharing);
+  return response.data;
+};
+
+/** Mesma gramática de recorte de `/analytics/monthly`: `month` XOR janela. */
+export const getFamilyAnalytics = async (
+  range: AnalysisRange,
+): Promise<FamilyAnalyticsResponse> => {
+  const response = await api.get<FamilyAnalyticsResponse>(
+    "/family/analytics/monthly",
+    { params: rangeParams(range) },
+  );
+  return response.data;
+};
+
+/**
+ * Só linhas de membros com `TRANSACTIONS` (o próprio chamador sempre
+ * completo); categoria oculta e conta não compartilhada vêm AUSENTES — o
+ * filtro é do servidor, e o app não tem como (nem deve) refazê-lo.
+ */
+export const getFamilyTransactions = async (params: {
+  range: AnalysisRange;
+  memberId?: string;
+  categoryId?: string;
+}): Promise<FamilyTransaction[]> => {
+  const response = await api.get<FamilyTransaction[]>("/family/transactions", {
+    params: {
+      ...rangeParams(params.range),
+      memberId: params.memberId,
+      categoryId: params.categoryId,
+    },
+  });
   return response.data;
 };

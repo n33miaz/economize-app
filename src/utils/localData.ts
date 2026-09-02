@@ -12,6 +12,7 @@ import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
 import { useReportsStore } from "../store/reportsStore";
 import { useCategoriesStore } from "../store/categoriesStore";
+import { useFamilyStore } from "../store/familyStore";
 
 // Apaga o rastro local do app (EC-104): o storage inteiro e o estado em
 // memória dos stores persistidos, terminando no logout — que troca a árvore
@@ -50,6 +51,9 @@ export async function clearLocalData(): Promise<void> {
   useAccountsStore.getState().reset();
   // opções de IA: provedor, modelo e os 4 últimos dígitos da chave do usuário
   useAiSettingsStore.getState().reset();
+  // a casa (EC-150): nome e números de OUTRAS pessoas, mais o código de
+  // convite emitido nesta sessão — o único rastro aqui que não é do dono
+  useFamilyStore.getState().reset();
 
   useAuthStore.getState().logout();
 }

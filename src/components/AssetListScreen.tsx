@@ -25,7 +25,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { padRowsForColumns } from "../utils/layout";
 import { useTheme } from "../theme/ThemeProvider";
 import { motion, spacing } from "../theme/ds";
-import { softEasingFn, useMotionPresets } from "../theme/motionPresets";
+import { enteringEasing, useMotionPresets } from "../theme/motionPresets";
 import { Indicator, isCurrencyData, isIndexData } from "../services/api";
 import {
   favoriteDisplayItems,
@@ -218,12 +218,12 @@ export default function AssetListScreen({
   // com "reduzir movimento" o card entra e sai seco
   const favEntering = useMemo(() => {
     if (reducedMotion) return undefined;
-    return FadeIn.duration(motion.duration.base).easing(softEasingFn);
+    return FadeIn.duration(motion.duration.base).easing(enteringEasing);
   }, [reducedMotion]);
 
   const favExiting = useMemo(() => {
     if (reducedMotion) return undefined;
-    return FadeOut.duration(motion.duration.fast).easing(softEasingFn);
+    return FadeOut.duration(motion.duration.fast).easing(enteringEasing);
   }, [reducedMotion]);
 
   const renderHeader = useMemo(() => {
@@ -330,7 +330,7 @@ export default function AssetListScreen({
         // Todo índice é pontuado — não só o IBOVESPA
         displaySymbol = isIndexData(item) ? "pts" : "R$";
       }
-      const displayValue = item.points !== undefined ? item.points : item.buy;
+      const displayValue = item.points ?? item.buy ?? 0;
 
       return (
         // O `flex: 1` divide a linha entre as duas colunas; numa coluna só ele

@@ -28,31 +28,50 @@ export function formatHours(hours: number | null): string | null {
   return `${hours.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`;
 }
 
-export function formatWorkDays(days: number | null): string | null {
-  if (days == null) return null;
-  const rounded = days >= 100 ? Math.round(days) : days;
-  const label = rounded.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-  return `${label} ${rounded === 1 ? "dia" : "dias"} de trabalho`;
-}
-
 /**
- * A frase que dá o baque: o preço medido em pedaço de vida.
+ * O preço em tempo trabalhado, na escada de unidades que ainda dizem alguma
+ * coisa: dias, meses e anos.
  *
- * <p>Só aparece a partir de meio mês de trabalho — abaixo disso "0,2 meses do
- * seu ano" é mais confuso do que os dias, que a pessoa já entende.
+ * <p>As horas ficam de fora de propósito — são o número grande logo acima, e
+ * repeti-las aqui gastaria a linha sem acrescentar nada.
+ *
+ * <p>Mês e ano só entram a partir de 1: "0,3 anos" ao lado de "4,1 meses" não
+ * informa, atrapalha. O dia entra sempre que existe, porque num desejo
+ * pequeno é a única unidade que sobra.
+ *
+ * <p>Os três números vêm prontos do servidor. Derivá-los aqui a partir das
+ * horas duplicaria a regra do outro lado e deixaria as duas versões livres
+ * para divergir.
  */
-export function describeLifeCost(
-  hours: number | null,
-  hoursPerMonth: number | null,
-): string | null {
-  if (hours == null || !hoursPerMonth || hoursPerMonth <= 0) return null;
-  const months = hours / hoursPerMonth;
-  if (months < 0.5) return null;
-  if (months < 12) {
-    return `${months.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} meses do seu ano`;
-  }
-  const years = months / 12;
-  return `${years.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} anos de trabalho`;
+export function formatWorkTime(projection: {
+  workDays: number | null;
+  workMonths: number | null;
+  workYears: number | null;
+}): string | null {
+  const partes: string[] = [];
+
+  const junta = (
+    valor: number | null,
+    singular: string,
+    plural: string,
+    minimo: number,
+  ) => {
+    if (valor == null || valor < minimo) return;
+    // Acima de cem a casa decimal só polui: "1.600 dias" e "1.600,4 dias"
+    // informam o mesmo, e o redondo se guarda de cabeça
+    const arredondado = valor >= 100 ? Math.round(valor) : valor;
+    const rotulo = arredondado.toLocaleString("pt-BR", {
+      maximumFractionDigits: 1,
+    });
+    partes.push(`${rotulo} ${arredondado === 1 ? singular : plural}`);
+  };
+
+  junta(projection.workDays, "dia", "dias", 0);
+  junta(projection.workMonths, "mês", "meses", 1);
+  junta(projection.workYears, "ano", "anos", 1);
+
+  if (partes.length === 0) return null;
+  return `${partes.join(" · ")} de trabalho`;
 }
 
 /** Quanto do desejo já está guardado, de 0 a 1. */

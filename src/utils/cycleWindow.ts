@@ -135,6 +135,28 @@ export function isCalendarMonthAnchor(anchorDay: number): boolean {
 }
 
 /**
+ * A janela é exatamente um mês de calendário: abre no dia 1 e fecha no último
+ * dia do MESMO mês. É a pergunta que decide como um recorte se escreve — "set
+ * 2026" ou "12/08 → 11/09" — quando a resposta traz `start`/`end` mas não diz
+ * em que modo foi pedida (a previsão de saldo, EC-116, devolve os dois campos
+ * sempre e mantém `month` como identidade do período, não como rótulo).
+ */
+export function isCalendarMonthWindow(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): boolean {
+  const first = parseIsoDate(start ?? "");
+  const last = parseIsoDate(end ?? "");
+  if (!first || !last) return false;
+  return (
+    first.day === 1 &&
+    first.year === last.year &&
+    first.month === last.month &&
+    last.day === daysInMonth(last.year, last.month)
+  );
+}
+
+/**
  * Primeiro dia do ciclo que começa no mês informado. Âncora 31 em fevereiro
  * cai para o último dia do mês — encurtar é a única saída que não abre buraco
  * entre um ciclo e o seguinte.
@@ -327,7 +349,11 @@ export function formatWindowLabel(
   return `${formatDayMonth(start)} → ${formatDayMonth(end)}`;
 }
 
-function spokenDate(iso: string, withYear: boolean): string {
+/**
+ * "2026-08-12" → "12 de agosto" (ou "12 de agosto de 2026"). Data falada para
+ * `accessibilityLabel`: o leitor de tela não pronuncia "12/08" como data.
+ */
+export function describeDate(iso: string, withYear = false): string {
   const parsed = parseIsoDate(iso);
   if (!parsed) return iso;
   const date = new Date(
@@ -347,7 +373,7 @@ export function describeWindow(
   end: string | null | undefined,
 ): string | null {
   if (!start || !end) return null;
-  return `de ${spokenDate(start, false)} a ${spokenDate(end, true)}`;
+  return `de ${describeDate(start)} a ${describeDate(end, true)}`;
 }
 
 /**

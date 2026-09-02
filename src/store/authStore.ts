@@ -120,6 +120,11 @@ export const useAuthStore = create(
         // anterior — o dado mais pessoal que o app tem. Sair tem de apagar.
         const { useWishStore } = require("./wishStore");
         useWishStore.getState().reset();
+
+        // Idem: a casa guarda nome e números de OUTRAS pessoas, e o
+        // `hasLoadedOnce` faria a próxima conta ver a casa da anterior
+        const { useFamilyStore } = require("./familyStore");
+        useFamilyStore.getState().reset();
       },
 
       clearError: () => set({ error: null }),

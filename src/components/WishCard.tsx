@@ -4,10 +4,9 @@ import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { formatBRL } from "../utils/money";
 import {
-  describeLifeCost,
   describePace,
   formatHours,
-  formatWorkDays,
+  formatWorkTime,
   statusLabel,
   wishProgress,
 } from "../utils/wishes";
@@ -22,19 +21,16 @@ import type { Wish } from "../services/api";
  */
 export default function WishCard({
   wish,
-  hoursPerMonth,
   onPress,
 }: {
   wish: Wish;
-  hoursPerMonth: number | null;
   onPress?: () => void;
 }) {
   const t = useTheme();
   const { projection } = wish;
 
   const hours = formatHours(projection.hoursOfWork);
-  const days = formatWorkDays(projection.workDays);
-  const lifeCost = describeLifeCost(projection.hoursOfWork, hoursPerMonth);
+  const workTime = formatWorkTime(projection);
   const pace = describePace(projection);
   const progress = wishProgress(wish);
   const comprado = wish.status === "PURCHASED";
@@ -84,7 +80,7 @@ export default function WishCard({
       )}
 
       <Text className="text-xs text-textSecondary mt-0.5">
-        {[hours ? formatBRL(wish.targetAmount) : null, days, lifeCost]
+        {[hours ? formatBRL(wish.targetAmount) : null, workTime]
           .filter(Boolean)
           .join(" · ")}
       </Text>

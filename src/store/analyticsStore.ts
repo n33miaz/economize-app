@@ -7,6 +7,7 @@ import {
   getMonthlyAnalytics,
 } from "../services/api";
 import { getCycleAnchorDay } from "./preferencesStore";
+import { useRecurrenceStore } from "./recurrenceStore";
 import {
   analysisRangeForMonth,
   cycleMonthKeyContaining,
@@ -184,6 +185,11 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
  */
 export async function reloadAnalyticsForAnchorChange(): Promise<void> {
   const store = useAnalyticsStore.getState();
+  // A previsão de saldo também é recortada pela âncora (EC-116), mas não dá
+  // para recalculá-la daqui: o saldo base nasce do extrato dentro da tela de
+  // previsão. Esquecê-la é o honesto — a Home só alerta "saldo negativo" com
+  // projeção calculada nesta sessão, e a próxima abertura da tela refaz a conta
+  useRecurrenceStore.getState().invalidateForecast();
   // Voltar para o dia 1 encolhe a régua de chips (o ciclo extra, que cobre os
   // primeiros dias do histórico, deixa de existir). Sem reancorar, o mês
   // selecionado sumia da régua e a Análise ficava com dados na tela e nenhum

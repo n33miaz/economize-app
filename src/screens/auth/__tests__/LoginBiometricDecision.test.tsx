@@ -37,6 +37,15 @@ async function submitValidCredentials(getByLabelText: any) {
   fireEvent.press(getByLabelText("Entrar"));
 }
 
+/**
+ * O padrão de 1 s do `waitFor` não serve aqui: desde a abertura (EC-148) a tela
+ * de login agenda 420 ms + 2.600 ms de temporizador e roda a animação do pote,
+ * e o laço de rAF mockado do Reanimated concorre com a sondagem. Com a máquina
+ * carregada — a suíte cheia roda vários workers — a espera perdia a corrida e
+ * o teste falhava sem nada estar quebrado.
+ */
+const ESPERA = { timeout: 8000 };
+
 describe("Login — decisão de biometria pós-credenciais", () => {
   // Espionado (e não real): o showToast verdadeiro agenda um setTimeout de 4s
   // que seguraria o worker do Jest vivo depois da suíte
@@ -73,7 +82,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
 
     await waitFor(() => {
       expect(useConfirmStore.getState().request).not.toBeNull();
-    });
+    }, ESPERA);
     // A navegação (troca de árvore por token) só depois da resposta
     expect(useAuthStore.getState().token).toBeNull();
     expect(useConfirmStore.getState().request?.confirmLabel).toBe(
@@ -90,7 +99,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
     await submitValidCredentials(getByLabelText);
     await waitFor(() => {
       expect(useConfirmStore.getState().request).not.toBeNull();
-    });
+    }, ESPERA);
 
     await act(async () => {
       await useConfirmStore.getState().request!.onConfirm();
@@ -111,7 +120,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
     await submitValidCredentials(getByLabelText);
     await waitFor(() => {
       expect(useConfirmStore.getState().request).not.toBeNull();
-    });
+    }, ESPERA);
 
     act(() => {
       useConfirmStore.getState().request!.onCancel!();
@@ -134,7 +143,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
     await submitValidCredentials(getByLabelText);
     await waitFor(() => {
       expect(useConfirmStore.getState().request).not.toBeNull();
-    });
+    }, ESPERA);
 
     await act(async () => {
       await useConfirmStore.getState().request!.onConfirm();
@@ -153,7 +162,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
 
     await waitFor(() => {
       expect(useAuthStore.getState().token).toBe("tok-abc");
-    });
+    }, ESPERA);
     expect(useConfirmStore.getState().request).toBeNull();
     expect(mockedAuth.authenticateAsync).not.toHaveBeenCalled();
     expect(usePreferencesStore.getState().biometricChoiceMade).toBe(false);
@@ -167,7 +176,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
 
     await waitFor(() => {
       expect(useAuthStore.getState().token).toBe("tok-abc");
-    });
+    }, ESPERA);
     expect(useConfirmStore.getState().request).toBeNull();
     expect(mockedAuth.hasHardwareAsync).not.toHaveBeenCalled();
   });
