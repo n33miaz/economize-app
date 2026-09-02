@@ -23,11 +23,15 @@ import {
   useReportsStore,
 } from "../store/reportsStore";
 import { useToastStore } from "../store/toastStore";
+import { useCategoriesStore } from "../store/categoriesStore";
+import { dominantLabel } from "../utils/reportBreakdown";
 import { askConfirm } from "../store/confirmStore";
 import {
   usePreferencesStore,
   selectCycleAnchorDay,
 } from "../store/preferencesStore";
+import ReportDetailSheet from "../components/ReportDetailSheet";
+import ReportPeriodSheet from "../components/ReportPeriodSheet";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import Skeleton from "../components/Skeleton";
@@ -37,11 +41,8 @@ import AssistantFAB, {
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { padRowsForColumns } from "../utils/layout";
 import { formatBRL, formatBRLCompact } from "../utils/money";
-import {
-  cycleWindowContaining,
-  formatDayMonthShort,
-  todayIso,
-} from "../utils/cycleWindow";
+import { formatDayMonthShort } from "../utils/cycleWindow";
+import { toInstantRange, type ReportWindow } from "../utils/reportPeriods";
 
 const PERIOD_LABELS: Record<ReportPeriod, string> = {
   WEEKLY: "Semanais",
@@ -49,12 +50,23 @@ const PERIOD_LABELS: Record<ReportPeriod, string> = {
   YEARLY: "Anuais",
 };
 
-function ReportCard({ item, index }: { item: Report; index: number }) {
+function ReportCard({
+  item,
+  index,
+  onPress,
+}: {
+  item: Report;
+  index: number;
+  onPress: () => void;
+}) {
   const t = useTheme();
   // Entrada em cascata acompanha a posição do card na lista
   const { listItemEntering } = useMotionPresets();
   const remove = useReportsStore((s) => s.remove);
   const showToast = useToastStore((s) => s.showToast);
+  const catalogo = useCategoriesStore((s) => s.items);
+  // A chave crua ("OTHER") não diz nada: o nome vem do catálogo de hoje
+  const dominante = dominantLabel(item.dominantCategory, catalogo);
   const saldo = item.totalIncome - item.totalExpense;
   const positivo = saldo >= 0;
 
@@ -85,17 +97,25 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
   };
 
   return (
-    <Animated.View
-      entering={listItemEntering(index)}
-      style={{
-        backgroundColor: t.background.elevated,
-        borderRadius: radius.xl,
-        padding: spacing[4],
-        borderWidth: 1,
-        borderColor: t.border.subtle,
-        marginBottom: spacing[3],
-      }}
-    >
+    <Animated.View entering={listItemEntering(index)}>
+      {/* O card inteiro abre o detalhe (EC-047): a quebra por categoria já
+          vinha do servidor e não tinha por onde ser vista */}
+      <TouchableOpacity
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Abrir o relatório de ${formatDayMonthShort(
+          item.startDate,
+        )} a ${formatDayMonthShort(item.endDate)}`}
+        activeOpacity={0.85}
+        style={{
+          backgroundColor: t.background.elevated,
+          borderRadius: radius.xl,
+          padding: spacing[4],
+          borderWidth: 1,
+          borderColor: t.border.subtle,
+          marginBottom: spacing[3],
+        }}
+      >
       <View
         style={{
           flexDirection: "row",
@@ -196,7 +216,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
         </View>
       </View>
 
-      {item.dominantCategory && (
+      {dominante && (
         <View
           style={{
             alignSelf: "flex-start",
@@ -214,7 +234,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
               fontWeight: "700",
             }}
           >
-            Categoria dominante · {item.dominantCategory}
+            Categoria dominante · {dominante}
           </Text>
         </View>
       )}
@@ -230,6 +250,7 @@ function ReportCard({ item, index }: { item: Report; index: number }) {
           {item.summary}
         </Text>
       )}
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -245,10 +266,20 @@ export default function Reports() {
   const showToast = useToastStore((s) => s.showToast);
   const anchorDay = usePreferencesStore(selectCycleAnchorDay);
   const [tab, setTab] = useState<ReportPeriod>("MONTHLY");
+  const [detalhe, setDetalhe] = useState<Report | null>(null);
+  const [periodoAberto, setPeriodoAberto] = useState(false);
+  // O catálogo dá NOME e COR às fatias do retrato; sem ele a pizza ficaria
+  // legendada por chave de sistema ("FOOD_MARKET")
+  const categorias = useCategoriesStore((s) => s.items);
+  const fetchCategorias = useCategoriesStore((s) => s.fetch);
 
   useEffect(() => {
     fetch(tab);
   }, [tab]);
+
+  useEffect(() => {
+    if (categorias.length === 0) fetchCategorias();
+  }, [categorias.length, fetchCategorias]);
 
   const filtered = useMemo(
     () => items.filter((item) => item.period === tab),
@@ -263,23 +294,18 @@ export default function Reports() {
     [filtered, columns],
   );
 
-  const handleGenerate = async () => {
+  // EC-047: gerar deixou de ser um atalho para "o período corrente". A folha
+  // de período é quem decide o recorte — inclusive um mês já fechado, que é o
+  // que dá para comparar
+  const handleGenerate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const now = new Date();
-    const start = new Date(now);
-    if (tab === "MONTHLY") {
-      // O relatório mensal passa a fechar o CICLO do usuário em vez de "os
-      // últimos 30 dias": a mesma âncora que rege a Home e a Análise. O fim
-      // continua sendo agora — um relatório que terminasse no futuro venderia
-      // um mês fechado que ainda está acontecendo.
-      const window = cycleWindowContaining(anchorDay, todayIso(now));
-      start.setTime(Date.parse(`${window.start}T00:00:00.000Z`));
-    } else if (tab === "WEEKLY") {
-      start.setDate(start.getDate() - 7);
-    } else {
-      start.setFullYear(start.getFullYear() - 1);
-    }
-    const created = await generate(tab, start.toISOString(), now.toISOString());
+    setPeriodoAberto(true);
+  };
+
+  const gerarDaJanela = async (janela: ReportWindow) => {
+    setPeriodoAberto(false);
+    const { startDate, endDate } = toInstantRange(janela);
+    const created = await generate(tab, startDate, endDate);
     if (!created) {
       showToast(
         "Geração falhou. Tente de novo; se persistir, importe um extrato primeiro.",
@@ -303,6 +329,7 @@ export default function Reports() {
               onPressIn={generatePress.onPressIn}
               onPressOut={generatePress.onPressOut}
               disabled={isGenerating}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityLabel="Gerar relatório"
               accessibilityRole="button"
               activeOpacity={0.85}
@@ -408,7 +435,13 @@ export default function Reports() {
           // O `flex: 1` só existe na grade: numa coluna só, ele seria um filho
           // flexível dentro de um contêiner de rolagem sem altura definida.
           <View style={columns > 1 ? { flex: 1 } : undefined}>
-            {item && <ReportCard item={item} index={index} />}
+            {item && (
+              <ReportCard
+                item={item}
+                index={index}
+                onPress={() => setDetalhe(item)}
+              />
+            )}
           </View>
         )}
         refreshControl={
@@ -447,6 +480,20 @@ export default function Reports() {
       />
 
       <AssistantFAB />
+
+      <ReportDetailSheet
+        report={detalhe}
+        visible={detalhe !== null}
+        onClose={() => setDetalhe(null)}
+      />
+
+      <ReportPeriodSheet
+        visible={periodoAberto}
+        period={tab}
+        anchorDay={anchorDay}
+        onClose={() => setPeriodoAberto(false)}
+        onPick={gerarDaJanela}
+      />
     </PageContainer>
   );
 }
