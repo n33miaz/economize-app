@@ -64,6 +64,18 @@ describe("calculateBankMetrics", () => {
     expect(result.expense).toBe(300);
     expect(result.total).toBe(900);
   });
+
+  it("débito com sinal trocado não vira soma das duas colunas", () => {
+    // Todo importador grava débito negativo, mas o "Líquido" do topo do
+    // extrato não pode depender disso: com o sinal invertido ele exibia
+    // R$ 1.300,00 — a SOMA — enquanto Entradas e Saídas seguiam certas
+    const result = calculateBankMetrics([
+      tx(1000, "CREDIT"),
+      tx(300, "DEBIT"),
+    ]);
+    expect(result.expense).toBe(300);
+    expect(result.total).toBe(700);
+  });
 });
 
 describe("statementMetrics — os números falam o idioma da conta", () => {

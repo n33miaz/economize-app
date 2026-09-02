@@ -9,16 +9,23 @@ export interface BankMetrics {
 export function calculateBankMetrics(
   transactions: BankTransaction[],
 ): BankMetrics {
-  return transactions.reduce<BankMetrics>(
-    (acc, curr) => {
-      const val = curr.amount;
-      if (curr.type === "CREDIT") acc.income += val;
-      else acc.expense += Math.abs(val);
-      acc.total += val;
-      return acc;
+  const acc = transactions.reduce<BankMetrics>(
+    (soma, curr) => {
+      const val = Math.abs(curr.amount);
+      if (curr.type === "CREDIT") soma.income += val;
+      else soma.expense += val;
+      return soma;
     },
     { income: 0, expense: 0, total: 0 },
   );
+  // Derivado, e não somado com o sinal cru. Todo caminho de importação (OFX,
+  // CSV, XLSX, TXT, conector) grava débito negativo, então somar o valor
+  // assinado dava o mesmo resultado — mas metade desta função se defendia do
+  // sinal com `Math.abs` e a outra metade confiava nele. Uma linha com sinal
+  // trocado não pode fazer o "Líquido" do topo do extrato virar a SOMA das
+  // duas colunas em silêncio, com Entradas e Saídas continuando certas
+  acc.total = acc.income - acc.expense;
+  return acc;
 }
 
 /**
