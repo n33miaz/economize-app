@@ -22,6 +22,16 @@ describe("preferencesStore", () => {
     expect(usePreferencesStore.getState().biometricLogin).toBe(false);
   });
 
+  it("nasce na visão simples — é o padrão do EC-142", () => {
+    // Quem abre o app pela primeira vez não pediu comparação nem porcentagem
+    expect(usePreferencesStore.getState().viewDepth).toBe("simple");
+  });
+
+  it("guarda a escolha de profundidade", () => {
+    usePreferencesStore.getState().setViewDepth("advanced");
+    expect(usePreferencesStore.getState().viewDepth).toBe("advanced");
+  });
+
   it("updates default currency", () => {
     usePreferencesStore.getState().setDefaultCurrency("USD");
     expect(usePreferencesStore.getState().defaultCurrency).toBe("USD");

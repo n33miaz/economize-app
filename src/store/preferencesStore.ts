@@ -17,6 +17,18 @@ export type Language = "pt-BR" | "en-US";
 export type NewsRegion = "all" | "br" | "global";
 export type NewsCategory = "all" | "economia" | "mercados" | "cripto" | "geral";
 
+/**
+ * Profundidade de leitura (EC-142).
+ *
+ * <p>"simple" é o padrão porque é o que serve a quem nunca organizou dinheiro:
+ * o número e a frase, sem comparação nem jargão. "advanced" devolve as
+ * variações, as porcentagens e a taxonomia para quem quer.
+ *
+ * <p>A escolha vale para o APP INTEIRO, e não é toggle por tela: alternar
+ * densidade tela por tela é o mesmo que não ter escolhido nada.
+ */
+export type ViewDepth = "simple" | "advanced";
+
 interface PreferencesState {
   theme: ThemeMode;
   biometricLogin: boolean;
@@ -30,6 +42,7 @@ interface PreferencesState {
   lastSeenVersion: string | null;
   newsRegion: NewsRegion;
   newsCategory: NewsCategory;
+  viewDepth: ViewDepth;
   /**
    * Dia em que o mês financeiro do usuário vira (EC-092). Dia 1 = mês de
    * calendário. Mora aqui, e não no servidor, por decisão de projeto: o custo
@@ -41,6 +54,12 @@ interface PreferencesState {
    * ícone lê como bug: ninguém descobre sozinho que o pote conta o mês.
    */
   potAnnouncementSeen: boolean;
+  /**
+   * A queda de VR/VA cujo pedido de extrato o usuário já dispensou (EC-137),
+   * em ISO. Guarda a OCORRÊNCIA, e não um booleano: dispensar o pedido de
+   * agosto não pode calar o de setembro.
+   */
+  mealVoucherPromptDismissedFor: string | null;
   hasHydrated: boolean;
 
   setTheme: (theme: ThemeMode) => void;
@@ -54,8 +73,10 @@ interface PreferencesState {
   setLastSeenVersion: (version: string) => void;
   setNewsRegion: (region: NewsRegion) => void;
   setNewsCategory: (category: NewsCategory) => void;
+  setViewDepth: (depth: ViewDepth) => void;
   setCycleAnchorDay: (day: number) => void;
   setPotAnnouncementSeen: (seen: boolean) => void;
+  dismissMealVoucherPrompt: (landedOn: string) => void;
   reset: () => void;
 }
 
@@ -70,8 +91,10 @@ const initialState = {
   lastSeenVersion: null,
   newsRegion: "all" as NewsRegion,
   newsCategory: "all" as NewsCategory,
+  viewDepth: "simple" as ViewDepth,
   cycleAnchorDay: DEFAULT_CYCLE_ANCHOR_DAY,
   potAnnouncementSeen: false,
+  mealVoucherPromptDismissedFor: null as string | null,
 };
 
 export const usePreferencesStore = create(
@@ -94,9 +117,12 @@ export const usePreferencesStore = create(
       setLastSeenVersion: (lastSeenVersion) => set({ lastSeenVersion }),
       setNewsRegion: (newsRegion) => set({ newsRegion }),
       setNewsCategory: (newsCategory) => set({ newsCategory }),
+      setViewDepth: (viewDepth) => set({ viewDepth }),
       // Clampa na entrada: valor fora de 1..31 viraria janela sem sentido
       setCycleAnchorDay: (day) => set({ cycleAnchorDay: clampAnchorDay(day) }),
       setPotAnnouncementSeen: (potAnnouncementSeen) => set({ potAnnouncementSeen }),
+      dismissMealVoucherPrompt: (landedOn) =>
+        set({ mealVoucherPromptDismissedFor: landedOn }),
       reset: () => set({ ...initialState }),
     }),
     {
@@ -123,4 +149,15 @@ export function selectCycleAnchorDay(state: PreferencesState): number {
 /** Mesma leitura para quem chama fora de componente (stores, handlers). */
 export function getCycleAnchorDay(): number {
   return clampAnchorDay(usePreferencesStore.getState().cycleAnchorDay);
+}
+
+/**
+ * Se a tela deve mostrar a camada avançada (EC-142).
+ *
+ * <p>Existe como hook próprio para nenhuma tela ler `viewDepth` na mão e
+ * comparar com a string errada — e para o padrão continuar sendo o simples
+ * enquanto o armazenamento não hidratou.
+ */
+export function useAdvancedView(): boolean {
+  return usePreferencesStore((state) => state.viewDepth === "advanced");
 }
