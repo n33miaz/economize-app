@@ -136,9 +136,11 @@ export default function BrandOpening({
   return (
     <View style={{ alignItems: "center", justifyContent: "center" }}>
       <Animated.View
-        pointerEvents="none"
         style={[
           {
+            // `none` inline é seguro (só `box-none` exige o compilador — ver
+            // utils/pointerEvents.ts); como prop, a web avisa depreciação
+            pointerEvents: "none",
             position: "absolute",
             width: moedaTamanho,
             height: moedaTamanho,
