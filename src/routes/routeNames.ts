@@ -33,6 +33,7 @@ export const APP_ROUTES = {
   opcoesIa: "Opções de IA",
   desejos: "Desejos",
   renda: "Renda e jornada",
+  familia: "Família",
 } as const;
 
 /** Abas da barra inferior (o container "Main"). */
@@ -53,6 +54,9 @@ export const FINANCE_TAB_ROUTES = {
 export const MARKET_TAB_ROUTES = {
   moedas: "Moedas",
   indices: "Índices",
+  // EC-099: as duas de cima são listas curadas e curtas; esta é o catálogo
+  // inteiro, paginado por cursor e ordenado pelo servidor
+  catalogo: "Catálogo",
 } as const;
 
 /** Telas do fluxo sem sessão. */

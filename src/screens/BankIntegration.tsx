@@ -31,19 +31,29 @@ import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
-import type { BankTransaction } from "../services/api";
+import type { BankTransaction, FamilyTransaction } from "../services/api";
 import { useAccountsStore } from "../store/accountsStore";
 import { useBankStore } from "../store/bankStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { parsePluggyReturn, useConnectorStore } from "../store/connectorStore";
+import { useFamilyStore } from "../store/familyStore";
+import {
+  selectCycleAnchorDay,
+  usePreferencesStore,
+} from "../store/preferencesStore";
 import { useToastStore } from "../store/toastStore";
 import { askConfirm } from "../store/confirmStore";
 import PageContainer from "../components/PageContainer";
 import ActionRow from "../components/ActionRow";
 import AssistantFAB from "../components/AssistantFAB";
+import ErrorState from "../components/ErrorState";
 import CategoryIcon from "../components/CategoryIcon";
 import ChartLegend from "../components/ChartLegend";
+import CycleAnchorSheet from "../components/CycleAnchorSheet";
+import CycleWindowChip from "../components/CycleWindowChip";
+import FamilyScopeToggle from "../components/FamilyScopeToggle";
 import FilterChipRow from "../components/FilterChipRow";
+import MemberBadge from "../components/MemberBadge";
 import OriginBadge from "../components/OriginBadge";
 import Skeleton from "../components/Skeleton";
 import TransactionDetailSheet from "../components/TransactionDetailSheet";
@@ -68,7 +78,19 @@ import {
   statementMetrics,
   statementScopeNote,
 } from "../utils/bankMetrics";
-import { formatDayMonthShort } from "../utils/cycleWindow";
+import {
+  analysisRangeForMonth,
+  cycleMonthKeyContaining,
+  cycleWindowForMonth,
+  formatDayMonthShort,
+  todayIso,
+} from "../utils/cycleWindow";
+import {
+  MEMBER_ALL,
+  applyMemberFilter,
+  memberFilterOptions,
+  resolveMemberFilter,
+} from "../utils/family";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import {
   isRenamed,
@@ -200,6 +222,7 @@ export default function BankIntegration() {
     transactions,
     isLoading,
     isImporting,
+    error: bankError,
     fetchTransactions,
     importStatement,
   } = useBankStore();
@@ -220,6 +243,61 @@ export default function BankIntegration() {
   // tela, `/bank-statements` não aceita recorte, e assim as métricas do topo
   // recalculam no mesmo quadro do toque.
   const [originFilter, setOriginFilter] = useState(ORIGIN_ALL);
+
+  // EC-150: o Extrato da CASA. O alternador é o mesmo da Análise, e o recorte
+  // também: a casa não tem calendário próprio, tem o de quem está olhando.
+  //
+  // Aqui a lista vem do SERVIDOR por período (`/family/transactions`), e não da
+  // lista inteira em memória como a pessoal: as linhas dos outros chegam já
+  // filtradas pelo que cada um decidiu mostrar — quem compartilha só totais não
+  // manda linha nenhuma, e essa decisão é do dono do dado, nunca desta tela.
+  const familyScope = useFamilyStore((s) => s.scope);
+  const familyTransactions = useFamilyStore((s) => s.transactions);
+  const isFamilyLoading = useFamilyStore((s) => s.isTransactionsLoading);
+  const familyError = useFamilyStore((s) => s.transactionsError);
+  const hasLoadedFamilyOnce = useFamilyStore((s) => s.hasLoadedTransactionsOnce);
+  const fetchFamilyTransactions = useFamilyStore((s) => s.fetchTransactions);
+  const inFamilyScope = familyScope === "family";
+  const anchorDay = usePreferencesStore(selectCycleAnchorDay);
+  const [anchorSheetOpen, setAnchorSheetOpen] = useState(false);
+  const [memberFilter, setMemberFilter] = useState(MEMBER_ALL);
+
+  // O ciclo corrente do usuário, pela mesma âncora da Home e da Análise
+  const familyMonth = useMemo(
+    () => cycleMonthKeyContaining(anchorDay, todayIso()),
+    [anchorDay],
+  );
+  const familyWindow = useMemo(
+    () => cycleWindowForMonth(anchorDay, familyMonth),
+    [anchorDay, familyMonth],
+  );
+
+  const loadFamilyTransactions = useCallback(() => {
+    fetchFamilyTransactions({
+      range: analysisRangeForMonth(anchorDay, familyMonth),
+    });
+  }, [fetchFamilyTransactions, anchorDay, familyMonth]);
+
+  useEffect(() => {
+    if (inFamilyScope) loadFamilyTransactions();
+  }, [inFamilyScope, loadFamilyTransactions]);
+
+  // Um chip por pessoa COM linha no período — quem mostra só totais não vira
+  // chip, senão filtrar por ela daria lista vazia sem explicação
+  const memberOptions = useMemo(
+    () => memberFilterOptions(familyTransactions),
+    [familyTransactions],
+  );
+  const activeMember = resolveMemberFilter(memberFilter, memberOptions);
+  const visibleFamilyTransactions = useMemo(
+    () => applyMemberFilter(familyTransactions, activeMember),
+    [familyTransactions, activeMember],
+  );
+  // Qual membro sou EU: é o que decide quais linhas continuam abrindo o
+  // detalhe (onde se edita apelido e categoria) e qual selo diz "você"
+  const myMemberId = useFamilyStore(
+    (s) => s.family?.members.find((member) => member.isMe)?.id ?? null,
+  );
   const accounts = useAccountsStore((s) => s.accounts);
   const accountsById = useAccountsStore((s) => s.byId);
   const accountsError = useAccountsStore((s) => s.error);
@@ -582,9 +660,12 @@ export default function BankIntegration() {
     item,
     index,
   }: {
-    item: BankTransaction;
+    item: BankTransaction | FamilyTransaction;
     index: number;
   }) => {
+    // Só no escopo da casa a linha tem dono a declarar: no extrato pessoal
+    // todas são da mesma pessoa e o selo diria o óbvio em toda linha
+    const member = "memberId" in item ? (item as FamilyTransaction) : null;
     const isCredit = item.type === "CREDIT";
     // Data pelo formatador da casa: ler o dia em UTC é o que impede a linha de
     // 01/08 aparecer como "31 jul" no fuso de Brasília
@@ -615,15 +696,25 @@ export default function BankIntegration() {
         ? `, origem ${accountDisplayName(account)}`
         : `, ${originLabel(item.accountId, account).toLowerCase()}`;
 
+    // Linha de outra pessoa não abre o detalhe: lá dentro se edita apelido e
+    // categoria, e o dado é dela. O servidor recusaria de qualquer forma (a
+    // cláusula de dono), mas oferecer o toque seria prometer o que não se pode
+    const alheia = member !== null && member.memberId !== myMemberId;
+
     return (
       <Animated.View entering={listItemEntering(index)}>
         <TouchableOpacity
-          onPress={() => setDetailTx(item)}
+          onPress={() => {
+            if (!alheia) setDetailTx(item);
+          }}
+          disabled={alheia}
           accessibilityLabel={`${spokenName}, ${date}, ${
             isCredit ? "entrada" : "saída"
-          } de ${formatBRL(Math.abs(item.amount))}${spokenOrigin}. Abrir detalhes e apelido`}
-          accessibilityRole="button"
-          activeOpacity={0.8}
+          } de ${formatBRL(Math.abs(item.amount))}${spokenOrigin}${
+            alheia ? `, lançamento de ${member.memberName}` : ""
+          }${alheia ? "" : ". Abrir detalhes e apelido"}`}
+          accessibilityRole={alheia ? "text" : "button"}
+          activeOpacity={alheia ? 1 : 0.8}
           className="bg-surface p-4 mb-3 rounded-2xl border border-border flex-row items-center justify-between"
         >
         <View className="flex-row items-center flex-1 mr-3">
@@ -695,6 +786,15 @@ export default function BankIntegration() {
                   maxLabelWidth={118}
                 />
               )}
+              {/* De quem é a linha. Só na casa, e ao lado da categoria porque
+                  responde a mesma pergunta do selo de origem: de onde veio */}
+              {member && (
+                <MemberBadge
+                  memberId={member.memberId}
+                  name={member.memberName}
+                  isMe={member.memberId === myMemberId}
+                />
+              )}
               {isPending && (
                 // Ponto warning discreto: categorização ainda não confirmada
                 <View
@@ -724,7 +824,10 @@ export default function BankIntegration() {
 
   // Primeiro load em tela vazia: esqueletos no lugar da lista. O RefreshControl
   // não monta aqui, então o spinner do pull-to-refresh não concorre com eles
-  if (isLoading && !hasLoadedOnce && transactions.length === 0) {
+  // As duas saídas antecipadas abaixo falam do extrato PESSOAL: na casa, quem
+  // manda é o estado da lista da casa, e o extrato pessoal vazio (ou que falhou
+  // ao baixar) não pode sequestrar a tela inteira
+  if (!inFamilyScope && isLoading && !hasLoadedOnce && transactions.length === 0) {
     return (
       <PageContainer style={{ flex: 1, position: "relative" }}>
         <StatementSkeleton />
@@ -733,10 +836,21 @@ export default function BankIntegration() {
     );
   }
 
+  // Rede caiu antes da primeira lista: dizer "nenhum extrato importado" aqui
+  // seria mentira — a pessoa tem histórico, só não conseguiu baixá-lo
+  if (!inFamilyScope && bankError && !isLoading && transactions.length === 0) {
+    return (
+      <PageContainer style={{ flex: 1, position: "relative" }}>
+        <ErrorState message={bankError} onRetry={fetchTransactions} />
+        <AssistantFAB />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer style={{ flex: 1, position: "relative" }}>
       <FlatList
-        data={visibleTransactions}
+        data={inFamilyScope ? visibleFamilyTransactions : visibleTransactions}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         // O mapa de contas e o de categorias chegam DEPOIS da lista: sem isto
@@ -748,14 +862,68 @@ export default function BankIntegration() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={fetchTransactions}
+            refreshing={inFamilyScope ? isFamilyLoading : isLoading}
+            onRefresh={
+              inFamilyScope ? loadFamilyTransactions : fetchTransactions
+            }
             colors={[t.accent.neon]}
           />
         }
         ListHeaderComponent={
           <View className="mb-6">
-            {showOrigin && (
+            {/* O alternador vem antes de tudo: ele decide de quem é a lista
+                inteira que vem abaixo, inclusive as métricas */}
+            <View
+              className="flex-row items-center mb-4"
+              style={{ gap: spacing[3] }}
+            >
+              <FamilyScopeToggle />
+              <View style={{ flex: 1 }} />
+              {inFamilyScope && (
+                <CycleWindowChip
+                  start={familyWindow.start}
+                  end={familyWindow.end}
+                  onPress={() => setAnchorSheetOpen(true)}
+                />
+              )}
+            </View>
+
+            {inFamilyScope && memberOptions.length > 0 && (
+              <View className="mb-4">
+                <Text className="text-textTertiary text-[10px] font-bold uppercase tracking-[1.2px] mb-2">
+                  Quem
+                </Text>
+                <FilterChipRow
+                  options={memberOptions}
+                  value={activeMember}
+                  onChange={setMemberFilter}
+                  spokenPrefix="Lançamentos de"
+                />
+              </View>
+            )}
+
+            {inFamilyScope && familyError && (
+              <ErrorState
+                message={familyError}
+                onRetry={loadFamilyTransactions}
+              />
+            )}
+
+            {inFamilyScope &&
+              !familyError &&
+              !isFamilyLoading &&
+              hasLoadedFamilyOnce &&
+              familyTransactions.length === 0 && (
+                <Text
+                  className="text-textSecondary text-sm"
+                  style={{ lineHeight: 20 }}
+                >
+                  Ninguém da casa está mostrando lançamentos neste período. Cada
+                  pessoa escolhe o que compartilhar em Perfil › Casa.
+                </Text>
+              )}
+
+            {!inFamilyScope && showOrigin && (
               <View className="mb-4">
                 {/* A fileira vem ANTES dos números porque é ela que decide o
                     que está sendo somado — filtro embaixo do total faria o
@@ -818,6 +986,12 @@ export default function BankIntegration() {
               </TouchableOpacity>
             )}
 
+            {/* Daqui para baixo é a visão PESSOAL: métricas, rosca por
+                categoria e as portas de importar e sincronizar. Na casa nada
+                disso vale — os números de lá são da Análise, que soma o que
+                cada um mostra, e importar extrato é ato individual */}
+            {!inFamilyScope && (
+            <>
             <Animated.View entering={cardEntering} className="mb-4">
               {/* Os números vêm prontos do escopo: três no idioma da conta
                   (Entradas/Saídas/Líquido), dois no idioma do cartão
@@ -1084,9 +1258,15 @@ export default function BankIntegration() {
                 )}
               </>
             )}
+            </>
+            )}
           </View>
         }
         ListEmptyComponent={
+          // Na casa o vazio já é explicado no cabeçalho ("ninguém está
+          // mostrando lançamentos"): repetir o convite a importar aqui pediria
+          // à pessoa que resolvesse com o extrato dela algo que não é dela
+          inFamilyScope ? null : (
           <Animated.View
             entering={cardEntering}
             className="items-center justify-center mt-10 bg-surface p-8 rounded-3xl border border-dashed border-border"
@@ -1130,6 +1310,7 @@ export default function BankIntegration() {
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
+          )
         }
       />
 
@@ -1138,6 +1319,12 @@ export default function BankIntegration() {
         visible={detailTx !== null}
         onClose={() => setDetailTx(null)}
         onUpdated={applyTransaction}
+      />
+
+      {/* A âncora do ciclo é a MESMA da Home e da Análise: mudar aqui muda lá */}
+      <CycleAnchorSheet
+        visible={anchorSheetOpen}
+        onClose={() => setAnchorSheetOpen(false)}
       />
 
       <AssistantFAB />

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LayoutAnimation,
   RefreshControl,
@@ -19,10 +19,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
-import type { CategorySlice, MonthlyAnalytics } from "../services/api";
+import type {
+  CategorySlice,
+  FamilyAnalyticsResponse,
+  FamilyMemberAnalytics,
+  MonthlyAnalytics,
+} from "../services/api";
 import { useAnalyticsStore } from "../store/analyticsStore";
+import { useCategoriesStore } from "../store/categoriesStore";
+import { useFamilyStore } from "../store/familyStore";
+import { useAdvancedView } from "../store/preferencesStore";
+import { plainHeaviest, plainVerdict } from "../utils/plainMonth";
+import { familyCategorySlices } from "../utils/family";
 import DebtBreakdown from "../components/DebtBreakdown";
 import CycleCaveats from "../components/CycleCaveats";
+import FamilyScopeToggle from "../components/FamilyScopeToggle";
+import MemberAvatar from "../components/MemberAvatar";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -39,6 +51,7 @@ import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import { usePreferencesStore, selectCycleAnchorDay } from "../store/preferencesStore";
 import {
+  analysisRangeForMonth,
   cycleChipLabel,
   cycleMonthKeys,
   cycleWindowForMonth,
@@ -76,6 +89,8 @@ function formatSignedPct(value: number) {
 function MonthHero({ data }: { data: MonthlyAnalytics }) {
   const t = useAppTheme();
   const { cardEntering } = useMotionPresets();
+  const avancado = useAdvancedView();
+  const heaviest = plainHeaviest(data.categories);
 
   const prev = data.previous;
   const prevHasData = prev.totalIncome !== 0 || prev.totalExpense !== 0;
@@ -198,7 +213,30 @@ function MonthHero({ data }: { data: MonthlyAnalytics }) {
           paddingTop: spacing[3],
         }}
       >
-        {prevHasData ? (
+        {/* EC-142: a visão simples não é a avançada com menos coisas — é a
+            mesma verdade dita em português. A comparação contra o período
+            anterior exige saber o que é "saldo"; a frase não exige nada */}
+        {!avancado ? (
+          <>
+            <Text
+              style={{ color: t.text.secondary, fontSize: 14, lineHeight: 20 }}
+            >
+              {plainVerdict(data.net, isWindowMode)}
+            </Text>
+            {heaviest && (
+              <Text
+                style={{
+                  color: t.text.tertiary,
+                  fontSize: 13,
+                  lineHeight: 18,
+                  marginTop: spacing[1],
+                }}
+              >
+                {heaviest}
+              </Text>
+            )}
+          </>
+        ) : prevHasData ? (
           <View
             style={{
               flexDirection: "row",
@@ -266,7 +304,7 @@ function MonthHero({ data }: { data: MonthlyAnalytics }) {
         {/* Regra da casa: o número comparado tem que estar explicado na tela.
             Em modo janela o comparável não é o mês passado, e migrar de um modo
             para o outro muda os percentuais acima */}
-        {isWindowMode && (
+        {isWindowMode && avancado && (
           <Text
             style={{
               color: t.text.tertiary,
@@ -296,6 +334,8 @@ function ExpenseRow({
   expanded = false,
   onToggle,
   onPressReview,
+  withComparison = true,
+  reviewable = true,
 }: {
   slice: CategorySlice;
   totalExpense: number;
@@ -304,13 +344,25 @@ function ExpenseRow({
   expanded?: boolean;
   onToggle?: () => void;
   onPressReview: () => void;
+  /**
+   * A visão da casa (EC-150) não tem período anterior: sem isto, o delta nulo
+   * viraria "novo" em toda linha — que é o rótulo de categoria que estreou,
+   * não de comparação que não existe.
+   */
+  withComparison?: boolean;
+  /**
+   * "Sem categoria" da casa soma lançamentos de OUTRAS pessoas: mandar para a
+   * minha revisão não categorizaria nada deles. A linha vira só leitura.
+   */
+  reviewable?: boolean;
 }) {
   const t = useAppTheme();
   const { listItemEntering } = useMotionPresets();
+  const avancado = useAdvancedView();
 
   const color = resolveCategoryColor(slice, t);
   const share = totalExpense > 0 ? (slice.expenseTotal / totalExpense) * 100 : 0;
-  const isUncategorized = slice.categoryId === null;
+  const isUncategorized = slice.categoryId === null && reviewable;
   const children =
     slice.children?.filter(
       (c) => c.expenseTotal > 0 || c.previousExpenseTotal > 0,
@@ -349,24 +401,33 @@ function ExpenseRow({
           >
             {slice.name}
           </Text>
-          {delta === null ? (
-            <Text
-              style={{ color: t.text.tertiary, fontSize: 12, fontWeight: "700" }}
-            >
-              novo
-            </Text>
-          ) : (
-            <Text
-              style={{
-                color: deltaColor,
-                fontSize: 12,
-                fontWeight: "700",
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {formatSignedPct(delta)}
-            </Text>
-          )}
+          {/* EC-142: variação contra o período anterior é leitura avançada.
+              O share logo abaixo fica nos dois modos — "35% das saídas"
+              responde direto "quanto do meu mês foi nisso" */}
+          {avancado &&
+            withComparison &&
+            (delta === null ? (
+              <Text
+                style={{
+                  color: t.text.tertiary,
+                  fontSize: 12,
+                  fontWeight: "700",
+                }}
+              >
+                novo
+              </Text>
+            ) : (
+              <Text
+                style={{
+                  color: deltaColor,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {formatSignedPct(delta)}
+              </Text>
+            ))}
         </View>
 
         <View
@@ -757,6 +818,398 @@ function MonthEmpty({
   );
 }
 
+/**
+ * Saldo da CASA no período (EC-150): a mesma hierarquia do `MonthHero`, sem a
+ * comparação com o anterior — a visão compartilhada não a tem nesta versão, e
+ * escrever "vs" contra nada seria inventar. O recorte é o de quem olha (a
+ * âncora do chamador), e é isso que a linha de baixo diz.
+ */
+function FamilyHero({ analytics }: { analytics: FamilyAnalyticsResponse }) {
+  const t = useAppTheme();
+  const { cardEntering } = useMotionPresets();
+  const { combined, window, members } = analytics;
+  const isWindowMode = !window.month;
+  const showing = members.filter((m) => m.totals !== null).length;
+  const silent = members.length - showing;
+
+  return (
+    <Animated.View
+      entering={cardEntering}
+      style={{
+        marginHorizontal: spacing[5],
+        marginTop: spacing[4],
+        backgroundColor: t.background.surface,
+        borderRadius: radius["2xl"],
+        borderWidth: 1,
+        borderColor: t.border.subtle,
+        padding: spacing[5],
+      }}
+    >
+      <Text
+        style={{
+          color: t.text.tertiary,
+          fontSize: 11,
+          fontWeight: "700",
+          letterSpacing: 1,
+          textTransform: "uppercase",
+        }}
+      >
+        {isWindowMode ? "Saldo da casa no ciclo" : "Saldo da casa no mês"}
+      </Text>
+      <Text
+        style={{
+          ...typography.numericDisplay,
+          color: t.text.primary,
+          marginTop: spacing[1],
+        }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        accessibilityLabel={`Saldo da casa: ${formatBRL(combined.net)}`}
+      >
+        {formatBRLCompact(combined.net)}
+      </Text>
+
+      <View style={{ flexDirection: "row", gap: spacing[3], marginTop: spacing[5] }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: t.text.tertiary, fontSize: 12 }}>Entradas</Text>
+          <Text
+            style={{ ...typography.numericMd, color: t.chart.up, marginTop: spacing[1] }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            accessibilityLabel={`Entradas da casa: ${formatBRL(combined.income)}`}
+          >
+            {formatBRLCompact(combined.income)}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: t.text.tertiary, fontSize: 12 }}>Saídas</Text>
+          <Text
+            style={{ ...typography.numericMd, color: t.chart.down, marginTop: spacing[1] }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            accessibilityLabel={`Saídas da casa: ${formatBRL(combined.expense)}`}
+          >
+            {formatBRLCompact(combined.expense)}
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: t.border.subtle,
+          marginTop: spacing[4],
+          paddingTop: spacing[3],
+        }}
+      >
+        {/* Regra da casa: o número tem que dizer quem está dentro dele. Quem
+            escolheu não mostrar fica fora da soma, e a soma precisa avisar */}
+        <Text style={{ color: t.text.tertiary, fontSize: 12, lineHeight: 17 }}>
+          {showing === members.length
+            ? `Soma do que ${members.length === 1 ? "você mostra" : `as ${members.length} pessoas mostram`} para a casa.`
+            : `Soma do que ${showing} de ${members.length} mostram — ${silent} ${silent === 1 ? "pessoa escolheu" : "pessoas escolheram"} não mostrar.`}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * Um cartão por pessoa: disco de iniciais, nome e os totais dela — ou "não
+ * mostra", que é resposta e não lacuna: a casa sabe que a pessoa existe e que
+ * ela escolheu ficar de fora dos números.
+ */
+function MemberCard({
+  member,
+  index,
+}: {
+  member: FamilyMemberAnalytics;
+  index: number;
+}) {
+  const t = useAppTheme();
+  const { listItemEntering } = useMotionPresets();
+  const hidden = member.totals === null;
+  return (
+    <Animated.View
+      entering={listItemEntering(index)}
+      accessible
+      accessibilityLabel={
+        hidden
+          ? `${member.name}${member.isMe ? ", você" : ""}: não mostra números para a casa`
+          : `${member.name}${member.isMe ? ", você" : ""}: entradas ${formatBRL(member.totals!.income)}, saídas ${formatBRL(member.totals!.expense)}, saldo ${formatBRL(member.totals!.net)}`
+      }
+      style={{
+        flexGrow: 1,
+        flexBasis: "47%",
+        backgroundColor: t.background.surface,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        borderColor: t.border.subtle,
+        padding: spacing[4],
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <MemberAvatar memberId={member.memberId} name={member.name} size={36} />
+        <View style={{ flex: 1, marginLeft: spacing[3] }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: t.text.primary, fontSize: 14, fontWeight: "700" }}
+          >
+            {member.name}
+            {member.isMe ? (
+              <Text style={{ color: t.text.tertiary, fontWeight: "500" }}> · você</Text>
+            ) : null}
+          </Text>
+          <Text style={{ color: t.text.tertiary, fontSize: 11, marginTop: 1 }}>
+            {hidden
+              ? "não mostra"
+              : member.shareScope === "TRANSACTIONS"
+                ? "mostra os lançamentos"
+                : "mostra só totais"}
+          </Text>
+        </View>
+      </View>
+      {hidden ? (
+        <Text
+          style={{
+            color: t.text.tertiary,
+            fontSize: 13,
+            lineHeight: 18,
+            marginTop: spacing[3],
+          }}
+        >
+          Escolheu não mostrar os números. Está na casa, fora da soma.
+        </Text>
+      ) : (
+        <View style={{ marginTop: spacing[3] }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ color: t.text.tertiary, fontSize: 12 }}>Entradas</Text>
+            <Text
+              style={{
+                color: t.chart.up,
+                fontSize: 13,
+                fontWeight: "700",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {formatBRLCompact(member.totals!.income)}
+            </Text>
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: spacing[1],
+            }}
+          >
+            <Text style={{ color: t.text.tertiary, fontSize: 12 }}>Saídas</Text>
+            <Text
+              style={{
+                color: t.chart.down,
+                fontSize: 13,
+                fontWeight: "700",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {formatBRLCompact(member.totals!.expense)}
+            </Text>
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: spacing[2],
+              paddingTop: spacing[2],
+              borderTopWidth: 1,
+              borderTopColor: t.border.subtle,
+            }}
+          >
+            <Text style={{ color: t.text.secondary, fontSize: 12, fontWeight: "700" }}>
+              Saldo
+            </Text>
+            <Text
+              style={{
+                color: t.text.primary,
+                fontSize: 13,
+                fontWeight: "700",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {formatSignedBRL(member.totals!.net)}
+            </Text>
+          </View>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+/**
+ * A Análise em "Casa" (EC-150): o combinado no topo, um cartão por pessoa e as
+ * mesmas listas de categoria da visão pessoal — desenhadas pelos MESMOS
+ * componentes, para as duas visões não divergirem no traço. As categorias
+ * chegam agrupadas pela raiz (como na pessoal) e sem subcategoria: não há o
+ * que expandir.
+ */
+function FamilyView({
+  analytics,
+  isLoading,
+  error,
+  onRetry,
+  columns,
+  emptyLabel,
+}: {
+  analytics: FamilyAnalyticsResponse | null;
+  isLoading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  columns: 1 | 2;
+  emptyLabel: string;
+}) {
+  const t = useAppTheme();
+  const catalog = useCategoriesStore((s) => s.items);
+
+  const slices = useMemo(
+    () => (analytics ? familyCategorySlices(analytics.combined.categories, catalog) : []),
+    [analytics, catalog],
+  );
+  const expenseSlices = useMemo(
+    () => slices.filter((s) => s.expenseTotal > 0),
+    [slices],
+  );
+  const incomeSlices = useMemo(
+    () =>
+      slices
+        .filter((s) => s.incomeTotal > 0)
+        .sort((a, b) => b.incomeTotal - a.incomeTotal),
+    [slices],
+  );
+
+  if (!analytics) {
+    if (error && !isLoading) {
+      return <ErrorState message={error} onRetry={onRetry} />;
+    }
+    return (
+      <View style={{ marginTop: spacing[4] }}>
+        <AnalyticsSkeleton showChips={false} />
+      </View>
+    );
+  }
+
+  const isEmpty = analytics.combined.income === 0 && analytics.combined.expense === 0;
+
+  return (
+    // key pelo início do recorte, como na visão pessoal: trocar de período
+    // remonta o bloco e refaz a cascata
+    <View key={analytics.window.start}>
+      {isEmpty ? (
+        <MonthEmpty label={emptyLabel} isWindowMode={!analytics.window.month} />
+      ) : (
+        <FamilyHero analytics={analytics} />
+      )}
+
+      <View style={{ marginTop: spacing[6], paddingHorizontal: spacing[5] }}>
+        <Text
+          style={{
+            color: t.text.primary,
+            fontSize: 18,
+            fontWeight: "700",
+            marginBottom: spacing[3],
+          }}
+        >
+          Quem mora aqui
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing[3] }}>
+          {analytics.members.map((member, index) => (
+            <MemberCard key={member.memberId} member={member} index={index} />
+          ))}
+        </View>
+      </View>
+
+      {!isEmpty && (
+        <BlockGrid columns={columns}>
+          {[
+            expenseSlices.length > 0 && (
+              <View
+                key="gastos"
+                style={{ marginTop: spacing[6], paddingHorizontal: spacing[5] }}
+              >
+                <Text
+                  style={{
+                    color: t.text.primary,
+                    fontSize: 18,
+                    fontWeight: "700",
+                    marginBottom: spacing[3],
+                  }}
+                >
+                  Gastos da casa por categoria
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: t.background.surface,
+                    borderRadius: radius["2xl"],
+                    borderWidth: 1,
+                    borderColor: t.border.subtle,
+                    padding: spacing[4],
+                  }}
+                >
+                  {expenseSlices.map((slice, index) => (
+                    <ExpenseRow
+                      key={slice.categoryId ?? "sem-categoria"}
+                      slice={slice}
+                      totalExpense={analytics.combined.expense}
+                      index={index}
+                      isLast={index === expenseSlices.length - 1}
+                      onPressReview={() => {}}
+                      withComparison={false}
+                      reviewable={false}
+                    />
+                  ))}
+                </View>
+              </View>
+            ),
+            incomeSlices.length > 0 && (
+              <View
+                key="receitas"
+                style={{ marginTop: spacing[6], paddingHorizontal: spacing[5] }}
+              >
+                <Text
+                  style={{
+                    color: t.text.primary,
+                    fontSize: 15,
+                    fontWeight: "700",
+                    marginBottom: spacing[3],
+                  }}
+                >
+                  Receitas da casa por categoria
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: t.background.surface,
+                    borderRadius: radius["2xl"],
+                    borderWidth: 1,
+                    borderColor: t.border.subtle,
+                    padding: spacing[4],
+                  }}
+                >
+                  {incomeSlices.map((slice, index) => (
+                    <IncomeRow
+                      key={slice.categoryId ?? "sem-categoria"}
+                      slice={slice}
+                      index={index}
+                      isLast={index === incomeSlices.length - 1}
+                    />
+                  ))}
+                </View>
+              </View>
+            ),
+          ]}
+        </BlockGrid>
+      )}
+    </View>
+  );
+}
+
 /** Skeletons do primeiro carregamento, imitando a geometria do conteúdo. */
 function AnalyticsSkeleton({ showChips }: { showChips: boolean }) {
   return (
@@ -806,6 +1259,27 @@ export default function Analytics() {
   const anchorDay = usePreferencesStore(selectCycleAnchorDay);
   const [anchorSheetOpen, setAnchorSheetOpen] = useState(false);
 
+  // EC-150: a visão da casa. O escopo é do store (compartilhado com o
+  // Extrato); o recorte é o MESMO chip da visão pessoal, traduzido pela mesma
+  // âncora — a casa não tem calendário próprio, tem o de quem está olhando
+  const hasFamily = useFamilyStore((s) => s.hasFamily);
+  const scope = useFamilyStore((s) => s.scope);
+  const familyAnalytics = useFamilyStore((s) => s.analytics);
+  const isFamilyLoading = useFamilyStore((s) => s.isAnalyticsLoading);
+  const familyError = useFamilyStore((s) => s.analyticsError);
+  const fetchFamilyAnalytics = useFamilyStore((s) => s.fetchAnalytics);
+  const fetchCategories = useCategoriesStore((s) => s.fetch);
+  const inFamilyScope = hasFamily && scope === "family";
+
+  const loadFamily = useCallback(() => {
+    const month = useAnalyticsStore.getState().selectedMonth;
+    if (!month) return;
+    fetchFamilyAnalytics(analysisRangeForMonth(anchorDay, month));
+    // O catálogo dá cor e ícone às categorias que são minhas (ou do sistema);
+    // a Análise pessoal não precisa dele porque o servidor já manda os dois
+    if (useCategoriesStore.getState().items.length === 0) fetchCategories();
+  }, [anchorDay, fetchFamilyAnalytics, fetchCategories]);
+
   // Meses primeiro: o store cai no mês mais recente com movimento antes
   // de buscar a consolidação. No foco (e não só na montagem), porque revisar
   // pelo banner acontece em outra tela e muda o consolidado
@@ -814,15 +1288,25 @@ export default function Analytics() {
       const load = async () => {
         await fetchMonths();
         await fetchMonthly();
+        // Só agora o mês selecionado existe com certeza; a casa segue o mesmo
+        // recorte, então espera por ele em vez de chutar um
+        if (useFamilyStore.getState().scope === "family") loadFamily();
       };
       load();
-    }, [fetchMonths, fetchMonthly]),
+    }, [fetchMonths, fetchMonthly, loadFamily]),
   );
+
+  // Troca de chip, de âncora ou de escopo: a casa recarrega no recorte novo.
+  // A visão pessoal já faz isso por dentro do `fetchMonthly`
+  useEffect(() => {
+    if (inFamilyScope && selectedMonth) loadFamily();
+  }, [inFamilyScope, selectedMonth, loadFamily]);
 
   const onRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Promise.all([fetchMonths(), fetchMonthly()]);
-  }, [fetchMonths, fetchMonthly]);
+    if (useFamilyStore.getState().scope === "family") loadFamily();
+  }, [fetchMonths, fetchMonthly, loadFamily]);
 
   // Detalhe por subcategoria abre sob demanda: o ranking dos pais é a leitura
   // principal, a quebra é o segundo olhar
@@ -900,6 +1384,16 @@ export default function Analytics() {
         ? formatMonthLabel(data.month)
         : (formatWindowLabel(data.start, data.end) ?? "este período");
 
+  // O chip diz o recorte de QUEM está na tela: em "Casa" é a janela que o
+  // servidor da casa devolveu, para o rótulo nunca discordar dos números
+  const chipWindow = inFamilyScope ? familyAnalytics?.window : data;
+  const familyEmptyLabel = familyAnalytics?.window.month
+    ? formatMonthLabel(familyAnalytics.window.month)
+    : (formatWindowLabel(
+        familyAnalytics?.window.start,
+        familyAnalytics?.window.end,
+      ) ?? "este período");
+
   if (error && !data) {
     return (
       <PageContainer>
@@ -954,25 +1448,41 @@ export default function Analytics() {
         {/* A janela somada e a engrenagem, fora do card do saldo: o ciclo vazio
             não renderiza o card, e era exatamente lá que o controle da âncora
             precisava estar. Some só quando não há extrato nenhum — aí a
-            resposta é importar, não trocar o ciclo */}
-        {data !== null && months.length > 0 && (
+            resposta é importar, não trocar o ciclo.
+            EC-150: o alternador Eu/Casa divide a linha com o chip. Ele nasce
+            nulo para quem não tem casa, e para quem tem a linha existe mesmo
+            sem extrato próprio — a casa pode ter movimento que eu não tenho */}
+        {(hasFamily || (data !== null && months.length > 0)) && (
           <View
             style={{
               flexDirection: "row",
-              justifyContent: "flex-end",
+              alignItems: "center",
               paddingHorizontal: spacing[5],
               marginTop: spacing[2],
             }}
           >
-            <CycleWindowChip
-              start={data.start}
-              end={data.end}
-              onPress={() => setAnchorSheetOpen(true)}
-            />
+            <FamilyScopeToggle />
+            <View style={{ flex: 1 }} />
+            {chipWindow && (
+              <CycleWindowChip
+                start={chipWindow.start}
+                end={chipWindow.end}
+                onPress={() => setAnchorSheetOpen(true)}
+              />
+            )}
           </View>
         )}
 
-        {!data ? (
+        {inFamilyScope ? (
+          <FamilyView
+            analytics={familyAnalytics}
+            isLoading={isFamilyLoading}
+            error={familyError}
+            onRetry={loadFamily}
+            columns={columns}
+            emptyLabel={familyEmptyLabel}
+          />
+        ) : !data ? (
           <View style={{ marginTop: periodKeys.length > 0 ? spacing[4] : 0 }}>
             <AnalyticsSkeleton showChips={periodKeys.length === 0} />
           </View>

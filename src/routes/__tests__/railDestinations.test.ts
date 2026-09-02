@@ -44,6 +44,8 @@ describe("mapa de destinos do trilho", () => {
       APP_ROUTES.noticias,
       APP_ROUTES.assistente,
       APP_ROUTES.perfil,
+      // EC-150: a casa é destino do trilho — no celular só o Perfil leva lá
+      APP_ROUTES.familia,
       APP_ROUTES.avancado,
       APP_ROUTES.sobre,
     ].forEach((rota) => expect(rotas).toContain(rota));

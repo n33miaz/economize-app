@@ -11,6 +11,7 @@ import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Target from "lucide-react-native/dist/esm/icons/target";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
 import User from "lucide-react-native/dist/esm/icons/user";
+import Users from "lucide-react-native/dist/esm/icons/users";
 import Wallet from "lucide-react-native/dist/esm/icons/wallet";
 import type { LucideIcon } from "lucide-react-native";
 
@@ -42,6 +43,7 @@ export type RailKey =
   | "noticias"
   | "assistente"
   | "perfil"
+  | "familia"
   | "ajustes"
   | "sobre";
 
@@ -196,6 +198,17 @@ export const RAIL_GROUPS: RailGroup[] = [
         primary: false,
       },
       {
+        // EC-150: a casa é destino, não tarefa — quem mora com alguém volta
+        // aqui para conferir quem entrou e ajustar o que mostra. No grupo
+        // "Conta" porque é sobre a conta desta pessoa e o que ela partilha
+        key: "familia",
+        label: "Família",
+        route: APP_ROUTES.familia,
+        inMainTabs: false,
+        Icon: Users,
+        primary: false,
+      },
+      {
         key: "ajustes",
         label: "Opções avançadas",
         route: APP_ROUTES.avancado,
@@ -245,6 +258,7 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   [MAIN_TAB_ROUTES.indicadores]: "mercado",
   [MARKET_TAB_ROUTES.moedas]: "mercado",
   [MARKET_TAB_ROUTES.indices]: "mercado",
+  [MARKET_TAB_ROUTES.catalogo]: "mercado",
   [APP_ROUTES.analise]: "analise",
   // Destino próprio: a tela abre do trilho sem cartão escolhido e do Extrato
   // com um cartão no parâmetro — nos dois casos a pílula certa é "Cartões"
@@ -268,6 +282,7 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   // Cadastro que alimenta os Desejos, alcançado de dentro deles: a pílula
   // continua em "Desejos" para o usuário não perder de vista de onde veio
   [APP_ROUTES.renda]: "desejos",
+  [APP_ROUTES.familia]: "familia",
 };
 
 /**

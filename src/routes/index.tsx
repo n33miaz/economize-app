@@ -56,6 +56,7 @@ import ForgotPassword from "../screens/auth/ForgotPassword";
 import ResetPassword from "../screens/auth/ResetPassword";
 import ChangePassword from "../screens/ChangePassword";
 import Home from "../screens/Home";
+import AssetCatalog from "../screens/AssetCatalog";
 import Currencies from "../screens/Currencies";
 import Indexes from "../screens/Indexes";
 import News from "../screens/News";
@@ -68,6 +69,7 @@ import AdvancedOptions from "../screens/AdvancedOptions";
 import AiSettings from "../screens/AiSettings";
 import Wishes from "../screens/Wishes";
 import IncomeSettings from "../screens/IncomeSettings";
+import Family from "../screens/Family";
 import Reports from "../screens/Reports";
 import Analytics from "../screens/Analytics";
 import Categories from "../screens/Categories";
@@ -142,6 +144,13 @@ function IndicatorsTabs() {
       >
         <TopTab.Screen name={MARKET_TAB_ROUTES.moedas} component={Currencies} />
         <TopTab.Screen name={MARKET_TAB_ROUTES.indices} component={Indexes} />
+        {/* EC-099: por último de propósito. Moedas e Índices são o que o
+            usuário abre todo dia; o catálogo inteiro é para quando ele está
+            procurando algo específico */}
+        <TopTab.Screen
+          name={MARKET_TAB_ROUTES.catalogo}
+          component={AssetCatalog}
+        />
       </TopTab.Navigator>
     </View>
   );
@@ -424,6 +433,13 @@ function AppStack() {
         component={IncomeSettings}
         options={ephemeralTransition}
       />
+      {/* EC-150: a casa — quem mora comigo e o que cada um mostra. Aberta
+          pelo Perfil no celular e pelo trilho no desktop */}
+      <Stack.Screen
+        name={APP_ROUTES.familia}
+        component={Family}
+        options={ephemeralTransition}
+      />
       <Stack.Screen
         name={APP_ROUTES.relatorios}
         component={Reports}
@@ -507,7 +523,15 @@ export default function Routes() {
         navigationRef.navigate("Main", { screen: destination.route });
         return;
       }
-      navigationRef.navigate(destination.route);
+      // Alargado para `string` de propósito: com a rota tipada como a união
+      // de TODAS as folhas, o `navigate` pede ao compilador que case a união
+      // contra uma assinatura por rota — e o TypeScript desiste dessa
+      // discriminação acima de 25 membros (a Família foi a 26ª). O `ParamList`
+      // do container é `Record<string, …>`, então `string` é o que ele aceita;
+      // a checagem de que `route` é uma `LeafRouteName` continua no mapa do
+      // trilho, que é onde ela sempre esteve
+      const route: string = destination.route;
+      navigationRef.navigate(route);
     },
     [navigationRef],
   );
