@@ -24,10 +24,12 @@ import ReceiptText from "lucide-react-native/dist/esm/icons/receipt-text";
 import SlidersHorizontal from "lucide-react-native/dist/esm/icons/sliders-horizontal";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import SunMoon from "lucide-react-native/dist/esm/icons/sun-moon";
+import Glasses from "lucide-react-native/dist/esm/icons/glasses";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
 import Target from "lucide-react-native/dist/esm/icons/target";
 import Clock from "lucide-react-native/dist/esm/icons/clock";
 import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
+import Users from "lucide-react-native/dist/esm/icons/users";
 import X from "lucide-react-native/dist/esm/icons/x";
 import type { LucideIcon } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -44,6 +46,7 @@ import {
   Currency,
   Language,
   ThemeMode,
+  ViewDepth,
   selectCycleAnchorDay,
   usePreferencesStore,
 } from "../store/preferencesStore";
@@ -219,10 +222,12 @@ export default function Profile() {
     biometricLogin,
     defaultCurrency,
     language,
+    viewDepth,
     setTheme,
     setBiometric,
     setDefaultCurrency,
     setLanguage,
+    setViewDepth,
   } = usePreferencesStore();
   const showToast = useToastStore((s) => s.showToast);
   const {
@@ -425,6 +430,7 @@ export default function Profile() {
               <TouchableOpacity
                 onPress={saveName}
                 disabled={isSaving}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 accessibilityLabel="Salvar nome"
                 accessibilityRole="button"
                 style={{
@@ -444,6 +450,7 @@ export default function Profile() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setEditing(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 accessibilityLabel="Cancelar edição"
                 accessibilityRole="button"
                 style={{
@@ -601,6 +608,14 @@ export default function Profile() {
             description="O que entra e quanto você trabalha por isso"
             onPress={() => navigation.navigate(APP_ROUTES.renda as never)}
           />
+          {/* EC-150: a casa mora em Conta porque é sobre ESTA conta — com
+              quem ela se junta e o que ela mostra para os outros */}
+          <ActionRow
+            Icon={Users}
+            label="Família"
+            description="Quem mora com você e o que cada um compartilha"
+            onPress={() => navigation.navigate(APP_ROUTES.familia as never)}
+          />
         </Animated.View>
 
         <Animated.View entering={listItemEntering(3)}>
@@ -654,6 +669,72 @@ export default function Profile() {
                 { label: "Sistema", value: "system" },
               ]}
             />
+          </View>
+          {/* EC-142: mora aqui, e NÃO em Opções avançadas — quem está na
+              visão simples nunca entraria lá para descobrir que existe uma
+              visão com mais coisas */}
+          <View
+            style={{
+              backgroundColor: t.background.elevated,
+              borderRadius: radius.xl,
+              padding: spacing[4],
+              borderWidth: 1,
+              borderColor: t.border.subtle,
+              marginBottom: spacing[2],
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: spacing[3],
+              }}
+            >
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: radius.full,
+                  backgroundColor: t.background.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: spacing[3],
+                }}
+              >
+                <Glasses size={17} color={t.text.primary} />
+              </View>
+              <Text
+                style={{
+                  color: t.text.primary,
+                  fontSize: 15,
+                  fontWeight: "600",
+                }}
+              >
+                Nível de detalhe
+              </Text>
+            </View>
+            <SegmentedControl<ViewDepth>
+              value={viewDepth}
+              onChange={setViewDepth}
+              options={[
+                { label: "Simples", value: "simple" },
+                { label: "Avançada", value: "advanced" },
+              ]}
+            />
+            {/* Dizer o que muda, e não só o nome da opção: "avançada" sozinho
+                não informa o que se ganha nem o que se perde */}
+            <Text
+              style={{
+                color: t.text.secondary,
+                fontSize: 12,
+                lineHeight: 17,
+                marginTop: spacing[3],
+              }}
+            >
+              {viewDepth === "simple"
+                ? "Os números e o resumo em português. Sem comparação com o período anterior e sem a quebra da dívida por tipo."
+                : "Tudo: variação contra o período anterior, o que mudou em cada categoria e a quebra da dívida por tipo."}
+            </Text>
           </View>
           <ActionRow
             Icon={CalendarRange}

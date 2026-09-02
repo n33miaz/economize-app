@@ -29,6 +29,12 @@ export default function ConfirmDialog() {
       // botões até resolver para não disparar a ação duas vezes
       setBusy(true);
       await request.onConfirm();
+    } catch (error) {
+      // Quem chamou é quem sabe o que a falha significa para o usuário (e
+      // mostra o toast). Aqui só não pode ESCAPAR: um handler de toque que
+      // rejeita vira unhandled rejection, que no navegador é erro de console
+      // sem nada na tela — e o diálogo já fechou pelo `finally`
+      console.error("Ação confirmada falhou:", error);
     } finally {
       setBusy(false);
       dismiss();

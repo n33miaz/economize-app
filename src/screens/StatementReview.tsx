@@ -332,7 +332,10 @@ function ReviewGroupCard({
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  minHeight: 40,
+                  // 44 é o mínimo da regra §5.8 do design system. A linha é
+                  // larga, mas altura é o eixo em que o polegar erra numa
+                  // lista densa como esta
+                  minHeight: 44,
                   paddingVertical: spacing[2],
                 }}
               >

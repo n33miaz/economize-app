@@ -136,6 +136,7 @@ function OptionGroup<T extends string>({
             <TouchableOpacity
               key={option.value}
               onPress={() => onSelect(option.value)}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityLabel={`${label}: ${option.label}`}
               accessibilityRole="radio"
               accessibilityState={{ checked: isSelected }}

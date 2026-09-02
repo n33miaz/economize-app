@@ -240,6 +240,7 @@ export default function CycleAnchorSheet({
                   <TouchableOpacity
                     key={`${item.label}-${item.day}`}
                     onPress={() => handlePick(item.day)}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     accessibilityLabel={`Usar o dia ${item.day}, de ${item.label}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}

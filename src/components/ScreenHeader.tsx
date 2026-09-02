@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StatusBar } from "react-native";
+import ChevronLeft from "lucide-react-native/dist/esm/icons/chevron-left";
 import Info from "lucide-react-native/dist/esm/icons/info";
 import User from "lucide-react-native/dist/esm/icons/user";
 import { useNavigation } from "@react-navigation/native";
@@ -15,6 +16,14 @@ interface ScreenHeaderProps {
   showInfoButton?: boolean;
   showProfileButton?: boolean;
   /**
+   * Seta de voltar à esquerda do título. Sem valor, aparece sozinha nas
+   * telas EMPILHADAS (pilha com histórico) e nunca nas raízes das abas.
+   * Existe por causa da web: no celular há o botão do sistema e o gesto de
+   * borda; no navegador uma tela empilhada sem seta é beco sem saída — a
+   * barra de abas fica coberta e nada na interface diz como voltar.
+   */
+  showBackButton?: boolean;
+  /**
    * Telas apresentadas como modal já nascem abaixo da status bar; somar o
    * statusBarHeight nelas cria uma faixa morta no topo (iOS). Passe false
    * nesses casos para usar só o respiro padrão.
@@ -28,10 +37,16 @@ export default function ScreenHeader({
   rightActions,
   showInfoButton = true,
   showProfileButton = true,
+  showBackButton,
   topInset = true,
 }: ScreenHeaderProps) {
   const t = useTheme();
   const navigation = useNavigation();
+  // Home, Finanças e Mercado vivem dentro do navegador de abas: para elas
+  // `getState()` é o estado da aba, não da pilha, e a seta não aparece
+  const navState = navigation.getState();
+  const isPushed = navState?.type === "stack" && navigation.canGoBack();
+  const showBack = showBackButton ?? isPushed;
   const paddingTop = topInset
     ? Constants.statusBarHeight + spacing[5]
     : spacing[5];
@@ -54,6 +69,25 @@ export default function ScreenHeader({
       />
 
       <View className="flex-row items-center justify-between">
+        {showBack && (
+          <TouchableOpacity
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Voltar"
+            accessibilityRole="button"
+            className="bg-elevated active:bg-border"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: radius.full,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: spacing[3],
+            }}
+            onPress={() => navigation.goBack()}
+          >
+            <ChevronLeft size={20} color={t.text.primary} />
+          </TouchableOpacity>
+        )}
         <View className="flex-1 mr-4">
           <Text
             className="text-textPrimary tracking-tight"
@@ -82,6 +116,7 @@ export default function ScreenHeader({
 
           {showInfoButton && (
             <TouchableOpacity
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityLabel="Sobre o app"
               accessibilityRole="button"
               className="bg-elevated active:bg-border"
@@ -100,6 +135,7 @@ export default function ScreenHeader({
 
           {showProfileButton && (
             <TouchableOpacity
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityLabel="Perfil"
               accessibilityRole="button"
               className="bg-elevated active:bg-border"

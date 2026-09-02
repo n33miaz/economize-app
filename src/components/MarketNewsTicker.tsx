@@ -484,6 +484,7 @@ export default function MarketNewsTicker() {
           </Text>
           <TouchableOpacity
             onPress={clearFilters}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Limpar filtro de notícias"
             accessibilityRole="button"
             activeOpacity={0.8}

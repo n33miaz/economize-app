@@ -167,6 +167,7 @@ export default function CategoryForm({
                       // sub de "Receitas" nascer como gasto inverteria o sinal na análise
                       if (option) setFlow(option.flow);
                     }}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     accessibilityLabel={
                       option ? `Subcategoria de ${option.name}` : "Categoria principal"
                     }
