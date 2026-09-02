@@ -1,8 +1,9 @@
 import React, { useEffect } from "react";
 import { View, Text } from "react-native";
 import Animated, {
-  useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
@@ -13,6 +14,7 @@ import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useToastStore } from "../store/toastStore";
+import { boxNone } from "../utils/pointerEvents";
 import { useTheme } from "../theme/ThemeProvider";
 import { motion } from "../theme/ds";
 
@@ -22,18 +24,24 @@ export default function Toast() {
   const insets = useSafeAreaInsets();
 
   const translateY = useSharedValue(-150);
+  // EC-054: com "reduzir movimento" ligado, o toast APARECE e SOME, sem
+  // deslizar. A mensagem continua sendo entregue — o que sai é o percurso,
+  // que é justamente o que incomoda quem pediu menos movimento
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
+    const destino = visible ? insets.top + 10 : -150;
+    if (reducedMotion) {
+      translateY.value = destino;
+      return;
+    }
     if (visible) {
       // Damping mais alto: o toast assenta sem quicar (motion intencional)
-      translateY.value = withSpring(insets.top + 10, {
-        damping: 20,
-        stiffness: 160,
-      });
+      translateY.value = withSpring(destino, { damping: 20, stiffness: 160 });
     } else {
-      translateY.value = withTiming(-150, { duration: motion.duration.base });
+      translateY.value = withTiming(destino, { duration: motion.duration.base });
     }
-  }, [visible, insets.top]);
+  }, [visible, insets.top, reducedMotion, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -60,9 +68,9 @@ export default function Toast() {
   return (
     <View
       className="absolute inset-0 items-center justify-start"
-      // `pointerEvents` no estilo, não como prop: a prop está depreciada e
-      // avisava no console da web a cada carga da página
-      style={{ zIndex: 9999, elevation: 99, pointerEvents: "box-none" }}
+      // A camada cobre a tela inteira só para posicionar o toast: sem o
+      // `box-none` daqui ela fica por cima de tudo e engole todo clique
+      style={[boxNone, { zIndex: 9999, elevation: 99 }]}
     >
       <Animated.View
         className="absolute top-0 self-center max-w-[90%]"

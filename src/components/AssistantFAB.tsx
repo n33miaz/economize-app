@@ -18,6 +18,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { radius, shadow, spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
 import BrandGradient from "./BrandGradient";
+import { boxNone } from "../utils/pointerEvents";
 
 interface AssistantFABProps {
   label?: string;
@@ -68,14 +69,16 @@ export default function AssistantFAB({
   return (
     <Animated.View
       entering={fabEntering}
-      style={{
-        position: "absolute",
-        right: spacing[5],
-        bottom: bottomOffset ?? insets.bottom + spacing[5],
-        // No estilo, não como prop: `props.pointerEvents` está depreciado e
-        // gritava no console da web a cada carga
-        pointerEvents: "box-none",
-      }}
+      // O halo e a sombra passam da área do botão: sem o `box-none` a moldura
+      // invisível deles rouba o clique de quem está por baixo
+      style={[
+        boxNone,
+        {
+          position: "absolute",
+          right: spacing[5],
+          bottom: bottomOffset ?? insets.bottom + spacing[5],
+        },
+      ]}
     >
       <TouchableOpacity
         accessibilityLabel={label}
