@@ -40,9 +40,15 @@ import { useIndicatorStore } from "../store/indicatorStore";
 import { hasMovement, useAnalyticsStore } from "../store/analyticsStore";
 import { useWalletStore } from "../store/walletStore";
 import { useFavoritesStore } from "../store/favoritesStore";
-import { usePreferencesStore } from "../store/preferencesStore";
+import {
+  useAdvancedView,
+  usePreferencesStore,
+} from "../store/preferencesStore";
 import { useRecurrenceStore } from "../store/recurrenceStore";
 import { useWishStore } from "../store/wishStore";
+import MealVoucherPrompt from "../components/MealVoucherPrompt";
+import { mealVoucherAsk } from "../utils/mealVoucher";
+import { todayIso } from "../utils/cycleWindow";
 import { describeSalaryTiming } from "../utils/wishes";
 import { cyclePerformance } from "../utils/pot";
 import PotIcon, { potStateFor } from "../components/PotIcon";
@@ -63,7 +69,11 @@ import { useBreakpoint } from "../hooks/useBreakpoint";
 import { formatBRL, formatBRLCompact, formatDecimal, formatPercent } from "../utils/money";
 import { formatMonthLabel, formatWindowLabel } from "../utils/cycleWindow";
 import { favoriteDisplayItems } from "../utils/indicatorList";
-import { firstRiskMonth, upcomingCommitment } from "../utils/recurrence";
+import {
+  firstRiskMonth,
+  forecastPeriodLabel,
+  upcomingCommitment,
+} from "../utils/recurrence";
 
 // Mesma janela usada na aba de recorrências: o mês seguinte inteiro cabe aqui
 const COMMITMENT_WINDOW_DAYS = 30;
@@ -115,6 +125,12 @@ export default function Home() {
   const setPotAnnouncementSeen = usePreferencesStore(
     (s) => s.setPotAnnouncementSeen,
   );
+  const mealVoucherPromptDismissedFor = usePreferencesStore(
+    (s) => s.mealVoucherPromptDismissedFor,
+  );
+  const dismissMealVoucherPrompt = usePreferencesStore(
+    (s) => s.dismissMealVoucherPrompt,
+  );
   const showBalance = !hideBalance;
   const { userName } = useAuthStore();
 
@@ -150,6 +166,24 @@ export default function Home() {
   // salário. Dois cartões seriam dois números sobre a mesma coisa
   const committed = useWishStore((s) => s.committed);
   const fetchCommitted = useWishStore((s) => s.fetchCommitted);
+  // EC-137: as fontes de renda trazem a âncora do VR, que é o que diz QUANDO
+  // perguntar. Chamada leve, e é a mesma que a tela de Renda já usa
+  const incomeSources = useWishStore((s) => s.income?.sources);
+  const fetchIncome = useWishStore((s) => s.fetchIncome);
+
+  // EC-137: o VR cai antes do salário e é gasto antes de o mês fechar. O app
+  // pergunta no momento em que a compra provavelmente aconteceu — depois, a
+  // pessoa não lembra mais
+  const vrAsk = useMemo(
+    () =>
+      mealVoucherAsk({
+        sources: incomeSources ?? [],
+        today: todayIso(),
+        lastTransactionDate: monthly?.lastTransactionDate,
+        dismissedFor: mealVoucherPromptDismissedFor,
+      }),
+    [incomeSources, monthly?.lastTransactionDate, mealVoucherPromptDismissedFor],
+  );
 
   // EC-146: o pote conta o ciclo. `null` enquanto não há dado — e aí ele
   // aparece no estado neutro, nunca no vermelho
@@ -191,7 +225,14 @@ export default function Home() {
       fetchHomeMonthly();
       fetchRecurrences();
       fetchCommitted();
-    }, [fetchQueue, fetchHomeMonthly, fetchRecurrences, fetchCommitted]),
+      fetchIncome();
+    }, [
+      fetchQueue,
+      fetchHomeMonthly,
+      fetchRecurrences,
+      fetchCommitted,
+      fetchIncome,
+    ]),
   );
 
   const onRefresh = useCallback(async () => {
@@ -241,6 +282,8 @@ export default function Home() {
         .slice(0, 3),
     [monthly],
   );
+
+  const avancado = useAdvancedView();
 
   const expenseDeltaPct = useMemo(() => {
     if (!monthly || monthly.previous.totalExpense <= 0) return null;
@@ -372,6 +415,7 @@ export default function Home() {
             }
             accessibilityLabel="Ver mercado e favoritos"
             accessibilityRole="button"
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           >
             <Star size={18} color={t.text.primary} />
           </TouchableOpacity>,
@@ -565,9 +609,16 @@ export default function Home() {
                         textTransform: "uppercase",
                       }}
                     >
-                      {isWindowMode
-                        ? `Sobrou no ciclo ${periodLabel}`
-                        : `Sobrou em ${periodLabel}`}
+                      {/* "Sobrou" em cima de número negativo é frase errada:
+                          o mês em que faltou dinheiro é o mês em que a leitura
+                          precisa estar mais correta, não menos */}
+                      {monthly.net < 0
+                        ? isWindowMode
+                          ? `Faltou no ciclo ${periodLabel}`
+                          : `Faltou em ${periodLabel}`
+                        : isWindowMode
+                          ? `Sobrou no ciclo ${periodLabel}`
+                          : `Sobrou em ${periodLabel}`}
                     </Text>
                     <TouchableOpacity
                       onPress={toggleBalance}
@@ -602,9 +653,13 @@ export default function Home() {
                       accessibilityLabel={
                         showBalance
                           ? `${
-                              isWindowMode
-                                ? `Sobrou no ciclo ${periodLabel}`
-                                : `Sobrou em ${periodLabel}`
+                              monthly.net < 0
+                                ? isWindowMode
+                                  ? `Faltou no ciclo ${periodLabel}`
+                                  : `Faltou em ${periodLabel}`
+                                : isWindowMode
+                                  ? `Sobrou no ciclo ${periodLabel}`
+                                  : `Sobrou em ${periodLabel}`
                             }: ${formatBRL(monthly.net)}`
                           : HIDDEN_SPOKEN
                       }
@@ -664,7 +719,21 @@ export default function Home() {
                       paddingTop: spacing[3],
                     }}
                   >
-                    {expenseDeltaPct !== null ? (
+                    {/* EC-142: a fileira existe para levar à Análise. Na
+                        visão simples ela continua levando, mas com convite no
+                        lugar do percentual contra o período anterior */}
+                    {!avancado ? (
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          flexShrink: 1,
+                          color: t.text.tertiary,
+                          fontSize: 12,
+                        }}
+                      >
+                        Ver no que foi o dinheiro
+                      </Text>
+                    ) : expenseDeltaPct !== null ? (
                       <>
                         {expenseDeltaPct <= 0 ? (
                           <ArrowDownRight size={14} color={t.chart.up} />
@@ -718,7 +787,7 @@ export default function Home() {
                   {/* O comparável do modo janela não é o mês passado: é uma janela
                       de mesmo tamanho terminando na véspera. Sem esta linha, o
                       percentual acima mudaria de significado em silêncio */}
-                  {isWindowMode && previousWindowLabel && (
+                  {isWindowMode && avancado && previousWindowLabel && (
                     <Text
                       style={{
                         color: t.text.tertiary,
@@ -734,6 +803,18 @@ export default function Home() {
                 </>
               )}
             </Animated.View>,
+
+            /* EC-137: acima da revisão porque é mais urgente — a revisão
+               espera, a memória da compra do vale não */
+            vrAsk !== null && (
+              <Animated.View key="vale" entering={listItemEntering(1)}>
+                <MealVoucherPrompt
+                  ask={vrAsk}
+                  onImport={goToImport}
+                  onDismiss={() => dismissMealVoucherPrompt(vrAsk.landedOn)}
+                />
+              </Animated.View>
+            ),
 
             /* Revisão pendente: o único bloco que pede ação do usuário */
             pendingReviewCount > 0 && (
@@ -900,13 +981,11 @@ export default function Home() {
                           fontWeight: "700",
                         }}
                       >
-                        {/* A projeção é por MÊS DE CALENDÁRIO — ela não conhece a
-                            âncora (alinhar o motor é mudança de API, ficou como
-                            ticket próprio). Fora do dia 1 a tela passa a ter duas
-                            réguas, e sem dizer qual é qual o usuário lê o número
-                            como erro */}
-                        Saldo previsto negativo em {formatMonthLabel(riskMonth.month)}
-                        {isWindowMode ? " (mês do calendário)" : ""}
+                        {/* O nome do período sai do recorte da projeção
+                            (`start`/`end`), pela mesma regra da tela de previsão:
+                            a projeção agora corre no ciclo do usuário (EC-116) e
+                            a Home fala numa régua só */}
+                        Saldo previsto negativo em {forecastPeriodLabel(riskMonth).short}
                       </Text>
                     </View>
                   ) : null}
@@ -1050,6 +1129,7 @@ export default function Home() {
                       mesmo canto com um alvo de toque menor que o mínimo */}
                   <TouchableOpacity
                     onPress={goToAnalytics}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityLabel="Ver todas as categorias na análise"
                     accessibilityRole="button"
                     activeOpacity={0.7}
