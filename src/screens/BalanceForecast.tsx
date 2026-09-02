@@ -30,7 +30,6 @@ import {
 } from "../store/recurrenceStore";
 import ChartLegend from "../components/ChartLegend";
 import ErrorState from "../components/ErrorState";
-import { formatMonthLabel } from "../components/MonthSelector";
 import PageContainer from "../components/PageContainer";
 import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
@@ -38,8 +37,9 @@ import Skeleton from "../components/Skeleton";
 import { calculateBankMetrics } from "../utils/bankMetrics";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import {
-  WEEKLY_PER_MONTH_LABEL,
-  WEEKLY_PER_MONTH_SPOKEN,
+  forecastItemWhen,
+  forecastPeriodKey,
+  forecastPeriodLabel,
   isMonthAtRisk,
   splitForecastMonth,
 } from "../utils/recurrence";
@@ -53,8 +53,17 @@ const WINDOW_OPTIONS = FORECAST_WINDOWS.map((months) => ({
 // diferença ser visível, baixo o bastante para caber acima da dobra
 const BAR_MAX_HEIGHT = 96;
 
-/** Uma linha da composição do mês: quando cai, o quê e quanto. */
-function ForecastRow({ item, settled }: { item: ForecastItem; settled: boolean }) {
+/** Uma linha da composição do período: quando cai, o quê e quanto. */
+function ForecastRow({
+  item,
+  settled,
+  periodNoun,
+}: {
+  item: ForecastItem;
+  settled: boolean;
+  /** "mês" ou "ciclo" — a palavra que o cabeçalho do card já usou */
+  periodNoun: string;
+}) {
   const t = useTheme();
   const isIncome = item.flow === "INCOME";
   const color = settled
@@ -62,19 +71,21 @@ function ForecastRow({ item, settled }: { item: ForecastItem; settled: boolean }
     : isIncome
       ? t.chart.up
       : t.chart.down;
-  // Cadência semanal não tem dia único no mês (dueDay nulo) e o valor desta
-  // linha já é a projeção mensal: 4,33 ocorrências. O selo assume a conta —
-  // "semanal" ao lado de um valor 4,3× maior que a cobrança confundiria.
-  const isWeekly = item.dueDay == null;
-  const when = isWeekly ? WEEKLY_PER_MONTH_LABEL : `dia ${item.dueDay}`;
-  const whenSpoken = isWeekly ? WEEKLY_PER_MONTH_SPOKEN : `dia ${item.dueDay}`;
+  // O selo escreve dia/mês a partir da data completa: em ciclo ancorado "dia
+  // 20" (agosto) e "dia 5" (setembro) não localizam nada. Cadência semanal não
+  // tem dia nem data, e o valor da linha já é a projeção do período (4,33
+  // ocorrências): o selo assume a conta — "semanal" ao lado de um valor 4,3×
+  // maior que a cobrança confundiria.
+  const when = forecastItemWhen(item);
 
   return (
     <View
       accessible
-      accessibilityLabel={`${item.displayName}, ${whenSpoken}, ${
+      accessibilityLabel={`${item.displayName}, ${when.spoken}, ${
         isIncome ? "entrada" : "saída"
-      } de ${formatBRL(item.amount)}${settled ? ", já liquidada neste mês" : ""}`}
+      } de ${formatBRL(item.amount)}${
+        settled ? `, já liquidada neste ${periodNoun}` : ""
+      }`}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -99,7 +110,7 @@ function ForecastRow({ item, settled }: { item: ForecastItem; settled: boolean }
           }}
           numberOfLines={1}
         >
-          {when}
+          {when.label}
         </Text>
       </View>
       <Text
@@ -130,9 +141,9 @@ function ForecastRow({ item, settled }: { item: ForecastItem; settled: boolean }
 }
 
 /**
- * Um mês da projeção. O mês que fecha negativo veste o token de perigo (borda,
- * fundo e valor): é a única informação da tela que exige reação, e o accent —
- * cor da marca — nunca significa alta nem baixa.
+ * Um período da projeção. O período que fecha negativo veste o token de perigo
+ * (borda, fundo e valor): é a única informação da tela que exige reação, e o
+ * accent — cor da marca — nunca significa alta nem baixa.
  */
 function ForecastMonthCard({
   month,
@@ -149,7 +160,14 @@ function ForecastMonthCard({
   const { listItemEntering } = useMotionPresets();
   const atRisk = isMonthAtRisk(month);
   const split = useMemo(() => splitForecastMonth(month), [month]);
-  const label = formatMonthLabel(month.month);
+  // O nome do período sai do recorte (`start`/`end`), não do `month`: em ciclo
+  // ancorado o "2026-08" é o ciclo 12/08→11/09, e escrevê-lo "ago 2026" era a
+  // ambiguidade que o EC-116 veio matar. Mês do calendário segue "set 2026"
+  const period = forecastPeriodLabel(month);
+  const label = period.short;
+  // A palavra que o resto do card usa acompanha o recorte — "fim do mês" sob
+  // um cabeçalho "12/08 → 11/09" seria a segunda régua de novo
+  const periodNoun = period.isCalendarMonth ? "mês" : "ciclo";
 
   const total = month.expectedIncome + month.expectedExpense;
   const incomeShare = total > 0 ? (month.expectedIncome / total) * 100 : 0;
@@ -208,12 +226,12 @@ function ForecastMonthCard({
       </View>
 
       <Text style={{ color: t.text.secondary, fontSize: 12, marginTop: spacing[2] }}>
-        Saldo previsto no fim do mês
+        Saldo previsto no fim do {periodNoun}
       </Text>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
-        accessibilityLabel={`Saldo previsto no fim de ${label}: ${formatBRL(
+        accessibilityLabel={`Saldo previsto ao fechar ${period.spoken}: ${formatBRL(
           month.cumulativeNet,
         )}`}
         style={{
@@ -301,7 +319,7 @@ function ForecastMonthCard({
           accessibilityState={{ expanded }}
           accessibilityLabel={`${
             expanded ? "Ocultar" : "Ver"
-          } os ${itemCount} lançamentos previstos de ${label}`}
+          } os ${itemCount} lançamentos previstos para ${period.spoken}`}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -316,8 +334,8 @@ function ForecastMonthCard({
             style={{ flex: 1, color: t.text.secondary, fontSize: 13, fontWeight: "700" }}
           >
             {expanded
-              ? "Ocultar o que compõe o mês"
-              : `Ver o que compõe o mês (${itemCount})`}
+              ? `Ocultar o que compõe o ${periodNoun}`
+              : `Ver o que compõe o ${periodNoun} (${itemCount})`}
           </Text>
           <ChevronDown
             size={16}
@@ -330,7 +348,12 @@ function ForecastMonthCard({
       {expanded && (
         <View style={{ marginTop: spacing[2], gap: spacing[1] }}>
           {split.pendingItems.map((item) => (
-            <ForecastRow key={item.seriesId} item={item} settled={false} />
+            <ForecastRow
+              key={item.seriesId}
+              item={item}
+              settled={false}
+              periodNoun={periodNoun}
+            />
           ))}
 
           {split.settledItems.length > 0 && (
@@ -355,7 +378,12 @@ function ForecastMonthCard({
                 </Text>
               </View>
               {split.settledItems.map((item) => (
-                <ForecastRow key={item.seriesId} item={item} settled />
+                <ForecastRow
+                  key={item.seriesId}
+                  item={item}
+                  settled
+                  periodNoun={periodNoun}
+                />
               ))}
             </View>
           )}
@@ -688,15 +716,21 @@ export default function BalanceForecast() {
               </Animated.View>
 
               <View style={{ marginTop: spacing[4] }}>
-                {months.map((month, index) => (
-                  <ForecastMonthCard
-                    key={month.month}
-                    month={month}
-                    index={index}
-                    expanded={expandedMonth === month.month}
-                    onToggle={() => handleToggleMonth(month.month)}
-                  />
-                ))}
+                {/* Identidade do card pelo `start` do recorte, que é o que o
+                    rótulo descreve — `month` é só o mês em que o período
+                    começa */}
+                {months.map((month, index) => {
+                  const key = forecastPeriodKey(month);
+                  return (
+                    <ForecastMonthCard
+                      key={key}
+                      month={month}
+                      index={index}
+                      expanded={expandedMonth === key}
+                      onToggle={() => handleToggleMonth(key)}
+                    />
+                  );
+                })}
               </View>
 
               <Text
@@ -707,8 +741,8 @@ export default function BalanceForecast() {
                   marginTop: spacing[2],
                 }}
               >
-                O mês corrente projeta só o que ainda falta acontecer: o que já
-                caiu na conta aparece marcado e fica fora da soma. Transferências
+                O período corrente projeta só o que ainda falta acontecer: o que
+                já caiu na conta aparece marcado e fica fora da soma. Transferências
                 entre suas próprias contas e séries sem ritmo definido não entram
                 na projeção.
               </Text>

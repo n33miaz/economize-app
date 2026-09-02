@@ -138,17 +138,22 @@ function SeriesCard({
   return (
     <Animated.View
       entering={listItemEntering(index)}
-      style={{
-        flexDirection: "row",
-        alignItems: "stretch",
-        backgroundColor: t.background.surface,
-        borderRadius: radius["2xl"],
-        borderWidth: 1,
-        borderColor: t.border.subtle,
-        marginBottom: spacing[3],
-        opacity: dismissedList ? 0.75 : 1,
-      }}
+      style={{ marginBottom: spacing[3] }}
     >
+      {/* A opacidade da lista de descartadas fica num filho, nunca no
+          elemento animado: a animação de entrada termina em opacity 1 e, na
+          web, sobrescreveria o 0.75 (o Reanimated avisa isso a cada linha) */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "stretch",
+          backgroundColor: t.background.surface,
+          borderRadius: radius["2xl"],
+          borderWidth: 1,
+          borderColor: t.border.subtle,
+          opacity: dismissedList ? 0.75 : 1,
+        }}
+      >
       <TouchableOpacity
         onPress={onEdit}
         activeOpacity={0.75}
@@ -293,6 +298,7 @@ function SeriesCard({
           <Trash2 size={18} color={t.text.tertiary} />
         )}
       </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }

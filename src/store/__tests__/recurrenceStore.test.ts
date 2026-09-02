@@ -1,4 +1,5 @@
 import type { RecurringSeries } from "../../services/api";
+import { usePreferencesStore } from "../preferencesStore";
 import { useRecurrenceStore } from "../recurrenceStore";
 
 // A camada de rede é o limite: o que interessa aqui é como o store reage a
@@ -13,6 +14,14 @@ jest.mock("../../services/api", () => ({
 }));
 
 const api = jest.requireMock("../../services/api");
+
+function setAnchor(day: number) {
+  usePreferencesStore.setState({ cycleAnchorDay: day });
+}
+
+// Recorte que o store manda com o relógio preso em 05/08/2026 (ver beforeEach)
+const CALENDAR_RANGE = { kind: "month", month: "2026-08" };
+const CYCLE_RANGE = { kind: "window", start: "2026-07-12", end: "2026-08-11" };
 
 function makeSeries(overrides: Partial<RecurringSeries> = {}): RecurringSeries {
   return {
@@ -49,6 +58,10 @@ const INITIAL = useRecurrenceStore.getState();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Relógio preso: o recorte da previsão é o ciclo que contém "hoje", e um
+  // teste que dependesse do dia real do CI só falharia em certas datas do mês
+  jest.useFakeTimers({ now: new Date("2026-08-05T12:00:00Z") });
+  setAnchor(1);
   useRecurrenceStore.setState({
     ...INITIAL,
     series: [],
@@ -112,6 +125,8 @@ describe("estado do mês corrente", () => {
       months: [
         {
           month: "2026-08",
+          start: "2026-08-01",
+          end: "2026-08-31",
           expectedIncome: 0,
           expectedExpense: 21.9,
           expectedNet: -21.9,
@@ -122,6 +137,7 @@ describe("estado do mês corrente", () => {
               displayName: "Spotify",
               flow: "EXPENSE",
               dueDay: 30,
+              dueDate: "2026-08-30",
               amount: 21.9,
               source: "DETECTED",
               settled: true,
@@ -131,9 +147,17 @@ describe("estado do mês corrente", () => {
       ],
     });
     await useRecurrenceStore.getState().fetchMonthState();
-    // janela de 1 mês e saldo zero: aqui só a flag `settled` importa
-    expect(api.getRecurrenceForecast).toHaveBeenCalledWith(1, 0);
+    // janela de 1 período e saldo zero: aqui só a flag `settled` importa — mas
+    // o recorte vai junto, para "corrente" ser o ciclo do usuário
+    expect(api.getRecurrenceForecast).toHaveBeenCalledWith(1, 0, CALENDAR_RANGE);
     expect(useRecurrenceStore.getState().monthState["s-1"].settled).toBe(true);
+  });
+
+  it("com âncora fora do dia 1 o estado do mês é o do ciclo corrente", async () => {
+    setAnchor(12);
+    api.getRecurrenceForecast.mockResolvedValue({ startingBalance: 0, months: [] });
+    await useRecurrenceStore.getState().fetchMonthState();
+    expect(api.getRecurrenceForecast).toHaveBeenCalledWith(1, 0, CYCLE_RANGE);
   });
 
   it("falhar aqui não pode derrubar a lista", async () => {
@@ -287,15 +311,51 @@ describe("descartar e reativar", () => {
 });
 
 describe("previsão de saldo", () => {
-  it("manda a janela e o saldo base informados pela tela", async () => {
+  it("manda a janela, o saldo base e o mês corrente quando a âncora é o dia 1", async () => {
     api.getRecurrenceForecast.mockResolvedValue({
       startingBalance: 1500,
+      anchorDay: 1,
       months: [],
     });
     await useRecurrenceStore.getState().fetchForecast(6, 1500);
-    expect(api.getRecurrenceForecast).toHaveBeenCalledWith(6, 1500);
+    // só `month`: com âncora no dia 1 o recorte É o mês do calendário, e é a
+    // mesma gramática que a Análise manda para /analytics/monthly
+    expect(api.getRecurrenceForecast).toHaveBeenCalledWith(6, 1500, CALENDAR_RANGE);
     expect(useRecurrenceStore.getState().forecast?.startingBalance).toBe(1500);
     expect(useRecurrenceStore.getState().hasLoadedForecastOnce).toBe(true);
+  });
+
+  it("fora do dia 1 manda o ciclo que contém hoje como start/end", async () => {
+    // Âncora 12 em 05/08: o ciclo corrente abriu em 12/07 e fecha em 11/08. É
+    // este recorte — e não o mês de agosto — que o servidor projeta primeiro
+    setAnchor(12);
+    api.getRecurrenceForecast.mockResolvedValue({
+      startingBalance: 0,
+      anchorDay: 12,
+      months: [],
+    });
+    await useRecurrenceStore.getState().fetchForecast(3, 0);
+    expect(api.getRecurrenceForecast).toHaveBeenCalledWith(3, 0, CYCLE_RANGE);
+  });
+
+  it("esquecer a previsão zera o estado e descarta a resposta que estava em voo", async () => {
+    // A troca de âncora chama isto: a resposta pedida com a âncora velha não
+    // pode repovoar a tela depois que o store já foi zerado
+    let resolveSlow: (value: unknown) => void = () => {};
+    const slow = new Promise((resolve) => {
+      resolveSlow = resolve;
+    });
+    api.getRecurrenceForecast.mockReturnValueOnce(slow);
+
+    const inFlight = useRecurrenceStore.getState().fetchForecast(3, 0);
+    useRecurrenceStore.getState().invalidateForecast();
+    expect(useRecurrenceStore.getState().isForecastLoading).toBe(false);
+    expect(useRecurrenceStore.getState().hasLoadedForecastOnce).toBe(false);
+
+    resolveSlow({ startingBalance: 0, anchorDay: 1, months: [{ month: "velho" }] });
+    await inFlight;
+    expect(useRecurrenceStore.getState().forecast).toBeNull();
+    expect(useRecurrenceStore.getState().hasLoadedForecastOnce).toBe(false);
   });
 
   it("ignora a resposta antiga quando a janela muda no meio do caminho", async () => {

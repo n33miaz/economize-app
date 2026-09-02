@@ -10,6 +10,13 @@ import {
   getRecurrences,
   updateRecurrence,
 } from "../services/api";
+import { getCycleAnchorDay } from "./preferencesStore";
+import {
+  type AnalysisRange,
+  analysisRangeForMonth,
+  cycleMonthKeyContaining,
+  todayIso,
+} from "../utils/cycleWindow";
 import {
   type CreateRecurrencePayload,
   type SeriesMonthState,
@@ -70,6 +77,13 @@ interface RecurrenceState {
     months: ForecastWindow,
     startingBalance: number,
   ) => Promise<void>;
+  /**
+   * Esquece a projeção calculada com a âncora anterior. Chamado por quem
+   * recarrega o que depende da âncora (`reloadAnalyticsForAnchorChange`): a
+   * Home lê `forecast` para o alerta de saldo negativo, e sem isto ela
+   * mostraria o recorte velho até alguém reabrir a tela de previsão.
+   */
+  invalidateForecast: () => void;
   byId: (id: string | null | undefined) => RecurringSeries | undefined;
 }
 
@@ -77,6 +91,21 @@ interface RecurrenceState {
 // mais velha pode responder depois. Sem isto, a janela exibida discordava do
 // botão marcado (mesmo remédio do analyticsStore).
 let forecastRequestId = 0;
+
+/**
+ * Recorte do período corrente na gramática de `/analytics/monthly`: o ciclo que
+ * contém hoje, traduzido pela MESMA função que a Análise e a Home usam (EC-116).
+ * Antes a projeção ia sem recorte e o servidor projetava por mês do calendário
+ * — com âncora fora do dia 1 a Home ficava com duas réguas de "mês" na mesma
+ * tela. Os períodos seguintes o servidor encadeia a partir deste.
+ */
+function currentCycleRange(): AnalysisRange {
+  const anchorDay = getCycleAnchorDay();
+  return analysisRangeForMonth(
+    anchorDay,
+    cycleMonthKeyContaining(anchorDay, todayIso()),
+  );
+}
 
 export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
   series: [],
@@ -130,9 +159,11 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
 
   fetchMonthState: async () => {
     try {
-      // Janela de 1 mês e saldo inicial zero de propósito: aqui só interessa a
-      // flag `settled` de cada série no mês corrente, que não depende do saldo
-      const forecast = await getRecurrenceForecast(1, 0);
+      // Janela de 1 período e saldo inicial zero de propósito: aqui só interessa
+      // a flag `settled` de cada série no período corrente, que não depende do
+      // saldo. O recorte vai junto para "corrente" ser o ciclo do usuário, e
+      // não o mês do calendário
+      const forecast = await getRecurrenceForecast(1, 0, currentCycleRange());
       set({ monthState: deriveMonthState(forecast.months[0]) });
     } catch {
       // sem o estado do mês a lista ainda funciona — cada série aparece como
@@ -272,7 +303,11 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
     const requestId = ++forecastRequestId;
     set({ isForecastLoading: true, forecastError: null });
     try {
-      const forecast = await getRecurrenceForecast(months, startingBalance);
+      const forecast = await getRecurrenceForecast(
+        months,
+        startingBalance,
+        currentCycleRange(),
+      );
       if (requestId !== forecastRequestId) return;
       set({
         forecast,
@@ -290,6 +325,18 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
         hasLoadedForecastOnce: true,
       });
     }
+  },
+
+  invalidateForecast: () => {
+    // avança o id para uma resposta em voo, pedida com a âncora velha, ser
+    // descartada pela mesma guarda do fetchForecast em vez de repovoar a tela
+    forecastRequestId += 1;
+    set({
+      forecast: null,
+      forecastError: null,
+      isForecastLoading: false,
+      hasLoadedForecastOnce: false,
+    });
   },
 
   byId: (id) => (id ? get().series.find((item) => item.id === id) : undefined),

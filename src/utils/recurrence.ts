@@ -15,6 +15,16 @@ import type {
   RecurrenceSource,
   RecurringSeries,
 } from "../services/api";
+import {
+  describeDate,
+  describeWindow,
+  formatDayMonth,
+  formatMonthLabel,
+  formatMonthLongLabel,
+  formatWindowLabel,
+  isCalendarMonthWindow,
+  monthKeyOf,
+} from "./cycleWindow";
 
 // --- Rótulos ---
 
@@ -712,11 +722,106 @@ export function isMonthAtRisk(month: ForecastMonth): boolean {
   return month.cumulativeNet < 0;
 }
 
-/** Primeiro mês da janela que fecha negativo — o alerta que vale mostrar. */
+/**
+ * Primeiro período da janela que fecha negativo — o alerta que vale mostrar.
+ * Devolve o período INTEIRO (com `start`/`end`), e não só o `month`: é do
+ * recorte que sai o rótulo do alerta, pela mesma regra da tela de previsão.
+ */
 export function firstRiskMonth(
   months: ForecastMonth[] | null | undefined,
 ): ForecastMonth | null {
   return months?.find(isMonthAtRisk) ?? null;
+}
+
+/** O que a resposta precisa ter para o app escrever o nome de um período. */
+export type ForecastPeriodRef = Pick<ForecastMonth, "month"> &
+  Partial<Pick<ForecastMonth, "start" | "end">>;
+
+export interface ForecastPeriodLabel {
+  /** Curto, para cabeçalho e alerta: "set 2026" ou "12/08 → 11/09" */
+  short: string;
+  /**
+   * Falado, para `accessibilityLabel`. Vem como sintagma completo — "setembro
+   * de 2026" ou "o ciclo de 12 de agosto a 11 de setembro de 2026" — para a
+   * frase que o recebe não precisar saber em que modo está.
+   */
+  spoken: string;
+  /** O recorte é um mês do calendário (abre no dia 1, fecha no último dia). */
+  isCalendarMonth: boolean;
+}
+
+/**
+ * Nome de um período da previsão, escrito a partir do RECORTE (EC-116). O
+ * servidor devolve `month` como identidade do período (o mês em que ele
+ * começa), e em ciclo ancorado esse mês não descreve nada: "ago 2026" para o
+ * ciclo 12/08→11/09 era exatamente a ambiguidade que obrigava a Home a escrever
+ * "(mês do calendário)" ao lado. A regra é uma só, para a Home e para a tela de
+ * previsão: recorte que é mês de calendário se escreve como mês; qualquer outro
+ * se escreve com as duas datas.
+ *
+ * Sem `start`/`end` (API uma versão atrás), cai para o `month` — que nesse caso
+ * É o mês do calendário, porque a API antiga só projetava assim.
+ */
+export function forecastPeriodLabel(period: ForecastPeriodRef): ForecastPeriodLabel {
+  const short = formatWindowLabel(period.start, period.end);
+  const spoken = describeWindow(period.start, period.end);
+  if (!short || !spoken) {
+    return {
+      short: formatMonthLabel(period.month),
+      spoken: formatMonthLongLabel(period.month),
+      isCalendarMonth: true,
+    };
+  }
+  if (isCalendarMonthWindow(period.start, period.end)) {
+    // o mês sai do `start`, e não do `month`: quando o recorte é o mês inteiro
+    // os dois coincidem, e é a data que a regra acima está lendo
+    const monthKey = monthKeyOf(period.start as string);
+    return {
+      short: formatMonthLabel(monthKey),
+      spoken: formatMonthLongLabel(monthKey),
+      isCalendarMonth: true,
+    };
+  }
+  return { short, spoken: `o ciclo ${spoken}`, isCalendarMonth: false };
+}
+
+/**
+ * Identidade do período na tela (`key` dos cards, qual está expandido). O
+ * `start` é único por período e é a mesma coisa que o rótulo descreve — usar o
+ * `month` faria a tela expandir "2026-08" sem dizer qual recorte é esse.
+ */
+export function forecastPeriodKey(period: ForecastPeriodRef): string {
+  return period.start ?? period.month;
+}
+
+export interface ForecastItemWhen {
+  /** Selo da linha: "20/08", ou o rótulo semanal */
+  label: string;
+  /** Falado: "dia 20 de agosto", ou a versão semanal por extenso */
+  spoken: string;
+}
+
+/**
+ * Quando a cobrança cai, para a linha da composição do período. Em ciclo
+ * ancorado "dia 20" e "dia 5" não ordenam nem localizam — o 20 é de agosto e o
+ * 5 é de setembro —, então a linha escreve dia/mês a partir do `dueDate`.
+ * WEEKLY não tem dia nem data (o valor da linha já é a projeção do período), e
+ * segue com o selo semanal; `dueDay` sem `dueDate` é API antiga e fica no
+ * "dia N" de antes.
+ */
+export function forecastItemWhen(
+  item: Pick<ForecastItem, "dueDay"> & Partial<Pick<ForecastItem, "dueDate">>,
+): ForecastItemWhen {
+  if (item.dueDay == null) {
+    return { label: WEEKLY_PER_MONTH_LABEL, spoken: WEEKLY_PER_MONTH_SPOKEN };
+  }
+  if (item.dueDate) {
+    return {
+      label: formatDayMonth(item.dueDate),
+      spoken: `dia ${describeDate(item.dueDate)}`,
+    };
+  }
+  return { label: `dia ${item.dueDay}`, spoken: `dia ${item.dueDay}` };
 }
 
 export interface UpcomingCommitment {

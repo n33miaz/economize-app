@@ -14,6 +14,9 @@ import {
   dueSummary,
   emptyFormValues,
   firstRiskMonth,
+  forecastItemWhen,
+  forecastPeriodKey,
+  forecastPeriodLabel,
   formValuesFromSeries,
   formatDateInput,
   formatDueDate,
@@ -516,6 +519,8 @@ describe("resultado da varredura", () => {
 describe("previsto × liquidado", () => {
   const month: ForecastMonth = {
     month: "2026-08",
+    start: "2026-08-01",
+    end: "2026-08-31",
     expectedIncome: 1000,
     expectedExpense: 250,
     expectedNet: 750,
@@ -526,6 +531,7 @@ describe("previsto × liquidado", () => {
         displayName: "Salário",
         flow: "INCOME",
         dueDay: 5,
+        dueDate: "2026-08-05",
         amount: 1000,
         source: "DETECTED",
         settled: false,
@@ -535,6 +541,7 @@ describe("previsto × liquidado", () => {
         displayName: "Spotify",
         flow: "EXPENSE",
         dueDay: 2,
+        dueDate: "2026-08-02",
         amount: 21.9,
         source: "DETECTED",
         settled: true,
@@ -544,6 +551,7 @@ describe("previsto × liquidado", () => {
         displayName: "Conta de luz",
         flow: "EXPENSE",
         dueDay: 10,
+        dueDate: "2026-08-10",
         amount: 250,
         source: "USER",
         settled: false,
@@ -585,6 +593,113 @@ describe("previsto × liquidado", () => {
     expect(firstRiskMonth(months)?.month).toBe("2026-09");
     expect(firstRiskMonth([month])).toBeNull();
     expect(firstRiskMonth(null)).toBeNull();
+  });
+
+  it("devolve o período inteiro em risco — é do recorte que sai o rótulo do alerta", () => {
+    // Em ciclo ancorado o `month` do período no vermelho não descreve nada
+    // ("2026-09" é o ciclo 12/09→11/10); a Home precisa de `start`/`end`
+    const cycle = {
+      ...month,
+      month: "2026-09",
+      start: "2026-09-12",
+      end: "2026-10-11",
+      cumulativeNet: -300,
+    };
+    const risk = firstRiskMonth([month, cycle]);
+    expect(risk).toEqual(cycle);
+    expect(forecastPeriodLabel(risk as ForecastMonth).short).toBe("12/09 → 11/10");
+  });
+});
+
+describe("nome do período da previsão", () => {
+  it("recorte que é mês de calendário se escreve como mês", () => {
+    const label = forecastPeriodLabel({
+      month: "2026-09",
+      start: "2026-09-01",
+      end: "2026-09-30",
+    });
+    expect(label.short).toBe("set 2026");
+    expect(label.spoken).toBe("setembro de 2026");
+    expect(label.isCalendarMonth).toBe(true);
+  });
+
+  it("ciclo ancorado se escreve com as duas datas, e não pelo mês em que começa", () => {
+    // "ago 2026" para o ciclo 12/08→11/09 era a ambiguidade que obrigava a
+    // Home a escrever "(mês do calendário)" ao lado
+    const label = forecastPeriodLabel({
+      month: "2026-08",
+      start: "2026-08-12",
+      end: "2026-09-11",
+    });
+    expect(label.short).toBe("12/08 → 11/09");
+    expect(label.spoken).toBe("o ciclo de 12 de agosto a 11 de setembro de 2026");
+    expect(label.isCalendarMonth).toBe(false);
+  });
+
+  it("fevereiro inteiro e ano bissexto continuam sendo mês de calendário", () => {
+    expect(
+      forecastPeriodLabel({ month: "2028-02", start: "2028-02-01", end: "2028-02-29" })
+        .isCalendarMonth,
+    ).toBe(true);
+    // dia 1 até o penúltimo dia NÃO é o mês inteiro — é uma janela
+    expect(
+      forecastPeriodLabel({ month: "2026-08", start: "2026-08-01", end: "2026-08-30" })
+        .short,
+    ).toBe("01/08 → 30/08");
+  });
+
+  it("sem start/end (API uma versão atrás) cai para o month, que aí é o mês do calendário", () => {
+    const label = forecastPeriodLabel({ month: "2026-08" });
+    expect(label.short).toBe("ago 2026");
+    expect(label.spoken).toBe("agosto de 2026");
+    expect(label.isCalendarMonth).toBe(true);
+  });
+
+  it("a identidade do card é o start, único por período", () => {
+    const periods = [
+      { month: "2026-08", start: "2026-08-12", end: "2026-09-11" },
+      { month: "2026-09", start: "2026-09-12", end: "2026-10-11" },
+      { month: "2026-10", start: "2026-10-12", end: "2026-11-11" },
+    ];
+    const keys = periods.map(forecastPeriodKey);
+    expect(new Set(keys).size).toBe(periods.length);
+    expect(keys[0]).toBe("2026-08-12");
+    // sem start (API antiga) o month ainda identifica o período
+    expect(forecastPeriodKey({ month: "2026-08" })).toBe("2026-08");
+  });
+});
+
+describe("quando a cobrança cai na linha da previsão", () => {
+  it("escreve dia/mês a partir da data completa", () => {
+    // no ciclo 12/08→11/09 o "dia 20" é de agosto e o "dia 5" é de setembro:
+    // só a data localiza cada um
+    expect(forecastItemWhen({ dueDay: 20, dueDate: "2026-08-20" })).toEqual({
+      label: "20/08",
+      spoken: "dia 20 de agosto",
+    });
+    expect(forecastItemWhen({ dueDay: 5, dueDate: "2026-09-05" })).toEqual({
+      label: "05/09",
+      spoken: "dia 5 de setembro",
+    });
+  });
+
+  it("WEEKLY segue com o selo semanal — não tem dia nem data", () => {
+    const when = forecastItemWhen({ dueDay: null, dueDate: null });
+    expect(when.label).toBe("~4,3×/mês");
+    expect(when.spoken).toBe("cerca de 4,3 vezes por mês");
+    // resposta antiga sem o campo: nada de "null/undefined" no selo
+    expect(forecastItemWhen({ dueDay: null })).toEqual(when);
+  });
+
+  it("dueDay sem dueDate (API antiga) fica no 'dia N' de antes", () => {
+    expect(forecastItemWhen({ dueDay: 30 })).toEqual({
+      label: "dia 30",
+      spoken: "dia 30",
+    });
+    expect(forecastItemWhen({ dueDay: 30, dueDate: null })).toEqual({
+      label: "dia 30",
+      spoken: "dia 30",
+    });
   });
 });
 
