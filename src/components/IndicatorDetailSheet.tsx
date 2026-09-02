@@ -13,8 +13,10 @@ import Star from "lucide-react-native/dist/esm/icons/star";
 import * as Haptics from "../utils/haptics";
 
 import {
+  AssetDetail,
   Indicator,
   convertCurrency,
+  getAssetDetail,
   isCurrencyData,
   isIndexData,
 } from "../services/api";
@@ -24,6 +26,11 @@ import {
   useFavoritesStore,
 } from "../store/favoritesStore";
 import { formatDecimal, formatPercent } from "../utils/money";
+import { assetNews } from "../utils/assetNews";
+import { useIndicatorStore } from "../store/indicatorStore";
+import useNewsData from "../hooks/useNewsData";
+import AssetNewsList from "./AssetNewsList";
+import AssetWindows from "./AssetWindows";
 import CustomModal from "./CustomModal";
 import HistoricalChart from "./HistoricalChart";
 
@@ -52,6 +59,15 @@ export default function IndicatorDetailSheet({
   const [amount, setAmount] = useState("100");
   const [conversionResult, setConversionResult] = useState<number | null>(null);
   const [loadingConversion, setLoadingConversion] = useState(false);
+  // EC-103: janelas de variação e faixa de 52 semanas, só para papel da B3 —
+  // é o provedor de ações que tem série histórica, e cada abertura custa uma
+  // requisição da cota diária
+  const [detail, setDetail] = useState<AssetDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  // Notícias do nosso próprio servidor (que já cacheia) e o índice que a Home
+  // deixou carregado: nenhuma das duas leituras toca a cota da Brapi
+  const { articles, fetchNews } = useNewsData();
+  const indicators = useIndicatorStore((s) => s.indicators);
 
   // O simulador não deve vazar resultado de um indicador para outro
   useEffect(() => {
@@ -61,7 +77,49 @@ export default function IndicatorDetailSheet({
     }
   }, [visible, indicator?.id]);
 
+  useEffect(() => {
+    const code = indicator?.code;
+    const isStock = indicator?.type === "stock";
+    if (!visible || !code || !isStock) {
+      setDetail(null);
+      return;
+    }
+    // Guarda de resposta velha: abrir um ativo e trocar para outro antes de a
+    // primeira resposta chegar mostraria o histórico do papel errado
+    let atual = true;
+    setLoadingDetail(true);
+    getAssetDetail(code)
+      .then((data) => {
+        if (atual) setDetail(data);
+      })
+      .catch(() => {
+        // O detalhe é um extra: sem ele a folha continua respondendo o preço
+        // e a variação do dia, que é o que ela sempre respondeu
+        if (atual) setDetail(null);
+      })
+      .finally(() => {
+        if (atual) setLoadingDetail(false);
+      });
+    // O radar alimenta a seção de manchetes do papel; sem ele ela some, o que
+    // é o comportamento certo quando não há notícia relacionada mesmo
+    fetchNews();
+    return () => {
+      atual = false;
+    };
+  }, [visible, indicator?.code, indicator?.type, fetchNews]);
+
   if (!indicator) return null;
+
+  // O IBOVESPA é o comparável de qualquer papel da B3, e é o único que o app
+  // tem sem pedir nada novo. Ausente (Home ainda não carregou), a comparação
+  // simplesmente não aparece
+  const ibov = indicators.find(
+    (item) => item.type === "index" && /BVSP|IBOVESPA/i.test(item.code),
+  );
+  const benchmark = ibov
+    ? { label: "IBOVESPA", changePct: ibov.variation }
+    : null;
+  const manchetes = assetNews(articles, indicator.code, indicator.name);
 
   const isIndex = isIndexData(indicator);
   const isCurrency = isCurrencyData(indicator);
@@ -142,7 +200,10 @@ export default function IndicatorDetailSheet({
               className="text-4xl font-bold tracking-tighter"
               style={{ color: t.text.primary }}
             >
-              {(indicator.points ?? 0).toLocaleString("pt-BR")} pts
+              {(indicator.points ?? indicator.buy ?? 0).toLocaleString("pt-BR", {
+                maximumFractionDigits: 0,
+              })}{" "}
+              pts
             </Text>
           </View>
         ) : (
@@ -218,6 +279,18 @@ export default function IndicatorDetailSheet({
             </Text>
           </View>
         </View>
+
+        {/* EC-103: o que a variação do dia não responde — se o papel está
+            caro ou barato em relação ao próprio ano */}
+        {indicator.type === "stock" && (
+          <AssetWindows
+            detail={detail}
+            isLoading={loadingDetail}
+            benchmark={benchmark}
+          />
+        )}
+
+        {indicator.type === "stock" && <AssetNewsList articles={manchetes} />}
 
         {isCurrency && <HistoricalChart currencyCode={indicator.code} />}
 

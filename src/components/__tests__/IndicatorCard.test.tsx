@@ -50,4 +50,27 @@ describe("IndicatorCard Component", () => {
     fireEvent.press(starButton);
     expect(mockProps.onToggleFavorite).toHaveBeenCalledWith("currency_USD");
   });
+
+  it("índice é pontuado pelo TIPO, mesmo sem símbolo", () => {
+    // O Catálogo não passa `symbol`; o IBOVESPA saía "R$ 179.722,48"
+    const { getByText } = render(
+      <IndicatorCard
+        {...mockProps}
+        symbol={undefined}
+        type="index"
+        name="IBOVESPA"
+        value={179722.48}
+      />,
+    );
+    expect(getByText("179.722 pts")).toBeTruthy();
+    expect(getByText("pontos")).toBeTruthy();
+  });
+
+  it("cotação abaixo de dez centavos ganha quatro casas", () => {
+    // Peso argentino a R$ 0,0041 saía "R$ 0,00" ao lado de uma variação real
+    const { getByText } = render(
+      <IndicatorCard {...mockProps} name="Peso Argentino" value={0.0041} />,
+    );
+    expect(getByText("R$ 0,0041")).toBeTruthy();
+  });
 });

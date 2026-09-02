@@ -67,14 +67,20 @@ const IndicatorCard = React.memo(
     }, [type, symbol, code]);
 
     const displayValue = useMemo(() => {
-      // Índices são pontuados (sem "R$"), no formato pt-BR
-      if (symbol === "pts") {
+      // Índices são pontuados (sem "R$"), no formato pt-BR — pelo tipo, não
+      // só pelo símbolo: o catálogo não passa símbolo e mostrava o IBOVESPA
+      // como "R$ 179.722,48"
+      if (symbol === "pts" || type === "index") {
         return `${safeValue.toLocaleString("pt-BR", {
           maximumFractionDigits: 0,
         })} pts`;
       }
-      return `${symbol} ${formatDecimal(safeValue)}`;
-    }, [symbol, safeValue]);
+      // Moeda que vale centavos de real (peso argentino, iene) não pode sair
+      // "R$ 0,00" ao lado de uma variação de -0,82%: abaixo de R$ 0,10 o card
+      // mostra quatro casas, que é o que a cotação de fato tem
+      const decimals = safeValue > 0 && safeValue < 0.1 ? 4 : 2;
+      return `${symbol} ${formatDecimal(safeValue, decimals)}`;
+    }, [symbol, type, safeValue]);
 
     const VariationIcon = variationInfo.Icon;
 
