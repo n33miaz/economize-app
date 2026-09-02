@@ -140,6 +140,9 @@ export const useIndicatorStore = create<IndicatorState>()(
               response.data,
             ),
             loading: false,
+            // Sem isto o cache acima nunca valia: `lastFetched` ficava nulo
+            // para sempre e toda tela que montava rebuscava a lista inteira
+            lastFetched: Date.now(),
           });
         } catch (e: any) {
           console.error("Erro ao buscar indicadores:", e);
