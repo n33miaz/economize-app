@@ -41,3 +41,6 @@ yarn-error.*
 /android
 
 .vercel
+
+# Relatório de cobertura: gerado a cada `jest --coverage`, nunca versionado
+coverage/
