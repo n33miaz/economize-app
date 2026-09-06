@@ -14,15 +14,27 @@ import { spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { changePassword, getApiErrorDetail } from "../services/api";
 import { useToastStore } from "../store/toastStore";
+import { useUserStore } from "../store/userStore";
 import { validateNewPassword } from "../utils/passwordPolicy";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 
-export default function ChangePassword() {
+interface Props {
+  /**
+   * Troca OBRIGATÓRIA de senha provisória (V21): a tela é a única do app até
+   * ela acontecer. Some o caminho de volta, o texto explica por que, e o
+   * sucesso não navega — quem libera é o servidor, na próxima leitura do
+   * perfil.
+   */
+  forced?: boolean;
+}
+
+export default function ChangePassword({ forced = false }: Props) {
   const t = useTheme();
   const navigation = useNavigation();
+  const fetchMe = useUserStore((s) => s.fetchMe);
   const { listItemEntering } = useMotionPresets();
   const submitPress = usePressScale();
   const showToast = useToastStore((s) => s.showToast);
@@ -54,7 +66,13 @@ export default function ChangePassword() {
     try {
       await changePassword(current, password);
       showToast("Senha alterada.", "success");
-      navigation.goBack();
+      if (forced) {
+        // Não há para onde voltar: a tela é a única montada. Quem libera o app
+        // é o servidor, que acabou de baixar a marca de senha provisória
+        await fetchMe();
+      } else {
+        navigation.goBack();
+      }
     } catch (error) {
       // O 400 traz um ProblemDetail ("Senha atual incorreta")
       setApiError(
@@ -68,9 +86,15 @@ export default function ChangePassword() {
   return (
     <PageContainer>
       <ScreenHeader
-        title="Alterar senha"
-        subtitle="Atualize sua senha de acesso"
+        title={forced ? "Crie sua senha" : "Alterar senha"}
+        subtitle={
+          forced
+            ? "Sua senha atual foi definida por outra pessoa"
+            : "Atualize sua senha de acesso"
+        }
         showProfileButton={false}
+        // Sem volta na troca obrigatória: não existe outra tela para onde ir
+        showBackButton={forced ? false : undefined}
       />
       <ScrollView
         contentContainerStyle={{ padding: spacing[5] }}

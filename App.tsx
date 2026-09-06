@@ -18,6 +18,7 @@ import Toast from "./src/components/Toast";
 import ConfirmDialog from "./src/components/ConfirmDialog";
 import ServerWakeOverlay from "./src/components/ServerWakeOverlay";
 import BiometricGate from "./src/components/BiometricGate";
+import PasswordChangeGate from "./src/components/PasswordChangeGate";
 import { useTheme, useThemeSync } from "./src/theme/ThemeProvider";
 import { lightTheme } from "./src/theme/colors";
 
@@ -88,7 +89,12 @@ export default function App() {
           backgroundColor={t.background.base}
         />
         <BiometricGate>
-          <Routes />
+          {/* A ordem importa: a tranca vem primeiro (o app fechado não mostra
+              nem a troca de senha), e só depois a pendência da senha
+              provisória decide se as rotas aparecem */}
+          <PasswordChangeGate>
+            <Routes />
+          </PasswordChangeGate>
         </BiometricGate>
         {/* Camadas globais: ficam fora do gate para poderem falar mesmo
             enquanto o app está bloqueado ou sem dados */}
