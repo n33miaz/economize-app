@@ -3,10 +3,16 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../services/api";
 
-interface LoginResult {
-  token: string;
-  name: string;
-}
+/**
+ * O que o login devolve ao chamador quando ele pede para NÃO entrar ainda.
+ *
+ * <p>Ou veio a sessão (token + nome), ou veio o desafio do segundo fator. Os
+ * dois casos são excludentes e o `kind` é o que a tela lê para saber se abre a
+ * pergunta da biometria ou o campo do código.
+ */
+export type LoginOutcome =
+  | { kind: "session"; token: string; name: string }
+  | { kind: "mfa"; mfaToken: string };
 
 interface AuthState {
   token: string | null;
@@ -18,7 +24,13 @@ interface AuthState {
     email: string,
     password: string,
     options?: { deferCommit?: boolean },
-  ) => Promise<LoginResult | undefined>;
+  ) => Promise<LoginOutcome | undefined>;
+  /** Segundo passo: troca o desafio + o código pela sessão. */
+  submitMfaCode: (
+    mfaToken: string,
+    code: string,
+    options?: { deferCommit?: boolean },
+  ) => Promise<LoginOutcome | undefined>;
   completeLogin: (token: string, userName: string) => void;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -38,12 +50,21 @@ export const useAuthStore = create(
         set({ isLoading: true, error: null });
         try {
           const response = await api.post("/auth/login", { email, password });
+
+          // Segundo fator ativo: a senha conferiu, mas NÃO há sessão. O que
+          // volta é um desafio de 5 minutos, e a tela assume daqui
+          if (response.data?.mfaRequired) {
+            set({ isLoading: false });
+            return { kind: "mfa", mfaToken: response.data.mfaToken };
+          }
+
           // Com deferCommit o token validado NÃO entra no estado: gravar o
           // token troca a árvore de navegação na hora, e o chamador ainda
           // precisa resolver o modal de biometria antes de entrar no app
           if (options?.deferCommit) {
             set({ isLoading: false });
             return {
+              kind: "session",
               token: response.data.token,
               name: response.data.name,
             };
@@ -59,6 +80,41 @@ export const useAuthStore = create(
             error:
               error.response?.status === 401
                 ? "E-mail ou senha incorretos."
+                : "Erro ao conectar com o servidor.",
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      submitMfaCode: async (mfaToken, code, options) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await api.post("/auth/login/mfa", {
+            mfaToken,
+            code,
+          });
+          if (options?.deferCommit) {
+            set({ isLoading: false });
+            return {
+              kind: "session",
+              token: response.data.token,
+              name: response.data.name,
+            };
+          }
+          set({
+            token: response.data.token,
+            userName: response.data.name,
+            isLoading: false,
+          });
+          return undefined;
+        } catch (error: any) {
+          // O servidor responde o MESMO 401 para código errado e para desafio
+          // expirado, de propósito — a mensagem aqui cobre os dois sem mentir
+          set({
+            error:
+              error.response?.status === 401
+                ? "Código inválido ou expirado. Tente de novo."
                 : "Erro ao conectar com o servidor.",
             isLoading: false,
           });

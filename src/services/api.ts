@@ -417,6 +417,14 @@ export interface UserMe {
   email: string;
   createdAt: string | null;
   lastLoginAt: string | null;
+  /**
+   * Senha provisória pendente de troca. Verdadeiro só em conta criada por
+   * outra pessoa — enquanto não trocar, alguém além do dono sabe a senha. Vem
+   * do SERVIDOR de propósito: se fosse decisão do app, bastaria entrar por
+   * outro cliente para pular a troca. Opcional porque o servidor pode ser
+   * mais velho que o app.
+   */
+  mustChangePassword?: boolean;
 }
 
 export interface HistoricalDataPoint {
@@ -1698,4 +1706,51 @@ export const getFamilyTransactions = async (params: {
     },
   });
   return response.data;
+};
+
+// --- Segundo fator (TOTP) ---
+
+export interface MfaStatus {
+  enabled: boolean;
+  /** Cadastro começado e não confirmado: o login ainda NÃO pede código. */
+  pendingConfirmation: boolean;
+  confirmedAt: string | null;
+  recoveryCodesRemaining: number;
+}
+
+export interface MfaSetup {
+  /** O segredo em texto, para quem digita à mão. Só vem UMA vez. */
+  secret: string;
+  /** A mesma coisa em forma de QR — `otpauth://totp/...`. */
+  otpauthUri: string;
+}
+
+export const getMfaStatus = async (): Promise<MfaStatus> => {
+  const response = await api.get<MfaStatus>("/mfa");
+  return response.data;
+};
+
+/** Gera um segredo novo. Repetir antes de confirmar TROCA o anterior. */
+export const startMfaSetup = async (): Promise<MfaSetup> => {
+  const response = await api.post<MfaSetup>("/mfa/setup");
+  return response.data;
+};
+
+/** Confirma com o primeiro código e devolve os códigos de recuperação. */
+export const activateMfa = async (code: string): Promise<string[]> => {
+  const response = await api.post<{ codes: string[] }>("/mfa/activate", {
+    code,
+  });
+  return response.data.codes;
+};
+
+/** Novo lote; o anterior deixa de valer por inteiro. */
+export const rotateMfaRecoveryCodes = async (): Promise<string[]> => {
+  const response = await api.post<{ codes: string[] }>("/mfa/recovery-codes");
+  return response.data.codes;
+};
+
+/** Desligar pede a SENHA, e não um código — ver o DTO no servidor. */
+export const disableMfa = async (password: string): Promise<void> => {
+  await api.post("/mfa/disable", { password });
 };

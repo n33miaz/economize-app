@@ -26,6 +26,7 @@ import { useAccountsStore } from "../store/accountsStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import * as Haptics from "../utils/haptics";
+import { copyToClipboard } from "../utils/clipboard";
 import { accountDisplayName, accountKindLabel } from "../utils/accounts";
 import {
   INVITE_CODE_LENGTH,
@@ -72,25 +73,6 @@ const SCOPE_OPTIONS: { label: string; value: FamilyShareScope }[] = [
 
 function plural(n: number, one: string, many: string) {
   return n === 1 ? one : many;
-}
-
-/**
- * Copiar sem biblioteca: o app não tem `expo-clipboard`, e trazer uma para
- * oito letras não se justifica. Na web o navegador oferece a área de
- * transferência; no aparelho o código fica selecionável e o texto diz como
- * copiar — a pessoa vai colar no WhatsApp, que é o caminho real do convite.
- */
-async function copyToClipboard(text: string): Promise<boolean> {
-  if (Platform.OS !== "web") return false;
-  const clipboard = (globalThis as { navigator?: Navigator }).navigator
-    ?.clipboard;
-  if (!clipboard?.writeText) return false;
-  try {
-    await clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Uma linha de "quem mora aqui": disco, nome, papel e o que mostra. */
