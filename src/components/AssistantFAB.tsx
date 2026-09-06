@@ -1,18 +1,10 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useReducedMotion,
-  withRepeat,
-  withTiming,
-  Easing,
-  interpolate,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, shadow, spacing } from "../theme/ds";
@@ -32,8 +24,6 @@ interface AssistantFABProps {
  */
 export const ASSISTANT_FAB_HEIGHT = 52;
 
-const AnimatedBrandGradient = Animated.createAnimatedComponent(BrandGradient);
-
 export default function AssistantFAB({
   label = "Fale com o Nino",
   bottomOffset,
@@ -41,25 +31,7 @@ export default function AssistantFAB({
   const t = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
   const { fabEntering } = useMotionPresets();
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    // Halo girando é puramente decorativo: com movimento reduzido, fica parado
-    if (reducedMotion) return;
-    progress.value = withRepeat(
-      withTiming(1, { duration: 2400, easing: Easing.linear }),
-      -1,
-      false,
-    );
-  }, [progress, reducedMotion]);
-
-  const gradientStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${interpolate(progress.value, [0, 1], [0, 360])}deg` },
-    ],
-  }));
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -93,7 +65,11 @@ export default function AssistantFAB({
           shadow.glow,
         ]}
       >
-        <AnimatedBrandGradient
+        {/* O halo era um gradiente girando em laço infinito. Movimento sem fim
+            na borda da tela puxa o olho a cada relance e não informa nada — o
+            botão não está carregando coisa alguma. Ficou o mesmo halo, parado:
+            a marca continua ali, a atenção volta para o conteúdo */}
+        <BrandGradient
           colors={[
             t.accent.neon,
             t.semantic.info,
@@ -101,13 +77,10 @@ export default function AssistantFAB({
           ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[
-            {
-              borderRadius: radius.full,
-              padding: 2,
-            },
-            gradientStyle,
-          ]}
+          style={{
+            borderRadius: radius.full,
+            padding: 2,
+          }}
         >
           <View
             style={{
@@ -131,7 +104,7 @@ export default function AssistantFAB({
               {label}
             </Text>
           </View>
-        </AnimatedBrandGradient>
+        </BrandGradient>
       </TouchableOpacity>
     </Animated.View>
   );
