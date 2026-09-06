@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../services/api";
+import {
+  deviceLabel,
+  readDeviceToken,
+  saveDeviceToken,
+} from "../utils/deviceIdentity";
 
 /**
  * O que o login devolve ao chamador quando ele pede para NÃO entrar ainda.
@@ -29,7 +34,7 @@ interface AuthState {
   submitMfaCode: (
     mfaToken: string,
     code: string,
-    options?: { deferCommit?: boolean },
+    options?: { deferCommit?: boolean; rememberDevice?: boolean },
   ) => Promise<LoginOutcome | undefined>;
   completeLogin: (token: string, userName: string) => void;
   register: (name: string, email: string, password: string) => Promise<void>;
@@ -49,7 +54,14 @@ export const useAuthStore = create(
       login: async (email, password, options) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await api.post("/auth/login", { email, password });
+          // O segredo do aparelho, quando existe, dispensa o segundo passo:
+          // é o que faz o fator conviver com o celular de todo dia
+          const response = await api.post("/auth/login", {
+            email,
+            password,
+            deviceToken: await readDeviceToken(),
+            deviceLabel: deviceLabel(),
+          });
 
           // Segundo fator ativo: a senha conferiu, mas NÃO há sessão. O que
           // volta é um desafio de 5 minutos, e a tela assume daqui
@@ -93,7 +105,15 @@ export const useAuthStore = create(
           const response = await api.post("/auth/login/mfa", {
             mfaToken,
             code,
+            rememberDevice: options?.rememberDevice ?? true,
+            deviceLabel: deviceLabel(),
           });
+          // Guardar ANTES de abrir a sessão: se o app fechasse no meio, o
+          // aparelho ficaria conhecido no servidor e desconhecido aqui — e o
+          // usuário levaria um pedido de código que não devia existir
+          if (response.data?.deviceToken) {
+            await saveDeviceToken(response.data.deviceToken);
+          }
           if (options?.deferCommit) {
             set({ isLoading: false });
             return {

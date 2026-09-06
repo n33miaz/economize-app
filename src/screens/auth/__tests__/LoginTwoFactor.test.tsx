@@ -118,9 +118,13 @@ describe("Login — verificação em duas etapas", () => {
     await waitFor(() => {
       expect(useAuthStore.getState().token).toBe("tok-abc");
     }, ESPERA);
+    // O aparelho é lembrado no mesmo passo: é o segundo fator que autoriza
+    // dispensá-lo nas próximas vezes
     expect(mockedPost).toHaveBeenLastCalledWith("/auth/login/mfa", {
       mfaToken: "desafio-123",
       code: "123456",
+      rememberDevice: true,
+      deviceLabel: expect.any(String),
     });
     expect(useAuthStore.getState().userName).toBe("Ana");
   });
@@ -171,6 +175,8 @@ describe("Login — verificação em duas etapas", () => {
     expect(mockedPost).toHaveBeenLastCalledWith("/auth/login/mfa", {
       mfaToken: "desafio-123",
       code: "K7QX2M9BTZ",
+      rememberDevice: true,
+      deviceLabel: expect.any(String),
     });
   });
 
@@ -206,6 +212,22 @@ describe("Login — verificação em duas etapas", () => {
     fireEvent.press(getByLabelText("Voltar para o login"));
 
     expect(getByLabelText("Senha")).toBeTruthy();
+  });
+
+  it("o login leva o segredo do aparelho, quando ele existe", async () => {
+    mockedPost.mockResolvedValue({ data: { token: "tok-abc", name: "Ana" } });
+
+    const { getByLabelText } = renderLogin();
+    await submitCredentials(getByLabelText);
+
+    await waitFor(() => expect(useAuthStore.getState().token).toBe("tok-abc"));
+    // Sem isto, o código seria pedido dez vezes por dia no celular do dono
+    expect(mockedPost).toHaveBeenCalledWith("/auth/login", {
+      email: "ana@teste.com",
+      password: "senha-da-ana",
+      deviceToken: null,
+      deviceLabel: expect.any(String),
+    });
   });
 
   it("sem fator ativo, a resposta de sempre continua entrando direto", async () => {
