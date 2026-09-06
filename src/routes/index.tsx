@@ -55,12 +55,12 @@ import Register from "../screens/auth/Register";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import ResetPassword from "../screens/auth/ResetPassword";
 import ChangePassword from "../screens/ChangePassword";
+import Security from "../screens/Security";
 import Home from "../screens/Home";
 import AssetCatalog from "../screens/AssetCatalog";
 import Currencies from "../screens/Currencies";
 import Indexes from "../screens/Indexes";
 import News from "../screens/News";
-import About from "../screens/About";
 import Wallet from "../screens/Wallet";
 import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
@@ -396,11 +396,6 @@ function AppStack() {
         options={modalLikeTransition}
       />
       <Stack.Screen
-        name={APP_ROUTES.sobre}
-        component={About}
-        options={modalLikeTransition}
-      />
-      <Stack.Screen
         name={APP_ROUTES.perfil}
         component={Profile}
         options={ephemeralTransition}
@@ -485,6 +480,13 @@ function AppStack() {
       <Stack.Screen
         name={APP_ROUTES.alterarSenha}
         component={ChangePassword}
+        options={ephemeralTransition}
+      />
+      {/* Verificação em duas etapas: ajuste de conta, aberto pelo Perfil —
+          não é destino do trilho, do mesmo jeito que Alterar senha */}
+      <Stack.Screen
+        name={APP_ROUTES.seguranca}
+        component={Security}
         options={ephemeralTransition}
       />
     </Stack.Navigator>

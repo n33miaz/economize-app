@@ -10,7 +10,6 @@ import {
 import Bell from "lucide-react-native/dist/esm/icons/bell";
 import CircleAlert from "lucide-react-native/dist/esm/icons/circle-alert";
 import FileUp from "lucide-react-native/dist/esm/icons/file-up";
-import Info from "lucide-react-native/dist/esm/icons/info";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import { useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
@@ -206,16 +205,6 @@ export default function AdvancedOptions() {
                 "mailto:neemias.manso@jcgestaoderiscos.com.br?subject=Economize!%20-%20Suporte",
               )
             }
-          />
-        </Animated.View>
-
-        <Animated.View entering={listItemEntering(3)}>
-          <SectionTitle>Sobre</SectionTitle>
-          <ActionRow
-            Icon={Info}
-            label="Sobre o Economize!"
-            description="Versão, time e agradecimentos"
-            onPress={() => navigation.navigate("Sobre" as never)}
           />
         </Animated.View>
       </ScrollView>

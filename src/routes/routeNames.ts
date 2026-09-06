@@ -19,7 +19,8 @@ export const APP_ROUTES = {
   main: "Main",
   noticias: "Notícias",
   assistente: "IA Assist",
-  sobre: "Sobre",
+  // "Sobre" saiu da navegação a pedido: a tela existe em `screens/About.tsx`
+  // e volta ao ar re-declarando o nome aqui, o item do trilho e a `Stack.Screen`
   perfil: "Profile",
   avancado: "Opções avançadas",
   relatorios: "Relatórios",
@@ -30,6 +31,7 @@ export const APP_ROUTES = {
   agendamento: "Agendamento",
   revisao: "Revisão",
   alterarSenha: "Alterar Senha",
+  seguranca: "Segurança",
   opcoesIa: "Opções de IA",
   desejos: "Desejos",
   renda: "Renda e jornada",

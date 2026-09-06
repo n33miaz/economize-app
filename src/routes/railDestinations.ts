@@ -4,7 +4,6 @@ import ChartColumn from "lucide-react-native/dist/esm/icons/chart-column";
 import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
 import House from "lucide-react-native/dist/esm/icons/house";
-import Info from "lucide-react-native/dist/esm/icons/info";
 import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 import Settings2 from "lucide-react-native/dist/esm/icons/settings-2";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
@@ -44,8 +43,7 @@ export type RailKey =
   | "assistente"
   | "perfil"
   | "familia"
-  | "ajustes"
-  | "sobre";
+  | "ajustes";
 
 export interface RailDestination {
   key: RailKey;
@@ -216,14 +214,6 @@ export const RAIL_GROUPS: RailGroup[] = [
         Icon: Settings2,
         primary: false,
       },
-      {
-        key: "sobre",
-        label: "Sobre",
-        route: APP_ROUTES.sobre,
-        inMainTabs: false,
-        Icon: Info,
-        primary: false,
-      },
     ],
   },
 ];
@@ -270,11 +260,11 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   [APP_ROUTES.assistente]: "assistente",
   [APP_ROUTES.perfil]: "perfil",
   [APP_ROUTES.avancado]: "ajustes",
-  [APP_ROUTES.sobre]: "sobre",
   // Tarefas: preservam o destino de origem
   [APP_ROUTES.revisao]: null,
   [APP_ROUTES.agendamento]: null,
   [APP_ROUTES.alterarSenha]: null,
+  [APP_ROUTES.seguranca]: null,
   // Ajuste de conta, aberto pelo Perfil — não é destino do trilho, então a
   // pílula fica com o destino de onde o usuário veio
   [APP_ROUTES.opcoesIa]: null,
