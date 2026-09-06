@@ -35,7 +35,58 @@ describe("aiStore — a conversa com o assistente", () => {
 
     await useAiStore.getState().sendMessage("Oi");
 
-    expect(mockPost).toHaveBeenCalledWith("/chat", { message: "Oi" });
+    // Primeira pergunta da conversa: histórico vazio, e a saudação de boas-
+    // vindas fica de fora dele — não é fala de ninguém
+    expect(mockPost).toHaveBeenCalledWith("/chat", {
+      message: "Oi",
+      history: [],
+    });
+  });
+
+  it("a conversa até aqui viaja junto, da mais ANTIGA para a mais recente", async () => {
+    mockPost.mockResolvedValue({ data: { reply: "Foram R$ 400." } });
+    await useAiStore.getState().sendMessage("Quanto gastei com mercado?");
+    mockPost.mockClear();
+    mockPost.mockResolvedValue({ data: { reply: "No mês passado, R$ 380." } });
+
+    // Sem histórico, "e no mês passado?" chegaria ao modelo como uma primeira
+    // pergunta solta — e a resposta seria necessariamente sobre nada
+    await useAiStore.getState().sendMessage("E no mês passado?");
+
+    expect(mockPost).toHaveBeenCalledWith("/chat", {
+      message: "E no mês passado?",
+      history: [
+        { role: "user", content: "Quanto gastei com mercado?" },
+        { role: "assistant", content: "Foram R$ 400." },
+      ],
+    });
+  });
+
+  it("pergunta que falhou não entra no histórico — ela nunca chegou ao modelo", async () => {
+    mockPost.mockRejectedValueOnce(new Error("offline"));
+    await useAiStore.getState().sendMessage("Pergunta perdida");
+    mockPost.mockClear();
+    mockPost.mockResolvedValue({ data: { reply: "ok" } });
+
+    await useAiStore.getState().sendMessage("Outra");
+
+    expect(mockPost).toHaveBeenCalledWith("/chat", {
+      message: "Outra",
+      history: [],
+    });
+  });
+
+  it("o histórico para em 12 falas — cada uma é token pago", async () => {
+    mockPost.mockResolvedValue({ data: { reply: "ok" } });
+    for (let i = 0; i < 10; i += 1) {
+      await useAiStore.getState().sendMessage(`Pergunta ${i}`);
+    }
+    mockPost.mockClear();
+
+    await useAiStore.getState().sendMessage("Última");
+
+    const corpo = mockPost.mock.calls[0][1] as { history: unknown[] };
+    expect(corpo.history).toHaveLength(12);
   });
 
   it("falha marca a PERGUNTA como erro, e devolve falso para a tela", async () => {

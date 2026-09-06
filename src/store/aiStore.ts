@@ -20,6 +20,52 @@ const WELCOME_MESSAGE: ChatMessage = {
 
 const MAX_MESSAGES = 50;
 
+/**
+ * Id único de mensagem.
+ *
+ * <p>Era `Date.now()` para a pergunta e `Date.now() + 1` para a resposta — e
+ * os dois COLIDEM: a resposta enviada no instante T nasce com o id T+1, e a
+ * pergunta seguinte digitada no milissegundo T+1 nasce com o mesmo. Duas
+ * mensagens com o mesmo id quebram a chave da lista e fazem `retryMessage`
+ * reenviar a mensagem errada. O contador cresce sempre, dentro da sessão.
+ */
+let nextMessageId = 0;
+const newMessageId = () => `msg-${Date.now()}-${(nextMessageId += 1)}`;
+
+/**
+ * Quantas falas anteriores viajam junto da pergunta.
+ *
+ * <p>Sem isto o Nino não tinha memória NENHUMA: "e no mês passado?" chegava ao
+ * servidor como uma primeira pergunta solta, e a resposta era necessariamente
+ * sobre nada. Doze é o teto que o servidor aceita, e é uma escolha de custo —
+ * cada fala vira token pago no provedor, e conversa antiga demais só ancora o
+ * modelo em números que já mudaram (os dados vêm do banco a cada chamada).
+ *
+ * <p>O par ida-e-volta conta como duas: doze são seis trocas.
+ */
+const MAX_HISTORY_TURNS = 12;
+
+/**
+ * As falas anteriores no formato do servidor: da mais ANTIGA para a mais
+ * recente. A lista em memória está ao contrário (a mais nova primeiro, que é a
+ * ordem em que a tela desenha), e mandar assim faria o modelo ler a conversa
+ * de trás para a frente.
+ */
+export function historyFor(messages: ChatMessage[]): {
+  role: "user" | "assistant";
+  content: string;
+}[] {
+  return messages
+    // a saudação não é conversa, e mensagem que falhou nunca chegou ao modelo
+    .filter((msg) => msg.id !== WELCOME_MESSAGE.id && !msg.isError)
+    .slice(0, MAX_HISTORY_TURNS)
+    .reverse()
+    .map((msg) => ({
+      role: msg.isUser ? ("user" as const) : ("assistant" as const),
+      content: msg.text,
+    }));
+}
+
 interface AiState {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -39,12 +85,18 @@ export const useAiStore = create(
       // UI decidir o haptic certo (antes vibrava "sucesso" até no erro).
       const deliver = async (userMsgId: string, text: string) => {
         try {
+          // A conversa até aqui SEM a pergunta que está sendo enviada — ela vai
+          // no `message`, e repetida no histórico o modelo a leria duas vezes
+          const history = historyFor(
+            get().messages.filter((msg) => msg.id !== userMsgId),
+          );
           const response = await api.post<{ reply: string }>("/chat", {
             message: text,
+            history,
           });
 
           const botMessage: ChatMessage = {
-            id: (Date.now() + 1).toString(),
+            id: newMessageId(),
             text: response.data.reply,
             isUser: false,
             timestamp: Date.now(),
@@ -72,7 +124,7 @@ export const useAiStore = create(
         isLoading: false,
 
         sendMessage: async (text: string) => {
-          const userMsgId = Date.now().toString();
+          const userMsgId = newMessageId();
           const userMessage: ChatMessage = {
             id: userMsgId,
             text,
