@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   AppState,
   BackHandler,
   Keyboard,
@@ -8,13 +9,17 @@ import {
   View,
 } from "react-native";
 import FingerprintPattern from "lucide-react-native/dist/esm/icons/fingerprint-pattern";
-import * as LocalAuthentication from "expo-local-authentication";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, shadow, spacing } from "../theme/ds";
+import { radius, spacing } from "../theme/ds";
 import { useAuthStore } from "../store/authStore";
 import { usePreferencesStore } from "../store/preferencesStore";
-import { askConfirm } from "../store/confirmStore";
+import {
+  biometricSupport,
+  forgetBiometrics,
+  verifyBiometrics,
+} from "../utils/biometrics";
 
 interface Props {
   children: React.ReactNode;
@@ -24,8 +29,19 @@ interface Props {
 // alt-tab rápido e pedir biometria de novo só irritaria
 const RELOCK_GRACE_MS = 30000;
 
+/**
+ * A tranca do app.
+ *
+ * <p>Quando ela está armada, o que aparece é uma TELA INTEIRA — não um
+ * diálogo sobre o conteúdo. A diferença não é estética: um diálogo diz "há um
+ * app atrás disto, responda para continuar", e o que se quer dizer aqui é "o
+ * app está fechado". Por isso o fundo é o da aplicação, sem cartão, sem
+ * moldura e com o mínimo de texto: o ícone, uma linha dizendo por que a tela
+ * existe, um botão em destaque e uma saída discreta pela senha.
+ */
 export default function BiometricGate({ children }: Props) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const biometricLogin = usePreferencesStore((s) => s.biometricLogin);
@@ -42,35 +58,44 @@ export default function BiometricGate({ children }: Props) {
   // Nasce bloqueado: liberar é sempre decisão do efeito abaixo, nunca do
   // estado inicial (que rodava antes da hidratação e deixava passar direto)
   const [authorized, setAuthorized] = useState(false);
-  const [failures, setFailures] = useState(0);
+  /** Já houve uma tentativa que não deu certo? Muda só o texto de apoio. */
+  const [falhou, setFalhou] = useState(false);
+  const [verificando, setVerificando] = useState(false);
   const backgroundedAt = useRef<number | null>(null);
 
   const runAuth = useCallback(async () => {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const enrolled = await LocalAuthentication.isEnrolledAsync();
-    if (!hasHardware || !enrolled) {
-      // Sem hardware (web inclusa) o gate degrada em silêncio e desarma a
-      // preferência para não travar as próximas aberturas
-      setBiometric(false);
-      setAuthorized(true);
-      return;
+    setVerificando(true);
+    try {
+      // A web entra por aqui igual ao celular desde que o adaptador ganhou o
+      // caminho do WebAuthn: no navegador do telefone a digital existe, e antes
+      // este mesmo teste a declarava "sem hardware" e liberava a tranca
+      const { available } = await biometricSupport();
+      if (!available) {
+        // Sem hardware o gate degrada em silêncio e desarma a preferência para
+        // não travar as próximas aberturas
+        setBiometric(false);
+        forgetBiometrics();
+        setAuthorized(true);
+        return;
+      }
+      if (await verifyBiometrics("Desbloqueie o Economize!")) {
+        setAuthorized(true);
+        setFalhou(false);
+      } else {
+        // Cancelar, digital molhada, leitor que não respondeu — do ponto de
+        // vista de quem está na tela é tudo a mesma coisa: tentar de novo. O
+        // botão continua ali, e é ele que pede a biometria outra vez.
+        //
+        // Não há mais "três erros e a sessão cai": com uma saída explícita
+        // pela senha, derrubar a sessão de quem só está com o dedo molhado
+        // punia o engano e não protegia de nada — quem tenta adivinhar
+        // biometria esbarra primeiro no bloqueio do próprio sistema.
+        setFalhou(true);
+      }
+    } finally {
+      setVerificando(false);
     }
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Desbloqueie o Economize!",
-      cancelLabel: "Cancelar",
-      disableDeviceFallback: false,
-    });
-    if (result.success) {
-      setAuthorized(true);
-      setFailures(0);
-    } else {
-      setFailures((prev) => {
-        const next = prev + 1;
-        if (next >= 3) logout();
-        return next;
-      });
-    }
-  }, [setBiometric, logout]);
+  }, [setBiometric]);
 
   useEffect(() => {
     // Só decide depois da hidratação — antes disso não sabemos se o gate vale
@@ -97,7 +122,7 @@ export default function BiometricGate({ children }: Props) {
       const currentToken = useAuthStore.getState().token;
       const wantsLock = usePreferencesStore.getState().biometricLogin;
       if (currentToken && wantsLock && elapsed >= RELOCK_GRACE_MS) {
-        setFailures(0);
+        setFalhou(false);
         setAuthorized(false);
       }
     });
@@ -106,8 +131,8 @@ export default function BiometricGate({ children }: Props) {
 
   const locked = hasHydrated && gateRequired && !authorized;
 
-  // Com as rotas montadas por baixo do overlay, o voltar do Android
-  // continuaria navegando às cegas atrás do bloqueio
+  // Com as rotas montadas por baixo da tela de bloqueio, o voltar do Android
+  // continuaria navegando às cegas atrás dela
   useEffect(() => {
     if (!locked) return;
     // Um TextInput focado atrás do overlay reabriria o teclado e a digitação
@@ -120,14 +145,13 @@ export default function BiometricGate({ children }: Props) {
     return () => subscription.remove();
   }, [locked]);
 
-  const handleLogout = useCallback(() => {
-    askConfirm({
-      title: "Sair da conta",
-      message: "Tem certeza que deseja encerrar a sessão?",
-      confirmLabel: "Sair",
-      destructive: true,
-      onConfirm: () => logout(),
-    });
+  /**
+   * Sair para a tela de senha. É `logout` porque a senha é justamente o que o
+   * app não guarda: voltar a pedi-la é voltar ao login.
+   */
+  const entrarComSenha = useCallback(() => {
+    setFalhou(false);
+    logout();
   }, [logout]);
 
   // Splash neutro enquanto as preferências hidratam: nada de rotas aqui
@@ -139,18 +163,18 @@ export default function BiometricGate({ children }: Props) {
     <View style={{ flex: 1 }}>
       <View
         style={{ flex: 1 }}
-        // O overlay esconde o conteúdo dos olhos, mas não do leitor de tela:
-        // sem isto o TalkBack/VoiceOver navegaria os dados financeiros por
-        // trás do bloqueio
+        // A tela de bloqueio esconde o conteúdo dos olhos, mas não do leitor
+        // de tela: sem isto o TalkBack/VoiceOver navegaria os dados
+        // financeiros por trás dela
         importantForAccessibility={locked ? "no-hide-descendants" : "auto"}
         accessibilityElementsHidden={locked}
       >
         {children}
       </View>
       {locked && (
-        // Overlay no mesmo commit de render das rotas: nenhum frame do
-        // conteúdo vaza antes do desbloqueio. O fundo é o base do tema,
-        // 100% opaco de propósito.
+        // No mesmo commit de render das rotas: nenhum quadro do conteúdo vaza
+        // antes do desbloqueio. Ocupa a tela inteira, com o fundo do app —
+        // é o app fechado, não um aviso por cima dele.
         <View
           accessibilityViewIsModal
           style={{
@@ -162,102 +186,101 @@ export default function BiometricGate({ children }: Props) {
             backgroundColor: t.background.base,
             alignItems: "center",
             justifyContent: "center",
-            padding: spacing[5],
+            paddingHorizontal: spacing[6],
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom + spacing[6],
           }}
         >
           <View
-            style={[
-              {
-                width: "100%",
-                maxWidth: 420,
-                backgroundColor: t.background.elevated,
-                borderRadius: radius["2xl"],
-                borderWidth: 1,
-                borderColor: t.border.default,
-                padding: spacing[6],
-                alignItems: "center",
-              },
-              shadow.lg,
-            ]}
+            style={{
+              width: 120,
+              height: 120,
+              borderRadius: radius.full,
+              backgroundColor: t.accent.neonMuted,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: spacing[8],
+            }}
           >
-            <View
-              style={{
-                width: 88,
-                height: 88,
-                borderRadius: radius.full,
-                backgroundColor: t.accent.neonMuted,
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: spacing[5],
-                borderWidth: 2,
-                borderColor: t.accent.neon,
-              }}
-            >
-              <FingerprintPattern size={40} color={t.accent.neon} />
-            </View>
-            <Text
-              style={{
-                color: t.text.primary,
-                fontSize: 20,
-                fontWeight: "700",
-                marginBottom: spacing[2],
-              }}
-            >
-              Economize!
-            </Text>
-            <Text
-              style={{
-                color: t.text.secondary,
-                fontSize: 14,
-                textAlign: "center",
-                marginBottom: spacing[6],
-              }}
-            >
-              {failures > 0
-                ? `Tentativa ${failures}/3 — toque para tentar novamente.`
-                : "Use sua biometria para continuar."}
-            </Text>
-            <TouchableOpacity
-              onPress={runAuth}
-              activeOpacity={0.85}
-              accessibilityLabel="Desbloquear"
-              accessibilityRole="button"
-              style={{
-                backgroundColor: t.accent.neon,
-                paddingHorizontal: spacing[6],
-                paddingVertical: spacing[3],
-                borderRadius: radius.full,
-              }}
-            >
+            <FingerprintPattern size={56} color={t.accent.neon} />
+          </View>
+
+          <Text
+            style={{
+              color: t.text.primary,
+              fontSize: 22,
+              fontWeight: "700",
+              textAlign: "center",
+            }}
+          >
+            Economize! está trancado
+          </Text>
+          <Text
+            style={{
+              color: t.text.secondary,
+              fontSize: 15,
+              lineHeight: 22,
+              textAlign: "center",
+              marginTop: spacing[3],
+              marginBottom: spacing[8],
+              maxWidth: 320,
+            }}
+          >
+            {falhou
+              ? "Não deu certo. Toque em OK para tentar de novo."
+              : "Use sua biometria para abrir."}
+          </Text>
+
+          <TouchableOpacity
+            onPress={runAuth}
+            disabled={verificando}
+            activeOpacity={0.85}
+            accessibilityLabel="OK"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: verificando, busy: verificando }}
+            style={{
+              width: "100%",
+              maxWidth: 320,
+              backgroundColor: t.accent.neon,
+              paddingVertical: spacing[4],
+              borderRadius: radius.full,
+              alignItems: "center",
+              opacity: verificando ? 0.7 : 1,
+            }}
+          >
+            {verificando ? (
+              <ActivityIndicator color={t.text.inverse} />
+            ) : (
               <Text
                 style={{
                   color: t.text.inverse,
                   fontWeight: "700",
-                  fontSize: 14,
+                  fontSize: 16,
                 }}
               >
-                Desbloquear
+                OK
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleLogout}
-              activeOpacity={0.7}
-              accessibilityLabel="Sair da conta"
-              accessibilityRole="button"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{ marginTop: spacing[5] }}
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={entrarComSenha}
+            activeOpacity={0.7}
+            accessibilityLabel="Entrar com senha"
+            accessibilityRole="button"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{ marginTop: spacing[6] }}
+          >
+            <Text
+              style={{
+                color: t.text.tertiary,
+                fontWeight: "600",
+                fontSize: 14,
+              }}
             >
-              <Text
-                style={{
-                  color: t.text.secondary,
-                  fontWeight: "600",
-                  fontSize: 13,
-                }}
-              >
-                Sair da conta
-              </Text>
-            </TouchableOpacity>
-          </View>
+              Entrar com senha
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>

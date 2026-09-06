@@ -16,6 +16,7 @@ import Clock3 from "lucide-react-native/dist/esm/icons/clock-3";
 import FileText from "lucide-react-native/dist/esm/icons/file-text";
 import FingerprintPattern from "lucide-react-native/dist/esm/icons/fingerprint-pattern";
 import KeyRound from "lucide-react-native/dist/esm/icons/key-round";
+import ShieldCheck from "lucide-react-native/dist/esm/icons/shield-check";
 import Languages from "lucide-react-native/dist/esm/icons/languages";
 import LogOut from "lucide-react-native/dist/esm/icons/log-out";
 import Mail from "lucide-react-native/dist/esm/icons/mail";
@@ -34,7 +35,6 @@ import X from "lucide-react-native/dist/esm/icons/x";
 import type { LucideIcon } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
-import * as LocalAuthentication from "expo-local-authentication";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -55,6 +55,11 @@ import { useBankStore } from "../store/bankStore";
 import { useWalletStore } from "../store/walletStore";
 import { useReportsStore } from "../store/reportsStore";
 import * as Haptics from "../utils/haptics";
+import {
+  biometricSupport,
+  enrollBiometrics,
+  forgetBiometrics,
+} from "../utils/biometrics";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
@@ -270,9 +275,8 @@ export default function Profile() {
     fetchBankTxs();
     fetchWalletTxs();
     (async () => {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
-      setBiometricAvailable(hasHardware && enrolled);
+      const { available } = await biometricSupport();
+      setBiometricAvailable(available);
     })();
     // carga única de dados da tela
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,19 +321,16 @@ export default function Profile() {
     usePreferencesStore.getState().setBiometricChoiceMade(true);
     if (!next) {
       setBiometric(false);
+      // Na web há uma credencial WebAuthn criada neste navegador; desligar tem
+      // de apagá-la, senão ela fica órfã no aparelho para sempre
+      forgetBiometrics();
       return;
     }
-    try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Confirme para exigir desbloqueio ao entrar",
-      });
-      if (result.success) {
-        setBiometric(true);
-        showToast("Desbloqueio por biometria ativado.", "success");
-      }
-    } catch {
-      // authenticateAsync também rejeita (não só resolve success=false)
-      showToast("Biometria indisponível agora. Tente novamente.", "warning");
+    if (await enrollBiometrics(me?.email || displayName)) {
+      setBiometric(true);
+      showToast("Desbloqueio por biometria ativado.", "success");
+    } else {
+      showToast("Biometria não confirmada. Tente novamente.", "warning");
     }
   };
 
@@ -788,6 +789,12 @@ export default function Profile() {
             label="Alterar senha"
             description="Atualize sua senha de acesso"
             onPress={() => navigation.navigate("Alterar Senha" as never)}
+          />
+          <ActionRow
+            Icon={ShieldCheck}
+            label="Segurança"
+            description="Verificação em duas etapas"
+            onPress={() => navigation.navigate(APP_ROUTES.seguranca as never)}
           />
           <ActionRow
             Icon={Sparkles}
