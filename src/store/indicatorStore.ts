@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import api, { Indicator, isCurrencyData, isIndexData } from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 import {
   AssetListFilters,
   DEFAULT_ASSET_FILTERS,
@@ -144,10 +145,15 @@ export const useIndicatorStore = create<IndicatorState>()(
             // para sempre e toda tela que montava rebuscava a lista inteira
             lastFetched: Date.now(),
           });
-        } catch (e: any) {
+        } catch (e) {
           console.error("Erro ao buscar indicadores:", e);
+          // "Não foi possível conectar ao servidor" acusava o servidor até
+          // num 404; a causa de transporte, quando é ela, vem do classificador
           set({
-            error: "Não foi possível conectar ao servidor.",
+            error: describeLoadFailure(
+              e,
+              "Não foi possível carregar as cotações agora.",
+            ),
             loading: false,
           });
         }

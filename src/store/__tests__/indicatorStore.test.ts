@@ -93,7 +93,8 @@ describe("indicatorStore", () => {
 
     await useIndicatorStore.getState().fetchIndicators();
 
-    expect(useIndicatorStore.getState().error).toMatch(/servidor/i);
+    // A frase fala do que não veio (as cotações), não culpa o servidor
+    expect(useIndicatorStore.getState().error).toMatch(/cotações/i);
     expect(useIndicatorStore.getState().loading).toBe(false);
   });
 

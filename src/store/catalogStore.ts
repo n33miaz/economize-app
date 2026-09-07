@@ -6,6 +6,7 @@ import {
   type CatalogPageInfo,
   type CatalogQuery,
 } from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 
 /**
  * O catálogo ampliado em lista infinita (EC-099, metade de app).
@@ -114,9 +115,12 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         // este recomeço acabou de invalidar
         isLoadingMore: false,
       });
-    } catch {
+    } catch (e) {
       if (id !== requestId) return;
-      set({ error: "Não foi possível carregar o catálogo.", isLoading: false });
+      set({
+        error: describeLoadFailure(e, "Não foi possível carregar o catálogo."),
+        isLoading: false,
+      });
     }
   },
 

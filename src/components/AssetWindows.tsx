@@ -135,7 +135,7 @@ export default function AssetWindows({
             <View
               style={{
                 height: 6,
-                borderRadius: 3,
+                borderRadius: radius.sm,
                 backgroundColor: t.background.elevated,
                 borderWidth: 1,
                 borderColor: t.border.subtle,
@@ -151,7 +151,7 @@ export default function AssetWindows({
                   left: `${(detail.rangePosition as number) * 100}%`,
                   width: 10,
                   height: 10,
-                  borderRadius: 5,
+                  borderRadius: radius.sm,
                   marginLeft: -5,
                   backgroundColor: t.accent.neon,
                 }}
