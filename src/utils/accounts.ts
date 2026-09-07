@@ -45,6 +45,18 @@ export const UNKNOWN_ORIGIN_SHORT = "Não informada";
 export const UNLISTED_ORIGIN_LABEL = "Origem não reconhecida";
 export const UNLISTED_ORIGIN_SHORT = "Não reconhecida";
 
+/**
+ * Como uma conexão bancária se chama na tela quando a instituição não veio.
+ * O nome do conector no provedor NUNCA entra aqui: ele nomeia o serviço que
+ * faz os trâmites, e o usuário não precisa saber que esse serviço existe.
+ */
+export const CONNECTION_FALLBACK_LABEL = "Conexão bancária";
+
+export function connectionLabel(item: { institution?: string | null }): string {
+  const institution = item.institution?.trim();
+  return institution || CONNECTION_FALLBACK_LABEL;
+}
+
 /** Rótulo do selo de origem, cobrindo os três estados possíveis. */
 export function originLabel(
   accountId: string | null | undefined,

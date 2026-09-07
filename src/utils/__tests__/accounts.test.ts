@@ -4,6 +4,7 @@ import type {
   ConnectorAccount,
 } from "../../services/api";
 import {
+  CONNECTION_FALLBACK_LABEL,
   ORIGIN_ALL,
   ORIGIN_NONE,
   UNKNOWN_ORIGIN_LABEL,
@@ -13,6 +14,7 @@ import {
   accountSubtitle,
   applyOriginFilter,
   buildInvoiceTimeline,
+  connectionLabel,
   creditCardAccounts,
   describeInvoice,
   describeInvoiceFailure,
@@ -547,5 +549,21 @@ describe("janela pedida × janela devolvida", () => {
     expect(describeInvoiceWindow(comAberta, 3)).toBe(
       "1 de 3 ciclos fechados tem lançamento. Ciclo sem movimento não vira fatura.",
     );
+  });
+});
+
+describe("connectionLabel — como a conexão se chama na tela", () => {
+  it("usa a instituição quando ela veio", () => {
+    expect(connectionLabel({ institution: "Banco Inter S.A." })).toBe(
+      "Banco Inter S.A.",
+    );
+  });
+
+  it("sem instituição fica 'Conexão bancária' — nunca o nome do conector", () => {
+    // O nome do conector no agregador é o do serviço que faz os trâmites; o
+    // usuário só precisa saber que o banco dele está conectado
+    expect(connectionLabel({ institution: null })).toBe(CONNECTION_FALLBACK_LABEL);
+    expect(connectionLabel({})).toBe("Conexão bancária");
+    expect(connectionLabel({ institution: "   " })).toBe("Conexão bancária");
   });
 });

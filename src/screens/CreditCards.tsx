@@ -30,11 +30,14 @@ import {
   describeInvoiceWindow,
   invoiceCycleIsApproximate,
 } from "../utils/accounts";
+import { bankKeyFor } from "../utils/bankBrand";
+import BankLogo from "../components/BankLogo";
 import BlockGrid from "../components/BlockGrid";
 import ErrorState from "../components/ErrorState";
 import FilterChipRow from "../components/FilterChipRow";
 import InvoiceCard from "../components/InvoiceCard";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
@@ -340,6 +343,11 @@ export default function CreditCards() {
   const windowNote = payload
     ? describeInvoiceWindow(payload.invoices, loadedMonths)
     : null;
+  // A instituição decide o logo do cabeçalho; o nome do cartão só entra quando
+  // ele mesmo carrega a marca. Sem nenhum dos dois, fica o ícone genérico
+  const cardBrand = selected
+    ? selected.institution ?? (bankKeyFor(selected.name) ? selected.name : null)
+    : null;
 
   const listHeader = (
     <View style={{ paddingTop: spacing[4] }}>
@@ -374,19 +382,27 @@ export default function CreditCards() {
                 marginBottom: spacing[4],
               }}
             >
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: radius.full,
-                  backgroundColor: t.accent.neonMuted,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: spacing[3],
-                }}
-              >
-                <CreditCard size={20} color={t.accent.neon} />
-              </View>
+              {cardBrand ? (
+                <BankLogo
+                  institution={cardBrand}
+                  size={40}
+                  style={{ marginRight: spacing[3] }}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: radius.full,
+                    backgroundColor: t.accent.neonMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: spacing[3],
+                  }}
+                >
+                  <CreditCard size={20} color={t.accent.neon} />
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text
                   numberOfLines={1}
@@ -555,6 +571,11 @@ export default function CreditCards() {
         ListHeaderComponent={listHeader}
         // Só monta o vazio quando ele vai aparecer: com a lista cheia, o
         // `renderEmpty()` de antes construía esqueletos a cada render
+        ListFooterComponent={
+          // Fim da lista: o slot nunca fica entre o usuário e os
+          // números dele. Devolve null no Plus, sem reservar espaço
+          <AdSlot style={{ marginTop: spacing[4] }} />
+        }
         ListEmptyComponent={timeline.length === 0 ? renderEmpty() : null}
         renderItem={({ item }) => {
           if (item.kind === "gap") {

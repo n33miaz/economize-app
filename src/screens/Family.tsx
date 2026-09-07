@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -54,6 +53,7 @@ import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import ActionRow from "../components/ActionRow";
+import BankLogo from "../components/BankLogo";
 import MemberAvatar from "../components/MemberAvatar";
 import CategoryIcon from "../components/CategoryIcon";
 
@@ -772,6 +772,17 @@ export default function Family() {
                         value={sharedAccounts === null || sharedAccounts.has(account.id)}
                         onChange={(share) => toggleAccount(account.id, share)}
                         disabled={!detailsEnabled}
+                        // O logo do banco ao lado do interruptor: quem tem dois
+                        // cartões de nomes parecidos escolhe pela marca
+                        left={
+                          account.institution ? (
+                            <BankLogo
+                              institution={account.institution}
+                              size={28}
+                              style={{ marginRight: spacing[3] }}
+                            />
+                          ) : undefined
+                        }
                       />
                     ))}
                   </>

@@ -8,6 +8,8 @@ import type { ConnectorAccount } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { originLabel } from "../utils/accounts";
+import { bankKeyFor } from "../utils/bankBrand";
+import BankLogo from "./BankLogo";
 
 interface OriginBadgeProps {
   /** O campo cru da transação — é ele que separa "sem origem" de "não achei". */
@@ -28,6 +30,11 @@ interface OriginBadgeProps {
  *
  * Origem nula não é falha e não veste aviso — ela é a maioria do histórico de
  * quem importa OFX na mão.
+ *
+ * Quando a instituição é conhecida, o logo do banco entra no lugar do ícone:
+ * reconhecer o roxo do Nubank é mais rápido do que ler o nome do cartão. O
+ * ícone continua como plano B — e ele ainda distingue cartão de conta, coisa
+ * que um logo sozinho não diz.
  */
 export default function OriginBadge({
   accountId,
@@ -41,6 +48,12 @@ export default function OriginBadge({
     : account.type === "CREDIT_CARD"
       ? CreditCard
       : Landmark;
+  // A instituição decide o logo; o nome da conta só entra quando ele mesmo
+  // carrega a marca ("Nubank Cartão"), nunca por aproximação
+  const brand = account
+    ? account.institution ?? (bankKeyFor(account.name) ? account.name : null)
+    : null;
+  const hasLogo = bankKeyFor(brand) !== null;
   const label = originLabel(accountId, account);
 
   return (
@@ -62,7 +75,11 @@ export default function OriginBadge({
         borderColor: t.border.subtle,
       }}
     >
-      <Icon size={12} color={t.text.tertiary} />
+      {hasLogo ? (
+        <BankLogo institution={brand} size={16} />
+      ) : (
+        <Icon size={12} color={t.text.tertiary} />
+      )}
       <Text
         numberOfLines={1}
         style={{

@@ -7,6 +7,7 @@ import {
   getAccounts,
   getApiErrorStatus,
 } from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 import { describeInvoiceFailure, indexAccounts } from "../utils/accounts";
 
 /** Estado por cartão: cada um pede a própria fatura e falha sozinho. */
@@ -84,14 +85,17 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         isLoading: false,
         hasLoadedOnce: true,
       });
-    } catch {
+    } catch (e) {
       // `hasLoadedOnce` fica FALSO de propósito: marcá-lo aqui transformava um
       // 500 de dois segundos no cold start em recurso desligado pelo resto da
       // sessão — toda tela que pede o mapa no foco batia na guarda de cache e
       // voltava sem tentar, e no celular não sobrava caminho para o retry
       // manual. Falha não é resposta; o próximo foco tenta de novo.
       set({
-        error: "Não foi possível carregar suas contas agora.",
+        error: describeLoadFailure(
+          e,
+          "Não foi possível carregar suas contas agora.",
+        ),
         isLoading: false,
       });
     }
