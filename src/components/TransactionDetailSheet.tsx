@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -11,8 +12,15 @@ import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
 import X from "lucide-react-native/dist/esm/icons/x";
 
 import type { BankTransaction, Category } from "../services/api";
-import { getApiErrorStatus, updateTransactionAlias } from "../services/api";
+import {
+  getApiErrorStatus,
+  setFamilyTransfer,
+  setInternalTransfer,
+  setTransactionIgnored,
+  updateTransactionAlias,
+} from "../services/api";
 import { useAccountsStore } from "../store/accountsStore";
+import { useFamilyStore } from "../store/familyStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { useToastStore } from "../store/toastStore";
 import type { AppTheme } from "../theme/colors";
@@ -74,6 +82,15 @@ function DetailRow({
   );
 }
 
+/**
+ * As três marcas que uma linha do extrato pode carregar, e o que cada uma quer
+ * dizer. São coisas diferentes de propósito — juntar tudo em "ignorar" perderia
+ * a informação de POR QUE a linha não conta.
+ */
+type MarkKey = "internal" | "family" | "ignored";
+
+const MARK_FAILURE = "Não consegui mudar isso agora. Tente de novo.";
+
 interface TransactionDetailSheetProps {
   transaction: BankTransaction | null;
   visible: boolean;
@@ -101,6 +118,9 @@ export default function TransactionDetailSheet({
   // carregado uma vez pelo accountsStore
   const accountsById = useAccountsStore((s) => s.byId);
   const showToast = useToastStore((s) => s.showToast);
+  // O interruptor da casa só existe para quem tem casa: sem família, a
+  // marca não muda soma nenhuma e seria um controle sem efeito
+  const hasFamily = useFamilyStore((s) => s.hasFamily);
 
   const [draft, setDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -110,6 +130,11 @@ export default function TransactionDetailSheet({
   // ao "concluir" do teclado) passavam os dois pela guarda e disparavam dois
   // PATCH, dois toasts e dois haptics
   const savingRef = useRef(false);
+
+  // Qual das três marcas está sendo gravada agora, ou null. Uma só por vez:
+  // são decisões diferentes sobre a mesma linha, e deixar duas em voo faria a
+  // resposta mais lenta sobrescrever a mais rápida
+  const [markPending, setMarkPending] = useState<MarkKey | null>(null);
 
   // Cada abertura recomeça do apelido salvo: rascunho de uma transação não pode
   // reaparecer sobre outra
@@ -165,6 +190,29 @@ export default function TransactionDetailSheet({
     } finally {
       savingRef.current = false;
       setIsSaving(false);
+    }
+  };
+
+  const toggleMark = async (key: MarkKey, next: boolean) => {
+    if (markPending) return;
+    setMarkPending(key);
+    try {
+      const updated =
+        key === "internal"
+          ? await setInternalTransfer(transaction.id, next)
+          : key === "family"
+            ? await setFamilyTransfer(transaction.id, next)
+            : await setTransactionIgnored(transaction.id, next);
+      Haptics.selectionAsync();
+      // A folha continua aberta: marcar é uma decisão que a pessoa costuma
+      // tomar junto com outra na mesma linha, e fechar a cada toque obrigaria
+      // a reabrir. Quem recarrega a lista é o onUpdated, como no apelido
+      onUpdated(updated);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(MARK_FAILURE);
+    } finally {
+      setMarkPending(null);
     }
   };
 
@@ -418,6 +466,65 @@ export default function TransactionDetailSheet({
             marginBottom: spacing[1],
           }}
         >
+          Como esta linha conta
+        </Text>
+        <Text
+          style={{
+            color: t.text.secondary,
+            fontSize: 12,
+            lineHeight: 17,
+            marginBottom: spacing[2],
+          }}
+        >
+          Nada aqui apaga o lançamento: ele continua no extrato, com o valor e a
+          data do banco. O que muda é em quais somas ele entra.
+        </Text>
+
+        <MarkRow
+          label="É dinheiro meu trocando de bolso"
+          hint="Pagamento de fatura, Pix de uma conta minha para outra. Sai de todas as somas."
+          value={transaction.internalTransfer}
+          busy={markPending === "internal"}
+          disabled={markPending !== null && markPending !== "internal"}
+          onChange={(next) => toggleMark("internal", next)}
+        />
+
+        {hasFamily ? (
+          <MarkRow
+            label="Ficou dentro da casa"
+            hint="Pix entre vocês, mesada, rateio. Sai só da soma da Casa — aqui o dinheiro entrou mesmo."
+            value={transaction.familyTransfer}
+            busy={markPending === "family"}
+            disabled={markPending !== null && markPending !== "family"}
+            onChange={(next) => toggleMark("family", next)}
+          />
+        ) : null}
+
+        <MarkRow
+          label="Esta linha não deveria existir"
+          hint="Entrou duas vezes, por duas fontes. Sai de toda soma e continua no extrato com selo."
+          value={transaction.ignored}
+          busy={markPending === "ignored"}
+          disabled={markPending !== null && markPending !== "ignored"}
+          onChange={(next) => toggleMark("ignored", next)}
+        />
+
+        <View
+          style={{
+            height: 1,
+            backgroundColor: t.border.subtle,
+            marginVertical: spacing[4],
+          }}
+        />
+
+        <Text
+          style={{
+            color: t.text.primary,
+            fontSize: 15,
+            fontWeight: "700",
+            marginBottom: spacing[1],
+          }}
+        >
           Apelido
         </Text>
         <Text
@@ -543,5 +650,66 @@ export default function TransactionDetailSheet({
         )}
       </ScrollView>
     </CustomModal>
+  );
+}
+
+/**
+ * Um interruptor de marca. Fica local ao arquivo porque a frase de apoio é o
+ * que dá sentido ao controle — as três marcas se parecem e significam coisas
+ * diferentes, e um interruptor só com rótulo curto se confundiria.
+ */
+function MarkRow({
+  label,
+  hint,
+  value,
+  busy,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-start",
+        paddingVertical: spacing[2],
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <View style={{ flex: 1, marginRight: spacing[3] }}>
+        <Text style={{ color: t.text.primary, fontSize: 13, fontWeight: "700" }}>
+          {label}
+        </Text>
+        <Text
+          style={{
+            color: t.text.tertiary,
+            fontSize: 11,
+            lineHeight: 15,
+            marginTop: 2,
+          }}
+        >
+          {hint}
+        </Text>
+      </View>
+      {busy ? (
+        <ActivityIndicator size="small" color={t.accent.neon} />
+      ) : (
+        <Switch
+          value={value}
+          onValueChange={onChange}
+          disabled={disabled}
+          accessibilityLabel={label}
+          trackColor={{ false: t.border.subtle, true: t.accent.neonMuted }}
+          thumbColor={value ? t.accent.neon : t.text.tertiary}
+        />
+      )}
+    </View>
   );
 }

@@ -1911,6 +1911,36 @@ export const reconcileFamilyTransfers =
     return response.data;
   };
 
+/**
+ * Diz que a linha é dinheiro do titular trocando de bolso — pagamento de
+ * fatura, Pix para si mesmo. Sai de TODAS as somas, não só da casa.
+ */
+export const setInternalTransfer = async (
+  id: string,
+  internalTransfer: boolean,
+): Promise<BankTransaction> => {
+  const response = await api.patch<BankTransaction>(
+    `/transactions/${id}/internal`,
+    { internalTransfer },
+  );
+  return response.data;
+};
+
+/**
+ * Descarta (ou traz de volta) uma linha. Ela some das somas e continua no
+ * extrato com selo — nada é apagado, porque reimportar o arquivo não desfaz.
+ */
+export const setTransactionIgnored = async (
+  id: string,
+  ignored: boolean,
+): Promise<BankTransaction> => {
+  const response = await api.patch<BankTransaction>(
+    `/transactions/${id}/ignored`,
+    { ignored },
+  );
+  return response.data;
+};
+
 /** Correção manual de uma linha: a decisão da pessoa vence a varredura. */
 export const setFamilyTransfer = async (
   id: string,
