@@ -201,6 +201,25 @@ export const useAuthStore = create(
         // `hasLoadedOnce` faria a próxima conta ver a casa da anterior
         const { useFamilyStore } = require("./familyStore");
         useFamilyStore.getState().reset();
+
+        // Idem: o plano é da conta. Sem zerar, quem entrasse depois de um
+        // Plus continuaria sem anúncios — e um gratuito depois de um Plus
+        // vencido veria o rótulo errado no Perfil
+        const { usePlanStore } = require("./planStore");
+        usePlanStore.getState().reset();
+
+        // Idem: posições, saldos e o perfil de investidor são o retrato mais
+        // completo do patrimônio de alguém, e o cache de cinco minutos por
+        // fatia sobreviveria a um login com outra conta
+        const { useInvestmentStore } = require("./investmentStore");
+        useInvestmentStore.getState().reset();
+
+        // Manchete não é dado pessoal — o motivo aqui é outro: "apagar dados
+        // locais" passa por este ponto e tem de esvaziar os caches de verdade,
+        // e o reset também descarta as buscas em voo, pedidas com o token que
+        // acabou de ser jogado fora
+        const { useNewsStore } = require("./newsStore");
+        useNewsStore.getState().reset();
       },
 
       clearError: () => set({ error: null }),
