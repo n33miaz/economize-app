@@ -56,6 +56,12 @@ import api, {
   updateFamilySharing,
   updateIncomeSource,
   updateWish,
+  createConnectToken,
+  getConnectorStatus,
+  listConnectorItems,
+  registerConnectorItem,
+  syncConnector,
+  unlinkConnectorItem,
 } from "../api";
 
 // O dublê tem de ser o AXIOS, não este módulo: as funções abaixo fecham sobre
@@ -143,6 +149,11 @@ describe("api — o contrato das rotas", () => {
     { nome: "compartilhamento", chamada: () => updateFamilySharing({} as never), metodo: "put", caminho: "/family/sharing" },
     { nome: "análise da casa", chamada: () => getFamilyAnalytics({ kind: "month", month: "2026-07" }), metodo: "get", caminho: "/family/analytics/monthly" },
     { nome: "extrato da casa", chamada: () => getFamilyTransactions({ range: { kind: "month", month: "2026-07" } }), metodo: "get", caminho: "/family/transactions" },
+    // Conector Open Finance: rotas NEUTRAS, sem nome de provedor no caminho
+    { nome: "status do conector", chamada: () => getConnectorStatus(), metodo: "get", caminho: "/connectors/status" },
+    { nome: "conexões bancárias", chamada: () => listConnectorItems(), metodo: "get", caminho: "/connectors/items" },
+    { nome: "registrar conexão", chamada: () => registerConnectorItem("item-1"), metodo: "post", caminho: "/connectors/items" },
+    { nome: "sincronizar conector", chamada: () => syncConnector(30), metodo: "post", caminho: "/connectors/sync" },
   ];
 
   it.each(casos)("$nome usa $metodo $caminho", async ({ chamada, metodo, caminho }) => {
@@ -197,6 +208,29 @@ describe("api — o contrato das rotas", () => {
     expect(cliente.patch.mock.calls[0][0]).toBe("/transactions/t1/alias");
     // Nulo precisa CHEGAR ao servidor: omitir o campo seria "não mexer"
     expect(cliente.patch.mock.calls[0][1]).toEqual({ displayAlias: null });
+  });
+
+  it("o conector: token desembrulhado, janela em params e id no caminho", async () => {
+    // Trocar de agregador não pode mexer no app: nenhuma rota carrega provedor
+    cliente.post.mockResolvedValue({ data: { accessToken: "tok" } });
+    await expect(createConnectToken()).resolves.toBe("tok");
+    expect(cliente.post.mock.calls[0][0]).toBe("/connectors/connect-token");
+
+    jest.clearAllMocks();
+    cliente.post.mockResolvedValue({ data: "RESPOSTA" });
+    await syncConnector(30);
+    expect(cliente.post.mock.calls[0][0]).toBe("/connectors/sync");
+    expect(cliente.post.mock.calls[0][2]).toMatchObject({ params: { days: 30 } });
+
+    jest.clearAllMocks();
+    cliente.post.mockResolvedValue({ data: "RESPOSTA" });
+    await registerConnectorItem("item-1");
+    expect(cliente.post.mock.calls[0][1]).toEqual({ itemId: "item-1" });
+
+    jest.clearAllMocks();
+    cliente.delete.mockResolvedValue({ data: undefined });
+    await unlinkConnectorItem("cx-1");
+    expect(cliente.delete.mock.calls[0][0]).toBe("/connectors/items/cx-1");
   });
 
   it("a análise mensal manda o recorte como parâmetro", async () => {

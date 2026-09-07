@@ -1,10 +1,22 @@
 import axios, { AxiosError } from "axios";
+import type { InternalAxiosRequestConfig } from "axios";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
 import { useToastStore } from "../store/toastStore";
 import { healthUrlFrom, waitForServer } from "../store/serverStore";
+import { APP_VERSION, platformHeader, versionHeaders } from "../utils/appVersion";
 import type { AnalysisRange } from "../utils/cycleWindow";
+import { describeRequestFailure } from "./requestFailure";
+
+// A leitura das falhas mora em módulo próprio (puro, sem cliente HTTP) e sai
+// também por aqui: quem já importa o `api` não precisa saber onde ela vive
+export {
+  describeLoadFailure,
+  describeRequestFailure,
+  FAILURE_MESSAGES,
+} from "./requestFailure";
+export type { RequestFailure, RequestFailureKind } from "./requestFailure";
 
 // URL de produção usada quando não há env nem servidor Metro (builds EAS)
 const PROD_BASE_URL = "https://economize-api.onrender.com/api/v1";
@@ -41,73 +53,129 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Versão e plataforma em TODA requisição: é o que permite ao servidor
+    // recusar (426) um app velho demais para o contrato atual, em vez de
+    // responder um shape que a tela não sabe ler
+    config.headers["X-App-Version"] = APP_VERSION;
+    config.headers["X-App-Platform"] = platformHeader();
     return config;
   },
   (error) => Promise.reject(error),
 );
 
-// Interceptor de Resposta 
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as any;
+// Interceptor de Resposta
+//
+// Quem LÊ a falha é `describeRequestFailure`; aqui só se decide o que fazer
+// com ela. A regra é uma: toast só quando o USUÁRIO agiu (POST/PUT/PATCH/
+// DELETE) ou quando a sessão caiu. GET que falha fica em silêncio — a tela
+// que pediu mostra o `ErrorState` com "tentar de novo", e uma frase no lugar
+// explica mais do que um toast global que some em quatro segundos. A versão
+// anterior gritava "servidores instáveis" para qualquer 5xx de qualquer GET,
+// três vezes por cold start, e o usuário lia culpa onde havia só um
+// container subindo.
+const USER_ACTION_METHODS = new Set(["post", "put", "patch", "delete"]);
 
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      const { useAuthStore } = require("../store/authStore");
-      useAuthStore.getState().logout();
-      useToastStore
-        .getState()
-        .showToast("Sua sessão expirou. Faça login novamente.", "warning");
+/** Teto para esperar um `Retry-After` em silêncio; acima disso, avisa. */
+const RATE_LIMIT_SILENT_WAIT_S = 5;
+/** Pausa antes da única repetição silenciosa de um 5xx. */
+const SERVER_RETRY_BACKOFF_MS = 1000;
+
+type RetryableRequest = InternalAxiosRequestConfig & {
+  _wakeAttempted?: boolean;
+  _retried?: boolean;
+};
+
+function isUserAction(config: RetryableRequest | undefined): boolean {
+  return USER_ACTION_METHODS.has((config?.method ?? "get").toLowerCase());
+}
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// "Você está offline" sai UMA vez por queda: o flag só volta a zero quando
+// uma resposta chega de fato — não a cada dez segundos enquanto a rede não
+// volta
+let offlineNoticed = false;
+
+api.interceptors.response.use(
+  (response) => {
+    offlineNoticed = false;
+    return response;
+  },
+  async (error: AxiosError) => {
+    const originalRequest = error.config as RetryableRequest | undefined;
+    const failure = describeRequestFailure(error);
+    const { showToast } = useToastStore.getState();
+
+    // 426: o servidor não fala mais com esta versão. Nem retry nem toast —
+    // quem assume é o gate de atualização, e o corpo (ProblemDetail) já traz
+    // a versão mínima e o endereço do download. Import tardio pelo mesmo
+    // motivo do authStore abaixo: o store de versão importa esta API.
+    if (failure.kind === "upgrade") {
+      const { useVersionStore } = require("../store/versionStore");
+      useVersionStore.getState().markUpgradeRequired(error.response?.data);
       return Promise.reject(error);
     }
 
-    // Sem resposta nenhuma (timeout ou conexão recusada) é o sintoma do
-    // container hibernado. Em vez de repetir contra um servidor que ainda nem
-    // subiu, espera o health responder — com aviso na tela — e refaz uma vez.
-    const looksAsleep = !error.response || error.code === "ECONNABORTED";
-    if (looksAsleep && originalRequest && !originalRequest._wakeAttempted) {
+    if (failure.kind === "unauthorized") {
+      const { useAuthStore } = require("../store/authStore");
+      useAuthStore.getState().logout();
+      showToast(failure.message, "warning");
+      return Promise.reject(error);
+    }
+
+    if (failure.kind === "offline") {
+      if (!offlineNoticed) {
+        offlineNoticed = true;
+        showToast(failure.message, "warning");
+      }
+      return Promise.reject(error);
+    }
+
+    // Servidor acordando (sem resposta, ou 502/503 do proxy da hospedagem):
+    // em vez de repetir contra um container que ainda nem subiu, espera o
+    // health responder — com o aviso do serverStore na tela — e refaz UMA vez
+    if (
+      failure.kind === "waking" &&
+      originalRequest &&
+      !originalRequest._wakeAttempted
+    ) {
       originalRequest._wakeAttempted = true;
       const awake = await waitForServer(healthUrlFrom(getBaseUrl()));
       if (awake) return api(originalRequest);
     }
 
-    const isNetworkOrServerError =
-      !error.response || error.response.status >= 500;
-
-    // error.config pode vir undefined (falha antes do request montar);
-    // sem essa guarda o TypeError aqui mascarava o erro original
+    // 429 com prazo curto: espera o que o servidor pediu e repete em silêncio
     if (
-      isNetworkOrServerError &&
+      failure.kind === "rate-limited" &&
       originalRequest &&
-      (originalRequest._retryCount ?? 0) < 2
+      !originalRequest._retried &&
+      failure.retryAfterSeconds !== null &&
+      failure.retryAfterSeconds <= RATE_LIMIT_SILENT_WAIT_S
     ) {
-      originalRequest._retryCount = (originalRequest._retryCount ?? 0) + 1;
-
-      const backoffTime = originalRequest._retryCount * 1000;
-      console.warn(
-        `[API] Falha na requisição. Tentativa ${originalRequest._retryCount} em ${backoffTime}ms...`,
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, backoffTime));
-      return api(originalRequest); // Tenta novamente
+      originalRequest._retried = true;
+      await sleep(failure.retryAfterSeconds * 1000);
+      return api(originalRequest);
     }
 
-    // Tratamento Global de Erros
-    if (error.code === "ECONNABORTED") {
-      useToastStore
-        .getState()
-        .showToast("A conexão demorou muito. Verifique sua internet.", "error");
-    } else if (!error.response) {
-      useToastStore
-        .getState()
-        .showToast("Sem conexão com o servidor. Você está offline?", "error");
-    } else if (error.response.status >= 500) {
-      useToastStore
-        .getState()
-        .showToast(
-          "Nossos servidores estão instáveis no momento. Tente mais tarde.",
-          "error",
-        );
+    // 5xx que não é hibernação: uma repetição, em silêncio. `error.config`
+    // pode vir undefined (falha antes do request montar); sem a guarda o
+    // TypeError aqui mascarava o erro original
+    if (
+      failure.kind === "server" &&
+      originalRequest &&
+      !originalRequest._retried
+    ) {
+      originalRequest._retried = true;
+      await sleep(SERVER_RETRY_BACKOFF_MS);
+      return api(originalRequest);
+    }
+
+    // Daqui para baixo a repetição já foi feita (ou não cabia). Só a AÇÃO do
+    // usuário ganha toast — e no tom certo: 429 e servidor acordando são
+    // informação, não alarme vermelho
+    if (isUserAction(originalRequest) && failure.retryable) {
+      showToast(failure.message, failure.kind === "server" ? "error" : "info");
     }
 
     return Promise.reject(error);
@@ -518,21 +586,33 @@ export const getBankTransactions = async (): Promise<BankTransaction[]> => {
   return response.data;
 };
 
-// --- Conector Open Finance (Meu Pluggy) ---
+// --- Conector Open Finance ---
+//
+// Nenhum nome de provedor daqui para baixo, nem nas rotas: o usuário só
+// precisa saber que pode conectar o banco, e quem faz os trâmites somos nós.
+// É também o que deixa o app trocar de provedor sem mexer em tela nenhuma.
 
-export interface PluggyStatus {
-  /** Flag PLUGGY_ENABLED no servidor. Falso esconde a seção inteira. */
+export interface ConnectorStatus {
+  /** Conector ligado no servidor. Falso esconde a seção inteira. */
   enabled: boolean;
   /** As credenciais são de uma pessoa só; `owner` diz se é esta conta. */
   owner?: boolean;
-  /** Tem clientId, clientSecret e ao menos um item configurado. */
+  /** Tem credenciais e ao menos um item configurado. */
   configured: boolean;
   itemCount: number;
+  /** Quem opera a conexão por trás. Não vai para a tela. */
+  provider?: { id: string; displayName: string } | null;
+  /**
+   * O script do widget que a ponte (`public/conectar-banco.html`) carrega, e
+   * o tipo dele. Vem do servidor justamente para a ponte não conhecer
+   * provedor nenhum.
+   */
+  widget?: { scriptUrl: string; kind: string } | null;
 }
 
-export const getPluggyStatus = async (): Promise<PluggyStatus> => {
+export const getConnectorStatus = async (): Promise<ConnectorStatus> => {
   try {
-    const response = await api.get<PluggyStatus>("/connectors/pluggy/status");
+    const response = await api.get<ConnectorStatus>("/connectors/status");
     return response.data;
   } catch {
     // Conector é opcional: falhar aqui não pode derrubar a tela de extrato
@@ -540,63 +620,68 @@ export const getPluggyStatus = async (): Promise<PluggyStatus> => {
   }
 };
 
-export const syncPluggy = async (
+export const syncConnector = async (
   days = 90,
 ): Promise<StatementUploadResult> => {
   // Mesma janela do upload: a sincronização passa pelo mesmo pipeline e pode
   // levar dezenas de segundos com 90 dias de histórico
   const response = await api.post<StatementUploadResult>(
-    "/connectors/pluggy/sync",
+    "/connectors/sync",
     null,
     { params: { days }, timeout: 180000 },
   );
   return response.data;
 };
 
-/** Uma conexão de banco do usuário. `itemId` é o id no agregador. */
-export interface PluggyItem {
+/**
+ * Uma conexão de banco do usuário. `itemId` é o id no agregador, e
+ * `connectorName` é o nome do CONECTOR lá — nunca vai para a tela: quem
+ * nomeia a conexão para o usuário é `institution`.
+ */
+export interface ConnectorItem {
   id: string;
   itemId: string;
   connectorId: number | null;
   connectorName: string | null;
+  institution?: string | null;
   createdAt: string;
   lastSyncedAt: string | null;
 }
 
 /**
- * Token de sessão do Pluggy Connect, com validade curta. Ele NÃO dá acesso a
- * dados de outros usuários e nasce amarrado a esta conta — por isso pode
- * trafegar até o navegador que abre o widget.
+ * Token de sessão do widget, com validade curta. Ele NÃO dá acesso a dados de
+ * outros usuários e nasce amarrado a esta conta — por isso pode trafegar até
+ * o navegador que abre o widget.
  */
-export const createPluggyConnectToken = async (): Promise<string> => {
+export const createConnectToken = async (): Promise<string> => {
   const response = await api.post<{ accessToken: string }>(
-    "/connectors/pluggy/connect-token",
+    "/connectors/connect-token",
   );
   return response.data.accessToken;
 };
 
-export const listPluggyItems = async (): Promise<PluggyItem[]> => {
-  const response = await api.get<PluggyItem[]>("/connectors/pluggy/items");
+export const listConnectorItems = async (): Promise<ConnectorItem[]> => {
+  const response = await api.get<ConnectorItem[]>("/connectors/items");
   return response.data;
 };
 
 /**
- * Registra a conexão recém-criada no Pluggy Connect. O servidor confere que o
- * item pertence a esta sessão antes de gravar: item de outra sessão responde
- * 404 e item já registrado responde 409.
+ * Registra a conexão recém-criada no widget. O servidor confere que o item
+ * pertence a esta sessão antes de gravar: item de outra sessão responde 404 e
+ * item já registrado responde 409.
  */
-export const registerPluggyItem = async (
+export const registerConnectorItem = async (
   itemId: string,
-): Promise<PluggyItem> => {
-  const response = await api.post<PluggyItem>("/connectors/pluggy/items", {
+): Promise<ConnectorItem> => {
+  const response = await api.post<ConnectorItem>("/connectors/items", {
     itemId,
   });
   return response.data;
 };
 
 /** Desvincula do app. Não apaga o histórico já importado nem o item no agregador. */
-export const unlinkPluggyItem = async (id: string): Promise<void> => {
-  await api.delete(`/connectors/pluggy/items/${id}`);
+export const unlinkConnectorItem = async (id: string): Promise<void> => {
+  await api.delete(`/connectors/items/${id}`);
 };
 
 // --- Contas de origem e faturas (EC-113) ---
@@ -738,6 +823,46 @@ export const getReviewQueue = async (
     params: uploadId ? { uploadId } : undefined,
   });
   return response.data;
+};
+
+export interface RecategorizeOutcome {
+  /** Linhas pendentes que o motor reexaminou. */
+  reviewed: number;
+  /** Quantas ganharam uma sugestão que não tinham. */
+  resolved: number;
+  /** Quantas seguem sem resposta — decisão do usuário. */
+  stillPending: number;
+  /** Quantas foram resolvidas pelo modelo, e não pelo vocabulário. */
+  resolvedByAi: number;
+}
+
+/**
+ * Reexamina a fila com o motor de hoje.
+ *
+ * A categorização só acontecia na importação: uma palavra nova no vocabulário
+ * (ou uma regra aprendida numa correção) valia para o próximo arquivo e nunca
+ * alcançava o extrato que já estava no banco. Não toca no que o usuário
+ * confirmou.
+ */
+export const recategorizePending = async (): Promise<RecategorizeOutcome> => {
+  const response = await api.post<RecategorizeOutcome>(
+    "/transactions/review/recategorize",
+  );
+  return response.data;
+};
+
+/**
+ * Quantas transações esperam revisão — só o número.
+ *
+ * A Home escreve "N transações esperando você" e não desenha nenhuma delas.
+ * Buscando a fila inteira, isso custava 92 KB agrupados (1.656 pendentes) e
+ * 2,1 s a cada abertura do app. A tela de revisão continua usando a fila.
+ */
+export const getReviewCount = async (): Promise<number> => {
+  const response = await api.get<{ count: number }>(
+    "/transactions/review/count",
+  );
+  return response.data.count;
 };
 
 export const applyReview = async (
@@ -1150,6 +1275,26 @@ export const getUserMe = async (): Promise<UserMe> => {
 
 export const updateUserMe = async (name: string): Promise<UserMe> => {
   const response = await api.patch<UserMe>("/users/me", { name });
+  return response.data;
+};
+
+/** Os três contadores do hub do Perfil — só os números. */
+export interface UserStats {
+  bankTransactions: number;
+  walletTransactions: number;
+  reports: number;
+}
+
+/**
+ * Contadores do Perfil.
+ *
+ * A tela mostrava os três números somando o `length` das três listas — e para
+ * isso baixava o extrato inteiro (100 KB para 1.752 linhas), a carteira e os
+ * relatórios em toda abertura, o que fazia do Perfil uma das telas mais lentas
+ * do app (3,6 s medidos). Aqui o servidor conta.
+ */
+export const getUserStats = async (): Promise<UserStats> => {
+  const response = await api.get<UserStats>("/users/me/stats");
   return response.data;
 };
 
@@ -1753,4 +1898,455 @@ export const rotateMfaRecoveryCodes = async (): Promise<string[]> => {
 /** Desligar pede a SENHA, e não um código — ver o DTO no servidor. */
 export const disableMfa = async (password: string): Promise<void> => {
   await api.post("/mfa/disable", { password });
+};
+
+// --- Versão mínima ---
+
+/** Resposta pública de `GET /app/version`. */
+export interface VersionInfo {
+  /** Abaixo disto o servidor recusa (426). */
+  minVersion: string;
+  /** A última publicada — acima da mínima é aviso, não bloqueio. */
+  latestVersion: string;
+  /** Página de download (a `baixar.html` do site). */
+  downloadUrl: string;
+  storeUrl: string | null;
+  /** APK direto, quando publicado; `null` enquanto não há. */
+  apkUrl?: string | null;
+  message?: string | null;
+  apiVersion?: string;
+  schemaVersion?: string;
+}
+
+/** O ProblemDetail que acompanha o 426. Tudo opcional: é corpo de erro. */
+export interface UpgradeRequiredProblem {
+  type?: string;
+  title?: string;
+  detail?: string;
+  minVersion?: string;
+  downloadUrl?: string;
+}
+
+// Curto de propósito: a consulta roda na abertura do app e não pode segurar
+// nada. Se a API estiver hibernada, o poll do serverStore acorda ela pela
+// primeira requisição de verdade — esta aqui só falha em silêncio e tenta na
+// próxima abertura
+const VERSION_CHECK_TIMEOUT_MS = 8000;
+
+/**
+ * Consulta de versão. Vai pelo axios CRU, e não pela instância `api`, por
+ * três razões: não leva token (a rota é pública), não pode disparar o aviso
+ * de "acordando o servidor" nem os retries do interceptor (é checagem de
+ * fundo), e o 426 dela não faz sentido — é ela quem diz o que é 426.
+ */
+export const getAppVersion = async (): Promise<VersionInfo> => {
+  const response = await axios.get<VersionInfo>(`${getBaseUrl()}/app/version`, {
+    timeout: VERSION_CHECK_TIMEOUT_MS,
+    headers: versionHeaders(),
+  });
+  return response.data;
+};
+
+// --- Plano (Gratuito × Plus) ---
+
+export type PlanId = "FREE" | "PLUS";
+
+export interface PlanOption {
+  id: PlanId;
+  name: string;
+  /** Em reais por mês; zero no gratuito. */
+  priceMonthly: number;
+  features: string[];
+}
+
+export interface PlansResponse {
+  current: PlanId;
+  plans: PlanOption[];
+  /** Enquanto `false`, o app só registra interesse — não há como pagar. */
+  checkoutAvailable: boolean;
+  interestRegistered: boolean;
+}
+
+export const getPlans = async (): Promise<PlansResponse> => {
+  const response = await api.get<PlansResponse>("/plans");
+  return response.data;
+};
+
+/** "Tenho interesse": 204, sem corpo. Repetir é idempotente no servidor. */
+export const registerPlanInterest = async (plan: PlanId): Promise<void> => {
+  await api.post("/plans/interest", { plan });
+};
+
+/**
+ * Os campos de plano que `GET /users/me` passou a devolver. Declarados aqui,
+ * à parte, e não dentro de `UserMe`, para a mudança ficar no fim do arquivo
+ * (é a regra desta rodada: o miolo está sendo reescrito em paralelo). Quando
+ * a rodada fechar, o natural é mudá-los para dentro de `UserMe`. Todos
+ * opcionais porque o servidor pode ser mais velho que o app: sem eles, o app
+ * assume gratuito com anúncios.
+ */
+export interface UserPlanFields {
+  plan?: PlanId;
+  /** Até quando o Plus vale; `null` no gratuito e no Plus sem prazo. */
+  planUntil?: string | null;
+  adsEnabled?: boolean;
+}
+
+/** O perfil como o servidor NOVO o devolve — é o que `getUserMe` traz na prática. */
+export type UserMeWithPlan = UserMe & UserPlanFields;
+// ---------------------------------------------------------- Investimentos
+
+/**
+ * De onde uma posição veio. As três fontes convivem na mesma lista, e a tela
+ * nunca esconde qual é qual: só a MANUAL pode ser editada por aqui — as outras
+ * são espelho do banco, e mexer no espelho não muda o que está no banco.
+ */
+export type InvestmentSource = "CONNECTOR" | "STATEMENT" | "MANUAL";
+
+export type InvestmentType =
+  | "FIXED_INCOME"
+  | "TREASURY"
+  | "FUND"
+  | "EQUITY"
+  | "ETF"
+  | "CRYPTO"
+  | "PENSION"
+  | "OTHER";
+
+/** Ao que a rentabilidade está atrelada. `NONE` é ativo sem indexador (ação, cripto). */
+export type InvestmentIndexer =
+  | "CDI"
+  | "SELIC"
+  | "IPCA"
+  | "PREFIXADO"
+  | "USD"
+  | "NONE";
+
+export interface InvestmentTypeShare {
+  type: InvestmentType;
+  label: string;
+  currentValue: number;
+  /** Fração de 0 a 1 do valor atual total. */
+  share: number;
+}
+
+export interface InvestmentInstitutionShare {
+  institution: string;
+  currentValue: number;
+  share: number;
+}
+
+export interface InvestmentIndexerShare {
+  indexer: InvestmentIndexer;
+  currentValue: number;
+  share: number;
+}
+
+export interface InvestmentMovementTotals {
+  applied: number;
+  redeemed: number;
+  yield: number;
+}
+
+export interface InvestmentSummary {
+  totalInvested: number;
+  currentValue: number;
+  profit: number;
+  /** Nulo quando não há base de custo — zero afirmaria "nada rendeu". */
+  profitPercent: number | null;
+  positionsCount: number;
+  byType: InvestmentTypeShare[];
+  byInstitution: InvestmentInstitutionShare[];
+  byIndexer: InvestmentIndexerShare[];
+  updatedAt: string | null;
+  /** Quantas posições estão com a data de posição vencida (ver `stale`). */
+  stalePositions: number;
+  sources: InvestmentSource[];
+  /**
+   * Códigos das posições manuais em moeda estrangeira: elas só ganham valor
+   * em reais quando a cotação do papel chega (`getForeignQuote`).
+   */
+  needsQuote: string[];
+  movements12m: InvestmentMovementTotals & { net: number };
+}
+
+export interface InvestmentPosition {
+  id: string;
+  source: InvestmentSource;
+  institution: string | null;
+  accountId: string | null;
+  name: string;
+  /** Ticker ou código do papel; nulo em CDB/fundo sem código negociável. */
+  code: string | null;
+  type: InvestmentType;
+  /** Recorte livre do servidor (CDB, LCI, TESOURO_SELIC, FII...). */
+  subtype: string | null;
+  indexer: InvestmentIndexer | null;
+  /** Taxa na gramática do indexador: 110 (% do CDI), 6.2 (IPCA + 6,2% a.a.). */
+  rate: number | null;
+  /** ISO 4217; nulo vale BRL. */
+  currency: string | null;
+  quantity: number | null;
+  unitPrice: number | null;
+  investedAmount: number | null;
+  /** Em reais para tudo que vem do banco; na manual em moeda estrangeira pode vir nulo. */
+  currentValue: number | null;
+  maturityDate: string | null;
+  positionDate: string | null;
+  updatedAt: string | null;
+  /** A data de posição ficou para trás: o valor é de um dia que já passou. */
+  stale: boolean;
+}
+
+/** Corpo do cadastro manual. Só `name` e `type` são obrigatórios no servidor. */
+export interface InvestmentPositionPayload {
+  name: string;
+  type: InvestmentType;
+  subtype?: string | null;
+  code?: string | null;
+  indexer?: InvestmentIndexer | null;
+  rate?: number | null;
+  currency?: string | null;
+  quantity?: number | null;
+  unitPrice?: number | null;
+  investedAmount?: number | null;
+  currentValue?: number | null;
+  maturityDate?: string | null;
+  institution?: string | null;
+}
+
+export type InvestmentMovementKind = "APPLY" | "REDEEM" | "YIELD" | "OTHER";
+
+/** Lançamento do extrato que o servidor reconheceu como movimento de investimento. */
+export interface InvestmentMovement {
+  transactionId: string;
+  date: string;
+  kind: InvestmentMovementKind;
+  amount: number;
+  description: string;
+  institution: string | null;
+  accountId: string | null;
+}
+
+export interface InvestmentMovements {
+  items: InvestmentMovement[];
+  totals: InvestmentMovementTotals;
+  /** Aplicado menos resgatado na janela. */
+  netInvested: number;
+}
+
+export interface InvestmentSyncResult {
+  synced: boolean;
+  created: number;
+  updated: number;
+  itemsRead: number;
+  skippedItems: number;
+}
+
+export type InvestmentInterestKind = "RATE" | "INDEX" | "CURRENCY" | "TICKER";
+
+/** Um indicador que o usuário acompanha. `market` só faz sentido em TICKER. */
+export interface InvestmentInterest {
+  kind: InvestmentInterestKind;
+  code: string;
+  market?: string | null;
+}
+
+/**
+ * O perfil do investidor, derivado do que ele TEM (posições, movimentos) e
+ * do que pediu para acompanhar. É ele que decide quais indicadores aparecem,
+ * quais títulos do Tesouro são relevantes e quais tópicos entram no radar.
+ * `isDefault` marca o perfil genérico de quem ainda não tem nada.
+ */
+export interface InvestmentProfile {
+  indexers: InvestmentIndexer[];
+  watch: InvestmentInterest[];
+  topics: string[];
+  derivedFrom: {
+    positions: number;
+    movements: number;
+    manualInterests: number;
+  };
+  isDefault: boolean;
+}
+
+export type MacroIndicatorCode =
+  | "CDI"
+  | "SELIC"
+  | "IPCA_MES"
+  | "IPCA_12M"
+  | "USD_PTAX"
+  | "POUPANCA"
+  | "IGPM";
+
+export interface MacroIndicator {
+  code: MacroIndicatorCode;
+  name: string;
+  value: number;
+  /** "% a.a.", "%" ou "BRL" — decide o formato na tela. */
+  unit: string;
+  referenceDate: string;
+  source: string;
+  asOf: string;
+  /** O provedor não atualizou hoje: a tela diz de que dia é o número. */
+  stale: boolean;
+}
+
+export type TreasuryIndexer = "SELIC" | "IPCA" | "PREFIXADO" | "OTHER";
+
+export interface TreasuryBond {
+  name: string;
+  indexer: TreasuryIndexer;
+  maturity: string;
+  annualRateBuy: number | null;
+  annualRateSell: number | null;
+  unitPriceBuy: number | null;
+  unitPriceSell: number | null;
+  minInvestment: number | null;
+  asOf: string;
+  source: string;
+}
+
+/** Cotação de papel no exterior, já com a conversão para reais quando o servidor tem o câmbio. */
+export interface ForeignQuote {
+  symbol: string;
+  market: string;
+  price: number;
+  currency: string;
+  priceBrl: number | null;
+  change: number | null;
+  changePercent: number | null;
+  date: string;
+  source: string;
+  asOf: string;
+  stale: boolean;
+}
+
+export interface NewsTopic {
+  id: string;
+  label: string;
+}
+
+/** Manchete do radar: o mesmo artigo de hoje, com os tópicos que o trouxeram. */
+export interface TopicNewsArticle extends NewsArticle {
+  topics: string[];
+}
+
+export interface TopicNewsResponse {
+  status: string;
+  totalResults: number;
+  articles: TopicNewsArticle[];
+  updatedAt: string | null;
+}
+
+export const getInvestmentSummary = async (): Promise<InvestmentSummary> => {
+  const response = await api.get<InvestmentSummary>("/investments/summary");
+  return response.data;
+};
+
+export const getInvestmentPositions = async (): Promise<InvestmentPosition[]> => {
+  const response = await api.get<InvestmentPosition[]>("/investments/positions");
+  return response.data;
+};
+
+export const createInvestmentPosition = async (
+  payload: InvestmentPositionPayload,
+): Promise<InvestmentPosition> => {
+  const response = await api.post<InvestmentPosition>(
+    "/investments/positions",
+    payload,
+  );
+  return response.data;
+};
+
+/** Só posição MANUAL aceita PATCH; as outras respondem 409 no servidor. */
+export const updateInvestmentPosition = async (
+  id: string,
+  patch: Partial<InvestmentPositionPayload>,
+): Promise<InvestmentPosition> => {
+  const response = await api.patch<InvestmentPosition>(
+    `/investments/positions/${id}`,
+    patch,
+  );
+  return response.data;
+};
+
+export const deleteInvestmentPosition = async (id: string): Promise<void> => {
+  await api.delete(`/investments/positions/${id}`);
+};
+
+export const getInvestmentMovements = async (
+  months = 12,
+): Promise<InvestmentMovements> => {
+  const response = await api.get<InvestmentMovements>("/investments/movements", {
+    params: { months },
+  });
+  return response.data;
+};
+
+/** 503 quando o conector está desligado — o chamador traduz pelo status. */
+export const syncInvestments = async (): Promise<InvestmentSyncResult> => {
+  const response = await api.post<InvestmentSyncResult>("/investments/sync");
+  return response.data;
+};
+
+export const getInvestmentProfile = async (): Promise<InvestmentProfile> => {
+  const response = await api.get<InvestmentProfile>("/investments/profile");
+  return response.data;
+};
+
+/** 204; repetir um interesse já existente é idempotente no servidor. */
+export const addInvestmentInterest = async (
+  interest: InvestmentInterest,
+): Promise<void> => {
+  await api.post("/investments/interests", interest);
+};
+
+export const removeInvestmentInterest = async (
+  kind: InvestmentInterestKind,
+  code: string,
+): Promise<void> => {
+  await api.delete(
+    `/investments/interests/${kind}/${encodeURIComponent(code)}`,
+  );
+};
+
+export const getMacroIndicators = async (): Promise<MacroIndicator[]> => {
+  const response = await api.get<MacroIndicator[]>("/indicators/macro");
+  return response.data;
+};
+
+export const getTreasuryBonds = async (): Promise<TreasuryBond[]> => {
+  const response = await api.get<TreasuryBond[]>("/indicators/treasury");
+  return response.data;
+};
+
+export const getForeignQuote = async (
+  symbol: string,
+  market = "US",
+): Promise<ForeignQuote> => {
+  const response = await api.get<ForeignQuote>(
+    `/indicators/quote/${encodeURIComponent(symbol)}`,
+    { params: { market } },
+  );
+  return response.data;
+};
+
+export const getNewsTopics = async (): Promise<NewsTopic[]> => {
+  const response = await api.get<NewsTopic[]>("/news/topics");
+  return response.data;
+};
+
+/**
+ * Manchetes filtradas pelos tópicos do perfil. Os ids vão numa lista
+ * separada por vírgula, que é a gramática que o servidor lê.
+ */
+export const getNewsByTopics = async (
+  topics: string[],
+  limit = 5,
+): Promise<TopicNewsResponse> => {
+  const response = await api.get<TopicNewsResponse>("/news/top-headlines", {
+    params: { topics: topics.join(","), limit },
+  });
+  return response.data;
 };
