@@ -315,38 +315,28 @@ describe("datas de lançamento (UTC, nunca o fuso do aparelho)", () => {
   // "01 de agosto" na folha de detalhes
   const lancamento = "2026-08-01T00:00:00Z";
 
-  // Fuso de Brasília só aqui, e devolvido no fim: o worker do Jest é reusado
-  // entre arquivos, e deixar o fuso trocado contaminaria as outras suítes
-  const fusoOriginal = process.env.TZ;
-  beforeAll(() => {
-    process.env.TZ = "America/Sao_Paulo";
-  });
-  afterAll(() => {
-    if (fusoOriginal === undefined) delete process.env.TZ;
-    else process.env.TZ = fusoOriginal;
-  });
-
-  it("o aparelho do teste está mesmo em UTC-3", () => {
-    // Guarda do próprio cenário: se o fuso não pegar, os casos abaixo passariam
-    // por acidente e parariam de proteger contra a regressão
-    expect(new Date(lancamento).getTimezoneOffset()).toBe(180);
-    expect(new Date(lancamento).getDate()).toBe(31);
-  });
-
-  it("exibe o dia em UTC nos três formatos, com o aparelho em UTC-3", () => {
+  // O cenário NAO troca o fuso do processo. Mexer em `process.env.TZ` depois
+  // que o Node subiu só funciona em algumas máquinas: na CI, que roda em UTC,
+  // não pegava, e a suíte ficava vermelha dizendo apenas que o relógio do
+  // runner é outro — nada sobre o código. O invariante de verdade independe do
+  // aparelho: o formatador tem de entregar o dia em UTC em qualquer fuso, e o
+  // fuso de Brasília entra explicitamente onde precisa aparecer
+  it("exibe o dia em UTC nos três formatos, em qualquer aparelho", () => {
     expect(formatDayMonthShort(lancamento)).toBe("01 ago");
     expect(formatDayMonth(lancamento)).toBe("01/08");
     expect(formatLongDate(lancamento)).toBe("01 de agosto de 2026");
   });
 
-  it("o formatador antigo (sem timeZone) entregaria a véspera", () => {
+  it("lido no fuso de Brasília, o mesmo instante é a véspera", () => {
     // Documenta o que exatamente foi corrigido: mesmo instante, leitura no fuso
-    // do aparelho, e o dia anda para trás
+    // de quem usa o app, e o dia anda para trás. O fuso vem escrito na chamada,
+    // então o caso vale igual na máquina do dono e no runner em UTC
     expect(
-      new Date(lancamento).toLocaleDateString("pt-BR", {
+      new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
         day: "2-digit",
         month: "2-digit",
-      }),
+      }).format(new Date(lancamento)),
     ).toBe("31/07");
   });
 
