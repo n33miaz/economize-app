@@ -1,6 +1,7 @@
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Pressable, Text, TouchableOpacity, View } from "react-native";
 import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
+import PiggyBank from "lucide-react-native/dist/esm/icons/piggy-bank";
 
 import type { AccountInvoice, BankTransaction, Category } from "../services/api";
 import type { AppTheme } from "../theme/colors";
@@ -24,6 +25,7 @@ import {
   transactionDisplayName,
   transactionOriginalName,
 } from "../utils/transactions";
+import { describeCoverage, readReserve } from "../utils/invoiceReserve";
 import CategoryIcon from "./CategoryIcon";
 
 interface InvoiceCardProps {
@@ -34,6 +36,12 @@ interface InvoiceCardProps {
   onToggle: () => void;
   onOpenTransaction: (transaction: BankTransaction) => void;
   categories: Map<string, Category>;
+  /**
+   * Abre a folha de reserva desta fatura (EC-181). Sem a prop, o card apenas
+   * MOSTRA o que já está separado — quem não oferece a edição não ganha um
+   * botão que não faz nada.
+   */
+  onEditReserve?: (invoice: AccountInvoice) => void;
 }
 
 /**
@@ -61,6 +69,7 @@ export default function InvoiceCard({
   onToggle,
   onOpenTransaction,
   categories,
+  onEditReserve,
 }: InvoiceCardProps) {
   const t = useTheme();
   const open = invoice.open;
@@ -68,6 +77,8 @@ export default function InvoiceCard({
   const breakdown = invoiceBreakdown(invoice);
   const due = invoiceDueLabel(invoice);
   const count = invoice.transactionCount;
+  const reserve = invoice.reserve;
+  const reading = readReserve(invoice);
 
   return (
     <View
@@ -250,6 +261,72 @@ export default function InvoiceCard({
             </View>
           ))}
         </View>
+
+        {/* Reserva (EC-181): dinheiro que JÁ está separado para esta fatura.
+            Fica FORA da fileira de chips de propósito — aqueles três são do
+            que o ciclo gerou, e reserva não é lançamento: nada saiu da conta */}
+        {reserve && reading ? (
+          <Pressable
+            onPress={onEditReserve ? () => onEditReserve(invoice) : undefined}
+            disabled={!onEditReserve}
+            accessibilityRole={onEditReserve ? "button" : undefined}
+            accessibilityLabel={`Reservado ${formatBRL(reserve.amount)}${
+              reserve.heldInAccountName ? ` em ${reserve.heldInAccountName}` : ""
+            }, ${describeCoverage(reading)}${
+              onEditReserve ? ". Tocar para alterar" : ""
+            }`}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: spacing[2],
+              paddingHorizontal: spacing[3],
+              paddingVertical: spacing[2],
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: t.border.subtle,
+              backgroundColor: t.background.elevated,
+            }}
+          >
+            <PiggyBank size={16} color={t.chart.up} />
+            <Text
+              style={{
+                color: t.text.primary,
+                fontSize: 12,
+                fontWeight: "700",
+                marginLeft: spacing[2],
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {formatBRL(reserve.amount)}
+            </Text>
+            <Text
+              style={{ color: t.text.tertiary, fontSize: 12, marginLeft: spacing[2] }}
+              numberOfLines={1}
+            >
+              separado · {describeCoverage(reading)}
+              {reserve.heldInAccountName ? ` · ${reserve.heldInAccountName}` : ""}
+            </Text>
+          </Pressable>
+        ) : onEditReserve ? (
+          <Pressable
+            onPress={() => onEditReserve(invoice)}
+            accessibilityRole="button"
+            accessibilityLabel="Separar dinheiro para esta fatura"
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: spacing[2],
+              paddingVertical: spacing[1],
+            }}
+          >
+            <PiggyBank size={14} color={t.text.tertiary} />
+            <Text
+              style={{ color: t.text.tertiary, fontSize: 12, marginLeft: spacing[2] }}
+            >
+              Separar dinheiro para esta fatura
+            </Text>
+          </Pressable>
+        ) : null}
       </TouchableOpacity>
 
       {expanded && (

@@ -12,7 +12,11 @@ import Landmark from "lucide-react-native/dist/esm/icons/landmark";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
 
-import type { BankTransaction, ConnectorAccount } from "../services/api";
+import type {
+  AccountInvoice,
+  BankTransaction,
+  ConnectorAccount,
+} from "../services/api";
 import { DEFAULT_INVOICE_MONTHS, useAccountsStore } from "../store/accountsStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { useBreakpoint } from "../hooks/useBreakpoint";
@@ -36,6 +40,7 @@ import BlockGrid from "../components/BlockGrid";
 import ErrorState from "../components/ErrorState";
 import FilterChipRow from "../components/FilterChipRow";
 import InvoiceCard from "../components/InvoiceCard";
+import InvoiceReserveSheet from "../components/InvoiceReserveSheet";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
@@ -180,6 +185,10 @@ export default function CreditCards() {
   const [months, setMonths] = useState(String(DEFAULT_INVOICE_MONTHS));
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [detailTx, setDetailTx] = useState<BankTransaction | null>(null);
+  // A fatura sendo coberta pela reserva (EC-181): guardo a fatura inteira, e
+  // não só a referência, porque a folha precisa do total para propor "o valor
+  // exato" e do que já está salvo para abrir preenchida
+  const [reserveFor, setReserveFor] = useState<AccountInvoice | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -619,10 +628,24 @@ export default function CreditCards() {
                 expanded={expandedKey === item.key}
                 onToggle={() => handleToggle(item.key)}
                 onOpenTransaction={setDetailTx}
+                onEditReserve={setReserveFor}
                 categories={categories}
               />
             </View>
           );
+        }}
+      />
+
+      <InvoiceReserveSheet
+        visible={reserveFor !== null}
+        invoice={reserveFor}
+        cardAccountId={selectedId}
+        accounts={accounts}
+        onClose={() => setReserveFor(null)}
+        onSaved={() => {
+          // A reserva volta DENTRO da fatura: recarregar o cartão é o único
+          // jeito de o chip e o valor guardado não discordarem
+          if (selectedId) fetchInvoices(selectedId, Number(months));
         }}
       />
 

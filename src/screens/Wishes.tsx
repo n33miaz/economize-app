@@ -11,7 +11,7 @@ import { spacing } from "../theme/ds";
 import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
-import { formatBRL } from "../utils/money";
+import { formatBRL, parseAmount } from "../utils/money";
 import {
   describeHourlyRate,
   describeWhatIf,
@@ -40,18 +40,6 @@ const SHEET_PADDING = {
   paddingTop: spacing[3],
   paddingBottom: spacing[6],
 } as const;
-
-/** Aceita "18.000,50" e "18000.50" — ninguém digita moeda de um jeito só. */
-function parseAmount(raw: string): number | null {
-  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
-  if (!cleaned) return null;
-  // Com vírgula, o ponto é separador de milhar; sem vírgula, o ponto é decimal
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
-}
 
 export default function Wishes({ navigation }: any) {
   const t = useTheme();

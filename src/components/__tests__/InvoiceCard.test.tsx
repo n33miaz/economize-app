@@ -25,6 +25,9 @@ function tx(overrides: Partial<BankTransaction> = {}): BankTransaction {
     normalizedDescription: "ifood rest",
     uploadId: null,
     accountId: "acc-cartao",
+    internalTransfer: false,
+    ignored: false,
+    familyTransfer: false,
     ...overrides,
   };
 }
@@ -42,6 +45,7 @@ function invoice(overrides: Partial<AccountInvoice> = {}): AccountInvoice {
     paymentsTotal: 900,
     transactionCount: 1,
     open: false,
+    reserve: null,
     transactions: [tx()],
     ...overrides,
   };

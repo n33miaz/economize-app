@@ -92,3 +92,19 @@ export function formatDecimal(value: number, decimals = 2): string {
     maximumFractionDigits: decimals,
   });
 }
+
+/**
+ * Aceita "18.000,50" e "18000.50" — ninguém digita moeda de um jeito só.
+ * Devolve `null` quando não dá para ler um número, para quem chama decidir a
+ * mensagem: "informe um valor" e "valor inválido" são erros diferentes.
+ */
+export function parseAmount(raw: string): number | null {
+  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
+  if (!cleaned) return null;
+  // Com vírgula, o ponto é separador de milhar; sem vírgula, o ponto é decimal
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
