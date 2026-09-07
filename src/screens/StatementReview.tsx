@@ -250,7 +250,7 @@ function ReviewGroupCard({
                 minHeight: 32,
                 borderRadius: radius.full,
                 paddingHorizontal: spacing[3],
-                paddingVertical: 6,
+                paddingVertical: spacing[2],
                 backgroundColor: resolved
                   ? t.accent.neonMuted
                   : t.semantic.warningMuted,
@@ -361,7 +361,7 @@ function ReviewGroupCard({
                     </Text>
                   </View>
                   {showOrigin && (
-                    <View style={{ marginTop: 3 }}>
+                    <View style={{ marginTop: spacing[1] }}>
                       <OriginBadge
                         accountId={tx.accountId}
                         account={account}
@@ -396,13 +396,24 @@ export default function StatementReview() {
   const insets = useSafeAreaInsets();
   const { reducedMotion } = useMotionPresets();
   const approvePress = usePressScale();
+  const savePress = usePressScale();
   const backPress = usePressScale();
 
   // O projeto não tem ParamList tipado — cast local e pontual
   const uploadId = (route.params as any)?.uploadId as string | undefined;
 
-  const { groups, isLoading, isApplying, error, fetchQueue, apply, confirmAll } =
-    useReviewStore();
+  const {
+    groups,
+    isLoading,
+    isApplying,
+    applyProgress,
+    error,
+    fetchQueue,
+    apply,
+    applyMany,
+    recategorize,
+    confirmAll,
+  } = useReviewStore();
   const applyTransaction = useReviewStore((s) => s.applyTransaction);
   const categories = useCategoriesStore((s) => s.items);
   const fetchCategories = useCategoriesStore((s) => s.fetch);
@@ -461,6 +472,15 @@ export default function StatementReview() {
     () => groups.filter((g) => !g.suggestedCategoryId).length,
     [groups],
   );
+  /** Grupos em que o usuário escolheu a categoria à mão (inclui correções). */
+  const chosenGroups = useMemo(
+    () => groups.filter((g) => choices[groupKey(g)]),
+    [groups, choices],
+  );
+  const chosenTxCount = useMemo(
+    () => chosenGroups.reduce((sum, g) => sum + g.transactions.length, 0),
+    [chosenGroups],
+  );
 
   const subtitle =
     isLoading && groups.length === 0
@@ -494,6 +514,76 @@ export default function StatementReview() {
         categoryId: resolved.id,
       },
     ]);
+  };
+
+  /**
+   * Tudo o que o usuário escolheu à mão, numa tacada.
+   *
+   * Faltava exatamente isto: "Aprovar tudo" confirma o que o MOTOR sugeriu e
+   * não toca nos grupos sem sugestão — que são justamente os que exigem
+   * escolha manual. Sem este botão, cada escolha só entrava pelo ✓ do próprio
+   * grupo, um pedido por grupo, e uma revisão de dezenas de grupos virava
+   * dezenas de cliques (e nenhum jeito de "salvar todos de uma vez").
+   */
+  const handleSaveChoices = async () => {
+    if (isApplying || chosenGroups.length === 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const items = chosenGroups.map((group) => ({
+      transactionIds: group.transactions.map((tx) => tx.id),
+      categoryId: choices[groupKey(group)].id,
+    }));
+
+    const { confirmed, failedItems } = await applyMany(items);
+
+    if (confirmed > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(
+        `${confirmed} ${plural(confirmed, "transação salva", "transações salvas")}.`,
+        failedItems.length > 0 ? "warning" : "success",
+      );
+    }
+
+    if (failedItems.length > 0) {
+      // As escolhas das levas que falharam CONTINUAM na tela: apagá-las aqui
+      // jogaria fora o trabalho que o usuário acabou de fazer
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      showToast(
+        `${failedItems.length} ${plural(failedItems.length, "grupo não foi salvo", "grupos não foram salvos")} — suas escolhas continuam aqui, toque em salvar de novo.`,
+        "warning",
+      );
+      return;
+    }
+
+    // Só as escolhas que entraram saem do estado local
+    setChoices((prev) => {
+      const next = { ...prev };
+      chosenGroups.forEach((group) => delete next[groupKey(group)]);
+      return next;
+    });
+
+    if (useReviewStore.getState().groups.length === 0) navigation.goBack();
+  };
+
+  /**
+   * Pede ao servidor para reexaminar a fila com o motor de hoje.
+   *
+   * O motor só rodava na importação: quem melhorou o vocabulário depois (ou
+   * corrigiu um estabelecimento e ensinou uma regra) via o ganho valer só para
+   * o arquivo seguinte. Com o extrato de dois anos, isso deixava linhas na fila
+   * pedindo decisão manual para lojas que o app já sabia reconhecer.
+   */
+  const handleRecategorize = async () => {
+    if (isApplying) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const outcome = await recategorize();
+    if (outcome.resolved > 0) {
+      // As escolhas locais saem: a fila voltou do servidor com sugestões novas,
+      // e uma escolha antiga apontaria para um grupo que pode nem existir mais
+      setChoices({});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    showToast(outcome.message, outcome.ok ? "success" : "warning");
   };
 
   const handleApproveAll = async () => {
@@ -702,6 +792,64 @@ export default function StatementReview() {
                 : `${uncategorizedCount} grupos sem categoria ficam de fora do aprovar tudo — escolha no chip e confirme.`}
             </Text>
           )}
+          {/* Ação primária quando há escolha manual na tela: é o que o usuário
+              acabou de fazer, e é o que ele quer gravar antes de qualquer
+              coisa. Fica ACIMA do "aprovar tudo" por isso */}
+          {chosenGroups.length > 0 && (
+            <Animated.View style={savePress.pressStyle}>
+              <TouchableOpacity
+                onPress={handleSaveChoices}
+                onPressIn={savePress.onPressIn}
+                onPressOut={savePress.onPressOut}
+                disabled={isApplying}
+                accessibilityLabel={`Salvar as ${chosenGroups.length} categorias que você escolheu, em ${chosenTxCount} transações`}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isApplying }}
+                activeOpacity={0.85}
+                style={{
+                  height: 52,
+                  borderRadius: radius.full,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: t.accent.neon,
+                  opacity: isApplying ? 0.7 : 1,
+                  marginBottom: spacing[2],
+                }}
+              >
+                {isApplying ? (
+                  <View
+                    style={{ flexDirection: "row", alignItems: "center" }}
+                  >
+                    <ActivityIndicator size="small" color={t.text.inverse} />
+                    {applyProgress && (
+                      // O número anda: numa revisão grande, botão parado por
+                      // vinte segundos parece travado
+                      <Text
+                        style={{
+                          color: t.text.inverse,
+                          fontWeight: "700",
+                          fontSize: 14,
+                          marginLeft: spacing[2],
+                        }}
+                      >
+                        {applyProgress.done} de {applyProgress.total}
+                      </Text>
+                    )}
+                  </View>
+                ) : (
+                  <Text
+                    style={{
+                      color: t.text.inverse,
+                      fontWeight: "700",
+                      fontSize: 15,
+                    }}
+                  >
+                    Salvar minhas escolhas ({chosenGroups.length})
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          )}
           {approveTxCount > 0 && (
             <Animated.View style={approvePress.pressStyle}>
               <TouchableOpacity
@@ -737,6 +885,35 @@ export default function StatementReview() {
                 )}
               </TouchableOpacity>
             </Animated.View>
+          )}
+          {/* Antes de escolher na mão: talvez o app já saiba. Discreto porque
+              é atalho, não o caminho principal */}
+          {groups.length > 0 && (
+            <TouchableOpacity
+              onPress={handleRecategorize}
+              disabled={isApplying}
+              accessibilityLabel="Reexaminar a fila com as regras atuais"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isApplying }}
+              activeOpacity={0.7}
+              style={{
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: spacing[1],
+                opacity: isApplying ? 0.5 : 1,
+              }}
+            >
+              <Text
+                style={{
+                  color: t.accent.neon,
+                  fontWeight: "700",
+                  fontSize: 14,
+                }}
+              >
+                Tentar reconhecer automaticamente
+              </Text>
+            </TouchableOpacity>
           )}
           <TouchableOpacity
             onPress={() => navigation.goBack()}
