@@ -260,7 +260,10 @@ export default function AssetListScreen({
               >
                 <HighlightCard
                   title={item.code || item.name}
-                  value={item.points ?? item.buy ?? 0}
+                  // Sem `?? 0`: quem decide como mostrar ausência de preço
+                  // é o card, e ele desenha traço. Zerar aqui afirmava que
+                  // o ativo não vale nada
+                  value={item.points ?? item.buy}
                   variation={item.variation}
                   type={item.type}
                   Icon={
@@ -330,7 +333,10 @@ export default function AssetListScreen({
         // Todo índice é pontuado — não só o IBOVESPA
         displaySymbol = isIndexData(item) ? "pts" : "R$";
       }
-      const displayValue = item.points ?? item.buy ?? 0;
+      // Sem `?? 0`: ausência de cotação chega ao card como ausência, e vira
+      // traço. O catálogo entrega item UNQUOTED de propósito, e era ele que
+      // aparecia valendo R$ 0,00
+      const displayValue = item.points ?? item.buy;
 
       return (
         // O `flex: 1` divide a linha entre as duas colunas; numa coluna só ele

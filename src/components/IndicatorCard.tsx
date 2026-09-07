@@ -40,7 +40,12 @@ const IndicatorCard = React.memo(
     const t = useTheme();
     const { pressStyle, onPressIn, onPressOut } = usePressScale();
 
-    const safeValue = Number(value) || 0;
+    // Ausência de preço é um FATO ("o catálogo não gastou cota com este
+    // ativo"), não o número zero. `Number(null) || 0` apagava essa diferença
+    // e o card afirmava R$ 0,00 com a variação certa ao lado — mesmo defeito
+    // que o EC-151 corrigiu para `points` e não para o preço
+    const hasValue = value != null && Number.isFinite(Number(value));
+    const safeValue = hasValue ? Number(value) : 0;
     const safeVariation = Number(variation) || 0;
 
     const variationInfo = useMemo(() => {
@@ -67,6 +72,9 @@ const IndicatorCard = React.memo(
     }, [type, symbol, code]);
 
     const displayValue = useMemo(() => {
+      // Traço, e não zero: quem lê entende "sem cotação" em vez de
+      // "não vale nada"
+      if (!hasValue) return "—";
       // Índices são pontuados (sem "R$"), no formato pt-BR — pelo tipo, não
       // só pelo símbolo: o catálogo não passa símbolo e mostrava o IBOVESPA
       // como "R$ 179.722,48"
@@ -80,7 +88,7 @@ const IndicatorCard = React.memo(
       // mostra quatro casas, que é o que a cotação de fato tem
       const decimals = safeValue > 0 && safeValue < 0.1 ? 4 : 2;
       return `${symbol} ${formatDecimal(safeValue, decimals)}`;
-    }, [symbol, type, safeValue]);
+    }, [symbol, type, safeValue, hasValue]);
 
     const VariationIcon = variationInfo.Icon;
 
