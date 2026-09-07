@@ -5,12 +5,13 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withSequence,
   withTiming,
 } from "react-native-reanimated";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { motion, radius, spacing } from "../theme/ds";
-import { softEasing } from "../theme/motionPresets";
+import { selectionEasing } from "../theme/motionPresets";
 import { SIDE_RAIL_WIDTH } from "../hooks/useBreakpoint";
 import AnimatedTabIcon from "./AnimatedTabIcon";
 import {
@@ -26,6 +27,8 @@ const ITEM_HEIGHT = 46;
 const INDICATOR_WIDTH = 3;
 // Recuo do traço nas pontas do item — vira um tique curto, não uma régua
 const INDICATOR_INSET = 11;
+// Mesmo estica-e-volta (10%) do indicador da barra inferior, virado de lado
+const INDICATOR_STRETCH = 0.1;
 
 interface SideRailProps {
   /** Destino ativo, derivado da rota-folha do container de navegação. */
@@ -73,6 +76,7 @@ export default function SideRail({ activeKey, onNavigate }: SideRailProps) {
   // Anima a posição medida, não um índice: os grupos têm títulos no meio, então
   // não existe passo constante entre um item e o seguinte
   const offsetY = useSharedValue(-1);
+  const stretch = useSharedValue(1);
 
   React.useEffect(() => {
     if (!activeRow) return;
@@ -81,16 +85,25 @@ export default function SideRail({ activeKey, onNavigate }: SideRailProps) {
     // sem deslizar do topo até o item ativo
     if (offsetY.value < 0 || reducedMotion) {
       offsetY.value = target;
+      stretch.value = 1;
       return;
     }
+    // Re-medição do mesmo item (o layout mudou, o destino não): reposiciona
+    // sem esticar — o estica-e-volta é do trajeto entre destinos
+    if (offsetY.value === target) return;
     offsetY.value = withTiming(target, {
       duration: motion.duration.base,
-      easing: softEasing,
+      easing: selectionEasing,
     });
-  }, [activeRow, reducedMotion, offsetY]);
+    const half = motion.duration.base / 2;
+    stretch.value = withSequence(
+      withTiming(1 + INDICATOR_STRETCH, { duration: half, easing: selectionEasing }),
+      withTiming(1, { duration: half, easing: selectionEasing }),
+    );
+  }, [activeRow, reducedMotion, offsetY, stretch]);
 
   const slideStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: offsetY.value }],
+    transform: [{ translateY: offsetY.value }, { scaleY: stretch.value }],
   }));
 
   return (
@@ -232,7 +245,6 @@ function RailItem({
   onPress: () => void;
 }) {
   const t = useTheme();
-  const { Icon } = item;
 
   return (
     <TouchableOpacity
@@ -268,12 +280,13 @@ function RailItem({
       }}
     >
       {item.primary ? (
-        // O trio da barra inferior mantém o preenchimento animado do ícone
-        <AnimatedTabIcon Icon={Icon} focused={focused} size={20} />
+        // O trio da barra inferior mantém o glifo próprio com o preenchimento
+        // que sobe — trilho e barra são a mesma linguagem de seleção
+        <AnimatedTabIcon Glyph={item.Icon} focused={focused} size={20} />
       ) : (
         // Nos secundários o `fill` do lucide vira silhueta (o "i" do Info some
         // dentro do disco), então a seleção fala só por cor e pílula
-        <Icon size={20} color={focused ? t.accent.neon : t.text.tertiary} />
+        <item.Icon size={20} color={focused ? t.accent.neon : t.text.tertiary} />
       )}
       <Text
         numberOfLines={1}

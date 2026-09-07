@@ -51,10 +51,25 @@ describe("mapa de destinos do trilho", () => {
   });
 
   it("marca como aninhado exatamente o trio da barra inferior", () => {
-    const aninhados = RAIL_DESTINATIONS.filter((d) => d.inMainTabs).map(
-      (d) => d.route,
-    );
+    // Aba de segundo nível (Investimentos) também é aninhada, mas declara a
+    // aba-mãe: sem `parentTab`, o que sobra tem de ser o trio, e nada mais
+    const aninhados = RAIL_DESTINATIONS.filter(
+      (d) => d.inMainTabs && !d.parentTab,
+    ).map((d) => d.route);
     expect(aninhados.sort()).toEqual([...ABAS_DA_BARRA].sort());
+  });
+
+  it("aba de segundo nível aponta para uma aba-mãe da barra", () => {
+    // O navegador de baixo não conhece "Investimentos": sem a aba-mãe o
+    // atalho do trilho seria um NAVIGATE que ninguém trata
+    const netas = RAIL_DESTINATIONS.filter((d) => d.parentTab);
+    expect(netas.map((d) => d.route)).toEqual([
+      FINANCE_TAB_ROUTES.investimentos,
+    ]);
+    netas.forEach((d) => {
+      expect(d.inMainTabs).toBe(true);
+      expect(ABAS_DA_BARRA).toContain(d.parentTab);
+    });
   });
 
   it("reserva o ícone com preenchimento animado ao mesmo trio", () => {

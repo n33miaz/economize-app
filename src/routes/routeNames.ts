@@ -36,6 +36,9 @@ export const APP_ROUTES = {
   desejos: "Desejos",
   renda: "Renda e jornada",
   familia: "Família",
+  // Gratuito × Plus. Alcançada pelo Perfil e pela oferta do Plus — não entra
+  // no trilho, porque não é destino do dia a dia: ninguém "volta ao plano"
+  plano: "Plano",
 } as const;
 
 /** Abas da barra inferior (o container "Main"). */
@@ -50,6 +53,9 @@ export const FINANCE_TAB_ROUTES = {
   carteira: "Carteira",
   extrato: "Extrato",
   recorrencias: "Recorrências",
+  // EC-15x: a quarta leitura do mesmo dinheiro — "o que está rendendo".
+  // Consolida conector, extrato e cadastro manual numa aba só
+  investimentos: "Investimentos",
 } as const;
 
 /** Abas superiores dentro de Indicadores. */

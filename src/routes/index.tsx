@@ -13,9 +13,6 @@ import {
   type LinkingOptions,
 } from "@react-navigation/native";
 import * as ExpoLinking from "expo-linking";
-import ChartCandlestick from "lucide-react-native/dist/esm/icons/chart-candlestick";
-import House from "lucide-react-native/dist/esm/icons/house";
-import WalletTabIcon from "lucide-react-native/dist/esm/icons/wallet";
 import { Platform, View, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReducedMotion } from "react-native-reanimated";
@@ -27,6 +24,11 @@ import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
+import {
+  HomeGlyph,
+  MarketGlyph,
+  WalletGlyph,
+} from "../components/icons/TabGlyphs";
 import {
   ephemeralTransition,
   fadeTransition,
@@ -78,6 +80,8 @@ import StatementReview from "../screens/StatementReview";
 import Recurrences from "../screens/Recurrences";
 import RecurrenceForm from "../screens/RecurrenceForm";
 import BalanceForecast from "../screens/BalanceForecast";
+import Plan from "../screens/Plan";
+import Investments from "../screens/Investments";
 
 // Altura da barra inferior sem contar o inset da barra de gestos
 const BOTTOM_BAR_HEIGHT = 84;
@@ -205,6 +209,10 @@ function FinanceTabs() {
             Recorrências "o que vai acontecer de novo". Os nomes das duas
             primeiras são contrato de navigate() e ficam intactos. */}
         <TopTab.Screen name={FINANCE_TAB_ROUTES.recorrencias} component={Recurrences} />
+        {/* EC-15x: a quarta leitura — "o que está rendendo". Por último porque
+            é a que menos muda de um dia para o outro; quem vem todo dia vem
+            pelo Extrato */}
+        <TopTab.Screen name={FINANCE_TAB_ROUTES.investimentos} component={Investments} />
       </TopTab.Navigator>
     </View>
   );
@@ -219,6 +227,9 @@ function MainTabs() {
   // de layout de computador. Aqui basta calar a barra — as duas nunca
   // aparecem juntas.
   const { isWide } = useBreakpoint();
+  // Mesmo gate das abas superiores: com "reduzir movimento" a troca de aba é
+  // seca, em vez de deslizar e esmaecer
+  const reducedMotion = useReducedMotion();
   // Web entra junto do iOS: no iPhone, tanto no Safari quanto instalado na tela
   // de início, a barra de gestos come o rodapé e Platform.OS lá é "web". No
   // Android o respiro fixo continua valendo, e no desktop o inset é 0.
@@ -237,7 +248,7 @@ function MainTabs() {
       screenOptions={{
         // "shift" desliza + esmaece na troca de tab — mesma família de movimento
         // da entrada do assistente, no lugar do corte seco do fade
-        animation: "shift",
+        animation: reducedMotion ? "none" : "shift",
         // Na web o React Navigation renderiza cada aba como <a href="/Main/...">
         // e o botão dele chama preventDefault no clique. Trocar por um
         // TouchableOpacity cru tirava esse preventDefault: o navegador seguia o
@@ -288,8 +299,10 @@ function MainTabs() {
         component={FinanceTabs}
         options={{
           title: "Finanças",
+          // Glifos próprios (não lucide): o preenchimento que sobe na seleção
+          // precisa de uma silhueta cheia desenhada para isso — ver TabGlyphs
           tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon Icon={WalletTabIcon} focused={focused} size={26} />
+            <AnimatedTabIcon Glyph={WalletGlyph} focused={focused} size={26} />
           ),
         }}
       />
@@ -299,7 +312,7 @@ function MainTabs() {
         options={{
           title: "Início",
           tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon Icon={House} focused={focused} size={28} />
+            <AnimatedTabIcon Glyph={HomeGlyph} focused={focused} size={28} />
           ),
         }}
       />
@@ -309,11 +322,7 @@ function MainTabs() {
         options={{
           title: "Mercado",
           tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon
-              Icon={ChartCandlestick}
-              focused={focused}
-              size={26}
-            />
+            <AnimatedTabIcon Glyph={MarketGlyph} focused={focused} size={26} />
           ),
         }}
       />
@@ -412,6 +421,13 @@ function AppStack() {
       <Stack.Screen
         name={APP_ROUTES.opcoesIa}
         component={AiSettings}
+        options={ephemeralTransition}
+      />
+      {/* Gratuito × Plus: ajuste de conta, aberto pelo Perfil e pela oferta do
+          Plus. Fora do trilho como as Opções de IA — ninguém "volta ao plano" */}
+      <Stack.Screen
+        name={APP_ROUTES.plano}
+        component={Plan}
         options={ephemeralTransition}
       />
       {/* EC-140/141: o desejo medido em horas de vida, e a renda/jornada que
@@ -522,7 +538,19 @@ export default function Routes() {
       // direto. Os nomes vêm do mapa de destinos e são os MESMOS que todo
       // navigate() já espalhado pelas telas usa.
       if (destination.inMainTabs) {
-        navigationRef.navigate("Main", { screen: destination.route });
+        // Aba de segundo nível (Investimentos, dentro de Finanças): o
+        // navegador de baixo não conhece o nome dela, e o React Navigation 7
+        // não repassa um NAVIGATE não tratado aos netos — então o pedido vai
+        // para a aba-mãe com a filha nos params, que é a gramática aninhada
+        navigationRef.navigate(
+          "Main",
+          destination.parentTab
+            ? {
+                screen: destination.parentTab,
+                params: { screen: destination.route },
+              }
+            : { screen: destination.route },
+        );
         return;
       }
       // Alargado para `string` de propósito: com a rota tipada como a união

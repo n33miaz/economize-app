@@ -32,6 +32,15 @@ const isWeb = Platform.OS === "web";
 export const enteringEasing = isWeb ? Easing.ease : softEasingFn;
 
 /**
+ * Easing da SELEÇÃO de destino (ícone que enche, traço que desliza, na barra
+ * e no trilho). No nativo é a curva `soft` do ds; na web fica a versão
+ * nomeada equivalente — `soft` é cubic-bezier(0.22, 0.61, 0.36, 1), a menos
+ * de um centésimo o ease-out cúbico — para a seleção seguir a mesma regra
+ * das entradas: só easing nomeada no navegador.
+ */
+export const selectionEasing = isWeb ? Easing.out(Easing.cubic) : softEasing;
+
+/**
  * Deslocamento inicial sutil (12 px em vez dos 25 do preset) — SÓ no nativo.
  *
  * Na web, `.withInitialValues()` gera um keyframe com nome próprio e, quando

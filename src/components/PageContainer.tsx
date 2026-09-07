@@ -69,6 +69,10 @@ export default function PageContainer({
         return;
       }
       if (reducedMotion) return;
+      // Só fade, sem deslocamento lateral: nas abas superiores quem já
+      // desliza a página inteira na direção da troca é o pager do
+      // material-top-tabs (`animationEnabled`), e um translateX aqui somaria
+      // um segundo movimento no mesmo eixo. O fade é o que o pager não faz
       opacity.value = 0.4;
       opacity.value = withTiming(1, {
         duration: motion.duration.fast,

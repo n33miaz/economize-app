@@ -1,25 +1,30 @@
 import CalendarClock from "lucide-react-native/dist/esm/icons/calendar-clock";
-import ChartCandlestick from "lucide-react-native/dist/esm/icons/chart-candlestick";
 import ChartColumn from "lucide-react-native/dist/esm/icons/chart-column";
 import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
-import House from "lucide-react-native/dist/esm/icons/house";
 import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 import Settings2 from "lucide-react-native/dist/esm/icons/settings-2";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Target from "lucide-react-native/dist/esm/icons/target";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
+import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import User from "lucide-react-native/dist/esm/icons/user";
 import Users from "lucide-react-native/dist/esm/icons/users";
-import Wallet from "lucide-react-native/dist/esm/icons/wallet";
 import type { LucideIcon } from "lucide-react-native";
 
+import {
+  HomeGlyph,
+  MarketGlyph,
+  WalletGlyph,
+  type TabGlyph,
+} from "../components/icons/TabGlyphs";
 import {
   APP_ROUTES,
   FINANCE_TAB_ROUTES,
   MAIN_TAB_ROUTES,
   MARKET_TAB_ROUTES,
   type LeafRouteName,
+  type MainTabRouteName,
 } from "./routeNames";
 
 /**
@@ -34,6 +39,7 @@ export type RailKey =
   | "financas"
   | "mercado"
   | "cartoes"
+  | "investimentos"
   | "analise"
   | "relatorios"
   | "previsao"
@@ -45,7 +51,7 @@ export type RailKey =
   | "familia"
   | "ajustes";
 
-export interface RailDestination {
+interface RailDestinationBase {
   key: RailKey;
   /** Rótulo exibido — pode mudar à vontade, não é contrato de navegação. */
   label: string;
@@ -57,14 +63,26 @@ export interface RailDestination {
   route: LeafRouteName;
   /** Abas de "Main" precisam de navegação aninhada; telas do stack, não. */
   inMainTabs: boolean;
-  Icon: LucideIcon;
   /**
-   * Trio primário: as mesmas três abas da barra inferior. Só elas ganham o
-   * ícone com preenchimento animado — no secundário o `fill` do lucide vira
-   * silhueta (o "i" do Info some dentro do disco cheio).
+   * Aba superior de SEGUNDO nível (Investimentos dentro de Finanças): a rota
+   * não é filha direta de "Main", então o pedido vai para a aba-mãe com a
+   * filha nos params. Só faz sentido com `inMainTabs`.
    */
-  primary: boolean;
+  parentTab?: MainTabRouteName;
 }
+
+/**
+ * O ícone acompanha o papel do destino, e o tipo garante o par certo:
+ *
+ * - Trio primário (as mesmas três abas da barra inferior): glifo PRÓPRIO, com
+ *   as duas variantes desenhadas para o preenchimento que sobe na seleção.
+ * - Secundários: ícone do lucide, seleção só por cor e pílula — o `fill` do
+ *   lucide vira silhueta (o "i" do Info some dentro do disco cheio), e é
+ *   exatamente por isso que o trio deixou de usá-lo.
+ */
+export type RailDestination =
+  | (RailDestinationBase & { primary: true; Icon: TabGlyph })
+  | (RailDestinationBase & { primary: false; Icon: LucideIcon });
 
 export interface RailGroup {
   /** Rótulo do grupo; o primeiro grupo não leva título (é a navegação-base). */
@@ -86,7 +104,7 @@ export const RAIL_GROUPS: RailGroup[] = [
         label: "Início",
         route: MAIN_TAB_ROUTES.principal,
         inMainTabs: true,
-        Icon: House,
+        Icon: HomeGlyph,
         primary: true,
       },
       {
@@ -94,7 +112,7 @@ export const RAIL_GROUPS: RailGroup[] = [
         label: "Finanças",
         route: MAIN_TAB_ROUTES.financas,
         inMainTabs: true,
-        Icon: Wallet,
+        Icon: WalletGlyph,
         primary: true,
       },
       {
@@ -102,7 +120,7 @@ export const RAIL_GROUPS: RailGroup[] = [
         label: "Mercado",
         route: MAIN_TAB_ROUTES.indicadores,
         inMainTabs: true,
-        Icon: ChartCandlestick,
+        Icon: MarketGlyph,
         primary: true,
       },
     ],
@@ -122,6 +140,19 @@ export const RAIL_GROUPS: RailGroup[] = [
         route: APP_ROUTES.cartoes,
         inMainTabs: false,
         Icon: CreditCard,
+        primary: false,
+      },
+      {
+        // EC-15x: os investimentos são uma aba de Finanças (a quarta leitura
+        // do mesmo dinheiro), mas no desktop três cliques até ela seriam o
+        // produto escondido de novo. O atalho leva direto — e é atalho para
+        // uma aba, então navega aninhado pela aba-mãe
+        key: "investimentos",
+        label: "Investimentos",
+        route: FINANCE_TAB_ROUTES.investimentos,
+        inMainTabs: true,
+        parentTab: MAIN_TAB_ROUTES.financas,
+        Icon: TrendingUp,
         primary: false,
       },
       {
@@ -245,6 +276,10 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   [FINANCE_TAB_ROUTES.carteira]: "financas",
   [FINANCE_TAB_ROUTES.extrato]: "financas",
   [FINANCE_TAB_ROUTES.recorrencias]: "financas",
+  // Pílula própria, como Cartões: o item "Investimentos" está no trilho, e
+  // deixá-lo apagado enquanto "Finanças" acende diria ao usuário que ele
+  // está em outro lugar
+  [FINANCE_TAB_ROUTES.investimentos]: "investimentos",
   [MAIN_TAB_ROUTES.indicadores]: "mercado",
   [MARKET_TAB_ROUTES.moedas]: "mercado",
   [MARKET_TAB_ROUTES.indices]: "mercado",
@@ -273,6 +308,9 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   // continua em "Desejos" para o usuário não perder de vista de onde veio
   [APP_ROUTES.renda]: "desejos",
   [APP_ROUTES.familia]: "familia",
+  // O plano é ajuste da conta, aberto pelo Perfil (ou pela oferta do Plus): a
+  // pílula fica em "Perfil", que é de onde se chega e para onde se volta
+  [APP_ROUTES.plano]: "perfil",
 };
 
 /**
