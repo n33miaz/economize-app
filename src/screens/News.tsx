@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
+import { spacing } from "../theme/ds";
 import NewsCard from "../components/NewsCard";
 import Skeleton from "../components/Skeleton";
 import useNewsData from "../hooks/useNewsData";
 import { NewsArticle } from "../services/api";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import ErrorState from "../components/ErrorState";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { padRowsForColumns } from "../utils/layout";
@@ -101,6 +103,11 @@ export default function News() {
           }
           renderItem={renderNewsCard}
           contentContainerClassName="pt-3 pb-5"
+          ListFooterComponent={
+            // Fim da lista: o slot nunca fica entre o usuário e os
+            // números dele. Devolve null no Plus, sem reservar espaço
+            <AdSlot style={{ marginTop: spacing[4] }} />
+          }
           ListEmptyComponent={
             <View className="flex-1 justify-center items-center p-5 mt-10">
               <Text className="text-textSecondary text-base font-regular mb-4">
