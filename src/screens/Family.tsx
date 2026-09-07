@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Switch,
@@ -13,6 +14,7 @@ import HousePlus from "lucide-react-native/dist/esm/icons/house-plus";
 import KeyRound from "lucide-react-native/dist/esm/icons/key-round";
 import LogOut from "lucide-react-native/dist/esm/icons/log-out";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
+import Scissors from "lucide-react-native/dist/esm/icons/scissors";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import UserPlus from "lucide-react-native/dist/esm/icons/user-plus";
 
@@ -37,6 +39,7 @@ import {
   shareScopeLabel,
   shareScopeSummary,
 } from "../utils/family";
+import { reconcileFamilyTransfers } from "../services/api";
 import type {
   Category,
   FamilyMember,
@@ -203,6 +206,10 @@ export default function Family() {
   const [draftName, setDraftName] = useState("");
   const [categoriesOpen, setCategoriesOpen] = useState(false);
 
+  // Desconto do que circulou dentro da casa (EC-189). Fica na tela da Casa e
+  // não no Perfil porque o efeito é só aqui: a análise pessoal não muda
+  const [isTrimming, setIsTrimming] = useState(false);
+
   // Rascunho do compartilhamento: nasce do servidor e só volta para ele no
   // "Salvar" — cada switch salvando sozinho faria seis idas para uma decisão
   const [draftScope, setDraftScope] = useState<FamilyShareScope>("TOTALS");
@@ -358,6 +365,38 @@ export default function Family() {
     }
     const result = await saveSharing(draft);
     showToast(result.message, result.ok ? "success" : "error");
+  };
+
+  const handleTrimTransfers = async () => {
+    if (isTrimming) return;
+    setIsTrimming(true);
+    try {
+      const outcome = await reconcileFamilyTransfers();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (outcome.against === 0) {
+        // Zero por falta de com quem comparar é outra história de zero por
+        // não ter achado nada, e o app precisa dizer qual das duas foi
+        showToast(
+          "Ninguém mais na casa tem nome completo no cadastro — sem isso não dá para reconhecer as transferências entre vocês.",
+          "warning",
+        );
+      } else if (outcome.marked === 0) {
+        showToast("Nada a descontar: a casa já estava sem repetição.", "info");
+      } else {
+        showToast(
+          `${outcome.marked} ${outcome.marked === 1 ? "lançamento saiu" : "lançamentos saíram"} da soma da casa.`,
+          "success",
+        );
+        // A visão em conjunto tem de refletir o desconto agora, sem o usuário
+        // ter de sair e voltar
+        fetchFamily();
+      }
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast("Não consegui descontar agora. Tente de novo.", "error");
+    } finally {
+      setIsTrimming(false);
+    }
   };
 
   const confirmRemove = (member: FamilyMember) => {
@@ -823,6 +862,35 @@ export default function Family() {
                     {isDirty ? "Salvar o que eu compartilho" : "Tudo salvo"}
                   </Text>
                 </Pressable>
+              </View>
+
+              {/* --------------------------- o que circulou aqui dentro */}
+              <SectionTitle>Dinheiro que ficou em casa</SectionTitle>
+              <View className="bg-cardBackground rounded-2xl p-4 border border-border">
+                <Text className="text-xs text-textSecondary leading-4">
+                  Pix entre vocês, mesada, rateio da conta de luz: esse dinheiro
+                  não é renda da casa — ele só mudou de bolso, e sem descontar a
+                  casa soma a mesma quantia duas vezes. Na sua análise pessoal a
+                  linha continua lá, porque na sua conta o dinheiro entrou mesmo.
+                </Text>
+                <View style={{ marginTop: spacing[3] }}>
+                  <ActionRow
+                    Icon={Scissors}
+                    label={
+                      isTrimming
+                        ? "Procurando…"
+                        : "Descontar transferências entre nós"
+                    }
+                    description="Vale para os seus lançamentos. Cada pessoa da casa precisa rodar o seu."
+                    onPress={handleTrimTransfers}
+                    disabled={isTrimming}
+                    right={
+                      isTrimming ? (
+                        <ActivityIndicator size="small" color={t.accent.neon} />
+                      ) : undefined
+                    }
+                  />
+                </View>
               </View>
 
               {/* ----------------------------------------------- sair */}

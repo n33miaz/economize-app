@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -9,8 +9,18 @@ import Family from "../Family";
 import { useAccountsStore } from "../../store/accountsStore";
 import { useCategoriesStore } from "../../store/categoriesStore";
 import { useFamilyStore } from "../../store/familyStore";
+import { useToastStore } from "../../store/toastStore";
+import { reconcileFamilyTransfers } from "../../services/api";
 
-jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+const descontar = reconcileFamilyTransfers as jest.MockedFunction<
+  typeof reconcileFamilyTransfers
+>;
+
+jest.mock("../../services/api", () => ({
+  __esModule: true,
+  default: {},
+  reconcileFamilyTransfers: jest.fn(),
+}));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
@@ -137,5 +147,37 @@ describe("Família", () => {
     const { getByText } = montar();
 
     await waitFor(() => expect(getByText("Família")).toBeTruthy());
+  });
+
+  it("desconta o que circulou dentro da casa e recarrega a visão", async () => {
+    const buscar = jest.fn().mockResolvedValue(undefined);
+    useFamilyStore.setState({
+      ...BASE,
+      family: CASA,
+      hasFamily: true,
+      fetchFamily: buscar,
+    } as never);
+    descontar.mockResolvedValue({ scanned: 1755, marked: 2, against: 1 });
+
+    const { getByText } = montar();
+    fireEvent.press(await waitFor(() => getByText("Descontar transferências entre nós")));
+
+    await waitFor(() => expect(descontar).toHaveBeenCalled());
+    // a soma da casa muda com o desconto: a tela não pode continuar
+    // mostrando o número antigo até o usuário sair e voltar
+    await waitFor(() => expect(buscar).toHaveBeenCalledTimes(2));
+    expect(useToastStore.getState().message).toContain("2 lançamentos");
+  });
+
+  it("zero por falta de nome completo é avisado, não confundido com zero achado", async () => {
+    useFamilyStore.setState({ ...BASE, family: CASA, hasFamily: true } as never);
+    descontar.mockResolvedValue({ scanned: 1755, marked: 0, against: 0 });
+
+    const { getByText } = montar();
+    fireEvent.press(await waitFor(() => getByText("Descontar transferências entre nós")));
+
+    await waitFor(() =>
+      expect(useToastStore.getState().message).toContain("nome completo"),
+    );
   });
 });
