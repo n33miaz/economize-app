@@ -19,6 +19,9 @@ import ConfirmDialog from "./src/components/ConfirmDialog";
 import ServerWakeOverlay from "./src/components/ServerWakeOverlay";
 import BiometricGate from "./src/components/BiometricGate";
 import PasswordChangeGate from "./src/components/PasswordChangeGate";
+import UpdateRequiredGate from "./src/components/UpdateRequiredGate";
+import UpdateBanner from "./src/components/UpdateBanner";
+import { usePreferencesStore } from "./src/store/preferencesStore";
 import { useTheme, useThemeSync } from "./src/theme/ThemeProvider";
 import { lightTheme } from "./src/theme/colors";
 
@@ -41,6 +44,14 @@ export default function App() {
     Roboto_400Regular,
     Roboto_700Bold,
   });
+  const prefsHydrated = usePreferencesStore((s) => s.hasHydrated);
+
+  // Uma sessão = uma abertura do app. Conta DEPOIS da hidratação: antes dela o
+  // valor persistido ainda não chegou, e o incremento seria sobrescrito. É o
+  // que alimenta "a oferta do Plus nunca aparece nas duas primeiras sessões".
+  useEffect(() => {
+    if (prefsHydrated) usePreferencesStore.getState().bumpSessionCount();
+  }, [prefsHydrated]);
 
   useEffect(() => {
     async function prepare() {
@@ -88,14 +99,21 @@ export default function App() {
           style={isLight ? "dark" : "light"}
           backgroundColor={t.background.base}
         />
-        <BiometricGate>
-          {/* A ordem importa: a tranca vem primeiro (o app fechado não mostra
-              nem a troca de senha), e só depois a pendência da senha
-              provisória decide se as rotas aparecem */}
-          <PasswordChangeGate>
-            <Routes />
-          </PasswordChangeGate>
-        </BiometricGate>
+        {/* Versão abaixo da mínima vem antes de TUDO, inclusive do login: se o
+            servidor não fala mais com este app, nenhuma tela dele funciona */}
+        <UpdateRequiredGate>
+          <BiometricGate>
+            {/* A ordem importa: a tranca vem primeiro (o app fechado não mostra
+                nem a troca de senha), e só depois a pendência da senha
+                provisória decide se as rotas aparecem */}
+            <PasswordChangeGate>
+              {/* Faixa "nova versão" no fluxo, acima das rotas — empurra o
+                  conteúdo em vez de cobrir. Só desenha quando há o que avisar */}
+              <UpdateBanner />
+              <Routes />
+            </PasswordChangeGate>
+          </BiometricGate>
+        </UpdateRequiredGate>
         {/* Camadas globais: ficam fora do gate para poderem falar mesmo
             enquanto o app está bloqueado ou sem dados */}
         <ServerWakeOverlay />
