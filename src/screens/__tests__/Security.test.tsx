@@ -252,7 +252,7 @@ describe("Security", () => {
       ).toBeTruthy(),
     );
 
-    fireEvent.press(getByLabelText("Tentar novamente"));
+    fireEvent.press(getByLabelText("Tentar de novo"));
 
     await waitFor(() => expect(getByText("Desligada")).toBeTruthy());
   });
