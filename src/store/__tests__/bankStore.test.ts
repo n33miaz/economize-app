@@ -41,6 +41,9 @@ describe("bankStore", () => {
       isLoading: false,
       isImporting: false,
       error: null,
+      // sem zerar a marca de tempo, a janela de cache do teste anterior
+      // engoliria a busca deste
+      fetchedAt: null,
     });
   });
 
@@ -51,6 +54,38 @@ describe("bankStore", () => {
 
     expect(useBankStore.getState().transactions).toHaveLength(1);
     expect(useBankStore.getState().isLoading).toBe(false);
+  });
+
+  it("voltar à aba dentro da janela não refaz a busca", async () => {
+    mockGet.mockResolvedValue([tx("t1", -45.9)]);
+
+    await useBankStore.getState().fetchTransactions();
+    await useBankStore.getState().fetchTransactions();
+
+    // A tela revalida a cada foco; o extrato é a resposta mais cara do app
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("puxar para atualizar ignora a janela", async () => {
+    mockGet.mockResolvedValue([tx("t1", -45.9)]);
+
+    await useBankStore.getState().fetchTransactions();
+    await useBankStore.getState().fetchTransactions(true);
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("falha não vale como leitura boa: o próximo foco tenta de novo", async () => {
+    mockGet.mockRejectedValueOnce(new Error("offline"));
+    mockGet.mockResolvedValueOnce([tx("t1", -45.9)]);
+
+    await useBankStore.getState().fetchTransactions();
+    await useBankStore.getState().fetchTransactions();
+
+    // Guardar o horário de uma falha deixaria a tela um minuto sem saída
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(useBankStore.getState().transactions).toHaveLength(1);
+    expect(useBankStore.getState().error).toBeNull();
   });
 
   it("falha ao carregar vira mensagem de tela", async () => {

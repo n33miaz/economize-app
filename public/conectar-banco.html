@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conectar banco — Economize!</title>
+<!--
+  Ponte para o widget de conexão bancária (EC-106).
+
+  POR QUE UMA PÁGINA, E NÃO UM SDK NO APP. Os widgets de Open Finance existem
+  como SDK (React, React Native, HTML+JS), não como página hospedada. Trazer um
+  SDK nativo para dentro do app significaria código nativo novo num projeto que
+  já sangrou com NativeWind, css-interop e Reanimated — e que ainda carrega o
+  `mock-worklets` como bomba-relógio. Esta página isola a dependência: o
+  script do provedor roda AQUI, num documento separado, e o bundle do app não
+  muda.
+
+  POR QUE ELA NÃO CITA PROVEDOR. O usuário só precisa saber que pode conectar
+  o banco — os trâmites são nossos, e queremos poder trocar de provedor sem
+  reescrever nada por aqui. Por isso o script do widget e o tipo dele chegam no
+  fragmento (`widget` e `kind`), vindos de GET /connectors/status, e o nome do
+  construtor global é derivado do `kind` ("x-connect" → `XConnect`). O
+  protocolo que esta página espera de um widget é o dos SDKs de conexão
+  hospedados em CDN: `new Construtor({ connectToken, includeSandbox,
+  onSuccess, onError, onClose }).init()`, com `onSuccess` entregando o id da
+  conexão em `dados.item.id` (ou `dados.itemId`).
+
+  Ela é publicada junto do site (o Expo copia `public/` para a raiz do build),
+  então mora no mesmo domínio já liberado no CORS.
+
+  TUDO VIAJA NO FRAGMENTO (#), NUNCA NA QUERY. Fragmento não é enviado ao
+  servidor, não entra em log de acesso e não vaza no cabeçalho Referer. O token
+  é de sessão, tem validade curta e é amarrado a uma conta só — mas isso é
+  motivo para cuidar dele, não para relaxar.
+
+  O SCRIPT SÓ CARREGA DE HOST CONHECIDO. `widget` chega pela URL, e URL
+  qualquer pessoa forja: sem uma lista, um link para esta página executaria o
+  script que o atacante quisesse na NOSSA origem — onde mora a sessão de quem
+  usa o app no navegador. A lista guarda o SHA-256 do host, e não o nome, para
+  a página continuar sem citar provedor; trocar de provedor é acrescentar um
+  hash aqui e apontar o servidor para o script novo.
+-->
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    background:#0F0E0B;color:#EAE7DE;
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:24px;text-align:center}
+  .caixa{max-width:380px}
+  h1{font-size:19px;margin:0 0 8px;font-weight:650}
+  p{color:#948F82;font-size:14px;margin:0 0 18px}
+  .erro{color:#F87171}
+  a.btn{display:inline-block;background:#F2C14E;color:#0F0E0B;text-decoration:none;
+    padding:12px 22px;border-radius:14px;font-weight:700;font-size:14px}
+  .pote{width:56px;height:56px;margin:0 auto 18px;display:block}
+</style>
+</head>
+<body>
+<div class="caixa">
+  <svg class="pote" viewBox="0 0 64 64" aria-hidden="true">
+    <rect fill="none" stroke="#F2C14E" stroke-width="4" stroke-linejoin="round"
+          x="14" y="18" width="36" height="38" rx="11"/>
+    <path fill="none" stroke="#F2C14E" stroke-width="4" stroke-linecap="round" d="M23 15h18"/>
+  </svg>
+  <h1 id="titulo">Conexão segura via Open Finance</h1>
+  <p id="msg">Escolha seu banco e autorize o acesso. O Economize! recebe só a leitura das transações — você autoriza no seu banco, nós buscamos os lançamentos.</p>
+  <a id="voltar" class="btn" style="display:none" href="#">Voltar ao aplicativo</a>
+</div>
+
+<script>
+(function () {
+  var titulo = document.getElementById("titulo");
+  var msg = document.getElementById("msg");
+  var voltar = document.getElementById("voltar");
+
+  // Fragmento, não query — ver o comentário do topo
+  var p = new URLSearchParams(location.hash.replace(/^#/, ""));
+  var token = p.get("token");
+  var destino = p.get("redirect");
+  var widgetUrl = p.get("widget");
+  var kind = p.get("kind");
+
+  // SHA-256 (hex) dos hosts de onde o script do widget pode vir. Ver o
+  // comentário do topo sobre por que hash, e não nome.
+  var HOSTS_PERMITIDOS = [
+    "bb7dcf871fce3507883c524ba1ef295181117a99f4f8ca4f46d85c3119edc398"
+  ];
+
+  function falhar(texto) {
+    titulo.textContent = "Não deu para conectar";
+    titulo.className = "erro";
+    msg.textContent = texto;
+    if (destino) mostrarVolta("erro=" + encodeURIComponent(texto));
+  }
+
+  // O retorno também vai no fragmento: o id do item identifica uma conexão
+  // bancária e não tem por que aparecer em log de servidor nenhum
+  function mostrarVolta(frag) {
+    voltar.href = destino + "#" + frag;
+    voltar.style.display = "inline-block";
+  }
+
+  function concluir(frag) {
+    if (!destino) {
+      titulo.textContent = "Conta conectada";
+      msg.textContent = "Pode fechar esta janela e voltar ao aplicativo.";
+      return;
+    }
+    mostrarVolta(frag);
+    // Tenta sozinho; o botão fica como plano B quando o navegador bloqueia
+    // a navegação automática para esquema de app
+    location.href = voltar.href;
+  }
+
+  function sha256Hex(texto) {
+    if (!(window.crypto && window.crypto.subtle && window.TextEncoder)) {
+      return Promise.reject(new Error("sem crypto"));
+    }
+    return window.crypto.subtle
+      .digest("SHA-256", new TextEncoder().encode(texto))
+      .then(function (buf) {
+        return Array.prototype.map
+          .call(new Uint8Array(buf), function (b) {
+            return ("0" + b.toString(16)).slice(-2);
+          })
+          .join("");
+      });
+  }
+
+  // Só https e só host da lista: o resto é link forjado
+  function hostPermitido(url) {
+    var parsed;
+    try {
+      parsed = new URL(url);
+    } catch (e) {
+      return Promise.resolve(false);
+    }
+    if (parsed.protocol !== "https:") return Promise.resolve(false);
+    return sha256Hex(parsed.hostname.toLowerCase()).then(
+      function (hex) { return HOSTS_PERMITIDOS.indexOf(hex) >= 0; },
+      function () { return false; }
+    );
+  }
+
+  // "x-connect" → "XConnect": a convenção de nome global dos SDKs de widget
+  function nomeDoConstrutor(valor) {
+    return valor
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(Boolean)
+      .map(function (parte) { return parte.charAt(0).toUpperCase() + parte.slice(1); })
+      .join("");
+  }
+
+  function carregarScript(url) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = url;
+      s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error("script")); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function abrirWidget(Construtor) {
+    var widget = new Construtor({
+      connectToken: token,
+      includeSandbox: false,
+      onSuccess: function (dados) {
+        // O SDK entrega a conexão criada; o id é o que o servidor precisa
+        // para amarrá-la a esta conta
+        var id = (dados && dados.item && dados.item.id) || (dados && dados.itemId);
+        if (!id) {
+          falhar("O conector não devolveu a identificação da conexão.");
+          return;
+        }
+        titulo.textContent = "Conta conectada";
+        msg.textContent = "Voltando ao aplicativo…";
+        concluir("item=" + encodeURIComponent(id));
+      },
+      onError: function (erro) {
+        falhar((erro && erro.message) || "O banco recusou a conexão.");
+      },
+      onClose: function () {
+        // Fechar sem concluir é escolha do usuário, não erro: volta em silêncio
+        if (destino) concluir("cancelado=1");
+      },
+    });
+    widget.init();
+  }
+
+  if (!token) {
+    falhar("Faltou o token da sessão. Volte ao aplicativo e tente de novo.");
+    return;
+  }
+  if (!widgetUrl || !kind) {
+    falhar("Faltou a configuração da conexão. Volte ao aplicativo e tente de novo.");
+    return;
+  }
+
+  titulo.textContent = "Abrindo a conexão segura…";
+  hostPermitido(widgetUrl).then(function (ok) {
+    if (!ok) {
+      falhar("Esta origem de conexão não é reconhecida. Volte ao aplicativo e tente de novo.");
+      return;
+    }
+    return carregarScript(widgetUrl).then(
+      function () {
+        var Construtor = window[nomeDoConstrutor(kind)];
+        if (typeof Construtor !== "function") {
+          falhar("Não foi possível carregar o conector. Verifique sua conexão.");
+          return;
+        }
+        abrirWidget(Construtor);
+      },
+      function () {
+        falhar("Não foi possível carregar o conector. Verifique sua conexão.");
+      }
+    );
+  });
+})();
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@ import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
 import FileText from "lucide-react-native/dist/esm/icons/file-text";
+import Landmark from "lucide-react-native/dist/esm/icons/landmark";
 import Link2 from "lucide-react-native/dist/esm/icons/link-2";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import RefreshCw from "lucide-react-native/dist/esm/icons/refresh-cw";
@@ -35,7 +36,7 @@ import type { BankTransaction, FamilyTransaction } from "../services/api";
 import { useAccountsStore } from "../store/accountsStore";
 import { useBankStore } from "../store/bankStore";
 import { useCategoriesStore } from "../store/categoriesStore";
-import { parsePluggyReturn, useConnectorStore } from "../store/connectorStore";
+import { parseConnectReturn, useConnectorStore } from "../store/connectorStore";
 import { useFamilyStore } from "../store/familyStore";
 import {
   selectCycleAnchorDay,
@@ -46,6 +47,7 @@ import { askConfirm } from "../store/confirmStore";
 import PageContainer from "../components/PageContainer";
 import ActionRow from "../components/ActionRow";
 import AssistantFAB from "../components/AssistantFAB";
+import BankLogo from "../components/BankLogo";
 import ErrorState from "../components/ErrorState";
 import CategoryIcon from "../components/CategoryIcon";
 import ChartLegend from "../components/ChartLegend";
@@ -67,6 +69,7 @@ import {
   ORIGIN_ALL,
   accountDisplayName,
   applyOriginFilter,
+  connectionLabel,
   creditCardAccounts,
   describeOriginFilter,
   originLabel,
@@ -103,17 +106,17 @@ const MAX_CHART_WIDTH = 420;
 // Raio da rosca: 56 é o que o gráfico de fluxo já ocupava (altura 140)
 const MAX_CHART_RADIUS = 56;
 
-// Cores de marca dos próprios bancos (dados, não tema) — únicas exceções
-// permitidas fora dos tokens, porque identificam produtos de terceiros
+// Atalhos para o app de cada banco. A identidade visual vem do logo
+// (`BankLogo`, que casa pelo nome), não de cor de marca solta fora dos tokens
 const BANK_SHORTCUTS = [
-  { id: "inter", name: "Inter", url: "bancointer://", color: "#FF7A00" },
-  { id: "nubank", name: "Nubank", url: "nubank://", color: "#8A05BE" },
-  { id: "flash", name: "Flash", url: "flash://", color: "pink" },
-  { id: "santander", name: "Santander", url: "santander://", color: "red" },
-  { id: "bradesco", name: "Bradesco", url: "bradesco://", color: "red" },
-  { id: "itau", name: "Itaú", url: "itau://", color: "#EC7000" },
-  { id: "bb", name: "BB", url: "bb://", color: "#F8D117" },
-  { id: "c6", name: "C6 Bank", url: "c6bank://", color: "#242424" },
+  { id: "inter", name: "Inter", url: "bancointer://" },
+  { id: "nubank", name: "Nubank", url: "nubank://" },
+  { id: "flash", name: "Flash", url: "flash://" },
+  { id: "santander", name: "Santander", url: "santander://" },
+  { id: "bradesco", name: "Bradesco", url: "bradesco://" },
+  { id: "itau", name: "Itaú", url: "itau://" },
+  { id: "bb", name: "BB", url: "bb://" },
+  { id: "c6", name: "C6 Bank", url: "c6bank://" },
 ];
 
 function plural(n: number, one: string, many: string) {
@@ -306,11 +309,11 @@ export default function BankIntegration() {
   const categoryItems = useCategoriesStore((s) => s.items);
   const fetchCategories = useCategoriesStore((s) => s.fetch);
   const { showToast } = useToastStore();
-  const pluggy = useConnectorStore((s) => s.pluggy);
+  const connector = useConnectorStore((s) => s.status);
   const isSyncing = useConnectorStore((s) => s.isSyncing);
-  const checkPluggy = useConnectorStore((s) => s.checkPluggy);
-  const runPluggySync = useConnectorStore((s) => s.runPluggySync);
-  const pluggyItems = useConnectorStore((s) => s.items);
+  const checkConnector = useConnectorStore((s) => s.checkStatus);
+  const runConnectorSync = useConnectorStore((s) => s.runSync);
+  const connections = useConnectorStore((s) => s.items);
   const fetchItems = useConnectorStore((s) => s.fetchItems);
   const buildConnectUrl = useConnectorStore((s) => s.buildConnectUrl);
   const finishConnect = useConnectorStore((s) => s.finishConnect);
@@ -387,7 +390,7 @@ export default function BankIntegration() {
       // categorias alimentam os chips das linhas do extrato
       fetchCategories();
       // o conector pode ter sido ligado no servidor desde a última visita
-      checkPluggy();
+      checkConnector();
       // contas em cache: a chamada só sai na primeira tela que precisar do
       // mapa — o extrato devolve `accountId`, nunca o nome do cartão
       fetchAccounts();
@@ -396,18 +399,18 @@ export default function BankIntegration() {
     }, [
       fetchTransactions,
       fetchCategories,
-      checkPluggy,
+      checkConnector,
       fetchAccounts,
       fetchItems,
     ]),
   );
 
-  // EC-106: retorno da ponte do Pluggy Connect. O id vem no fragmento da URL —
-  // no aparelho pelo deep link `economize://`, na web pelo hash da própria
-  // página. Um caminho só de leitura para as duas plataformas.
+  // EC-106: retorno da ponte de conexão bancária. O id vem no fragmento da
+  // URL — no aparelho pelo deep link `economize://`, na web pelo hash da
+  // própria página. Um caminho só de leitura para as duas plataformas.
   const registrarRetorno = useCallback(
     async (url: string | null | undefined) => {
-      const retorno = parsePluggyReturn(url);
+      const retorno = parseConnectReturn(url);
       if (!retorno) return;
       if ("cancelado" in retorno) return; // fechar o widget não é erro
       if ("erro" in retorno) {
@@ -437,7 +440,9 @@ export default function BankIntegration() {
       // Na web não há deep link: a ponte devolve para a própria origem e o
       // id chega no hash. Limpo depois de ler para o F5 não reprocessar
       const href = window.location.href;
-      if (href.includes("pluggy_item") || href.includes("pluggy_cancelado")) {
+      // O mesmo leitor decide se o hash é retorno da ponte: procurar palavras
+      // soltas na URL pegaria um `?item=` de outra tela
+      if (parseConnectReturn(href)) {
         registrarRetorno(href);
         window.history.replaceState(null, "", window.location.pathname);
       }
@@ -461,12 +466,10 @@ export default function BankIntegration() {
     Linking.openURL(url);
   };
 
-  const handleDesconectar = (id: string, nome: string | null) => {
+  const handleDesconectar = (id: string, nome: string) => {
     askConfirm({
       title: "Desconectar este banco?",
-      message: `O Economize! para de buscar novos lançamentos de ${
-        nome || "esta conexão"
-      }. O que já foi importado continua no seu extrato.`,
+      message: `O Economize! para de buscar novos lançamentos de ${nome}. O que já foi importado continua no seu extrato.`,
       confirmLabel: "Desconectar",
       destructive: true,
       onConfirm: async () => {
@@ -482,11 +485,13 @@ export default function BankIntegration() {
     });
   };
 
-  const handlePluggySync = async () => {
+  const handleConnectorSync = async () => {
     try {
-      const result = await runPluggySync();
+      const result = await runConnectorSync();
       if (!result) return;
-      await fetchTransactions();
+      // `force`: a sincronização acabou de trazer lançamentos, e é justamente
+      // aí que a lista guardada está errada
+      await fetchTransactions(true);
       // A sincronização é o ÚNICO momento em que a lista de contas muda: sem
       // recarregar aqui, o primeiro cartão conectado só apareceria (com selo,
       // filtro e faturas) depois de reabrir o app
@@ -863,8 +868,12 @@ export default function BankIntegration() {
         refreshControl={
           <RefreshControl
             refreshing={inFamilyScope ? isFamilyLoading : isLoading}
+            // Puxar para atualizar é um pedido explícito: ignora a janela de
+            // cache do store (`force`), senão o gesto não faria nada
             onRefresh={
-              inFamilyScope ? loadFamilyTransactions : fetchTransactions
+              inFamilyScope
+                ? loadFamilyTransactions
+                : () => fetchTransactions(true)
             }
             colors={[t.accent.neon]}
           />
@@ -887,6 +896,17 @@ export default function BankIntegration() {
                 />
               )}
             </View>
+
+            {/* A lista antiga fica e o aviso entra por cima: recarga que
+                falhou não pode apagar um extrato que já estava na tela, e
+                nem virar toast — a frase e o "tentar de novo" ficam aqui */}
+            {!inFamilyScope && bankError && transactions.length > 0 && (
+              <ErrorState
+                compact
+                message={bankError}
+                onRetry={fetchTransactions}
+              />
+            )}
 
             {inFamilyScope && memberOptions.length > 0 && (
               <View className="mb-4">
@@ -1066,48 +1086,66 @@ export default function BankIntegration() {
 
             {/* Open Finance: some por completo enquanto o servidor não
                 devolver enabled — quem não configurou não precisa nem saber */}
-            {pluggy.enabled && (
+            {connector.enabled && (
               <View className="bg-surface rounded-3xl p-4 border border-border mt-4">
                 <View className="flex-row items-center mb-2">
                   <Link2 size={18} color={t.accent.neon} />
                   <Text className="text-base font-bold text-textPrimary ml-2">
-                    Meu Pluggy
+                    Conexão bancária
                   </Text>
                 </View>
 
-                <Text className="text-xs text-textSecondary mb-3">
-                  {pluggyItems.length > 0
-                    ? `${pluggyItems.length} ${plural(pluggyItems.length, "banco conectado", "bancos conectados")}. A sincronização traz os últimos 90 dias e passa pelo mesmo pipeline do extrato — nada duplica.`
-                    : "Conecte seu banco e o Economize! busca os lançamentos sozinho, sem você baixar extrato."}
+                {/* Uma frase para o que acontece, sem nome de provedor: o
+                    usuário autoriza no banco dele e o resto é nosso */}
+                <Text
+                  className="text-xs text-textSecondary mb-3"
+                  style={{ lineHeight: 17 }}
+                >
+                  {connections.length > 0
+                    ? `${connections.length} ${plural(connections.length, "banco conectado", "bancos conectados")} pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica — a sincronização traz os últimos 90 dias.`
+                    : "Conecte seu banco pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica."}
                 </Text>
 
                 {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
-                    conectar deixou de ser configuração de servidor */}
-                {pluggyItems.map((conexao) => (
-                  <View
-                    key={conexao.id}
-                    className="flex-row items-center justify-between bg-elevated border border-border rounded-2xl px-3 py-3 mb-2"
-                  >
-                    <View className="flex-1 pr-3">
-                      <Text className="text-sm font-bold text-textPrimary" numberOfLines={1}>
-                        {conexao.connectorName || "Conexão bancária"}
-                      </Text>
-                      <Text className="text-xs text-textTertiary mt-0.5">
-                        {conexao.lastSyncedAt
-                          ? `Sincronizado em ${formatDayMonthShort(conexao.lastSyncedAt)}`
-                          : "Ainda não sincronizado"}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => handleDesconectar(conexao.id, conexao.connectorName)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Desconectar ${conexao.connectorName || "conexão bancária"}`}
-                      hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                    conectar deixou de ser configuração de servidor. O nome é
+                    a INSTITUIÇÃO — o nome do conector no provedor nunca entra */}
+                {connections.map((conexao) => {
+                  const nome = connectionLabel(conexao);
+                  return (
+                    <View
+                      key={conexao.id}
+                      className="flex-row items-center justify-between bg-elevated border border-border rounded-2xl px-3 py-3 mb-2"
                     >
-                      <Unlink size={16} color={t.text.tertiary} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                      <BankLogo
+                        institution={conexao.institution}
+                        size={36}
+                        Fallback={Landmark}
+                        style={{ marginRight: spacing[3] }}
+                      />
+                      <View className="flex-1 pr-3">
+                        <Text
+                          className="text-sm font-bold text-textPrimary"
+                          numberOfLines={1}
+                        >
+                          {nome}
+                        </Text>
+                        <Text className="text-xs text-textTertiary mt-0.5">
+                          {conexao.lastSyncedAt
+                            ? `Sincronizado em ${formatDayMonthShort(conexao.lastSyncedAt)}`
+                            : "Ainda não sincronizado"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDesconectar(conexao.id, nome)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Desconectar ${nome}`}
+                        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                      >
+                        <Unlink size={16} color={t.text.tertiary} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
 
                 <TouchableOpacity
                   className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3 mt-1"
@@ -1126,18 +1164,18 @@ export default function BankIntegration() {
                   <Text className="text-accent font-bold text-sm ml-2">
                     {isLinking
                       ? "Abrindo…"
-                      : pluggyItems.length > 0
+                      : connections.length > 0
                         ? "Conectar outro banco"
                         : "Conectar meu banco"}
                   </Text>
                 </TouchableOpacity>
 
-                {pluggyItems.length > 0 && (
+                {connections.length > 0 && (
                   <TouchableOpacity
                     className="flex-row items-center justify-center border border-border rounded-full px-4 py-3 mt-2"
-                    onPress={handlePluggySync}
+                    onPress={handleConnectorSync}
                     disabled={isSyncing}
-                    accessibilityLabel="Sincronizar contas do Meu Pluggy"
+                    accessibilityLabel="Sincronizar bancos conectados"
                     accessibilityRole="button"
                     activeOpacity={0.85}
                     style={{ opacity: isSyncing ? 0.6 : 1 }}
@@ -1168,14 +1206,20 @@ export default function BankIntegration() {
                 {BANK_SHORTCUTS.map((bank) => (
                   <TouchableOpacity
                     key={bank.id}
-                    className="w-[72px] h-[72px] rounded-xl justify-center items-center"
-                    style={{ backgroundColor: bank.color }}
+                    className="w-[72px] h-[72px] rounded-xl justify-center items-center bg-surface border border-border"
                     onPress={() => openBankApp(bank.url)}
                     accessibilityLabel={`Abrir app do ${bank.name}`}
                     accessibilityRole="button"
                     activeOpacity={0.8}
                   >
-                    <Text className="text-white font-bold text-xs">
+                    {/* O logo carrega a marca; o rótulo embaixo é para quem
+                        não a reconhece de vista — e para quem não tem logo,
+                        que fica com o monograma */}
+                    <BankLogo institution={bank.name} size={34} />
+                    <Text
+                      className="text-textSecondary font-bold text-[10px] mt-1"
+                      numberOfLines={1}
+                    >
                       {bank.name}
                     </Text>
                   </TouchableOpacity>
