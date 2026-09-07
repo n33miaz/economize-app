@@ -38,6 +38,7 @@ import {
   validateTransactionAlias,
   describeAliasFailure,
 } from "../utils/transactions";
+import BankLogo from "./BankLogo";
 import CategoryIcon from "./CategoryIcon";
 import CustomModal from "./CustomModal";
 import FloatingLabelInput from "./FloatingLabelInput";
@@ -309,22 +310,33 @@ export default function TransactionDetailSheet({
               dado faz o usuário achar que a tela quebrou */}
           <DetailRow label="Conta de origem">
             {account ? (
-              <View style={{ alignItems: "flex-end" }}>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: t.text.primary,
-                    fontSize: 13,
-                    fontWeight: "600",
-                    textAlign: "right",
-                  }}
-                >
-                  {accountDisplayName(account)}
-                </Text>
-                <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
-                  {accountKindLabel(account.type)}
-                  {account.institution ? ` · ${account.institution}` : ""}
-                </Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {/* O logo entra só quando há instituição a nomear: sem ela, um
+                    monograma de "cartão de crédito" seria enfeite */}
+                {account.institution ? (
+                  <BankLogo
+                    institution={account.institution}
+                    size={28}
+                    style={{ marginRight: spacing[2] }}
+                  />
+                ) : null}
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: t.text.primary,
+                      fontSize: 13,
+                      fontWeight: "600",
+                      textAlign: "right",
+                    }}
+                  >
+                    {accountDisplayName(account)}
+                  </Text>
+                  <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
+                    {accountKindLabel(account.type)}
+                    {account.institution ? ` · ${account.institution}` : ""}
+                  </Text>
+                </View>
               </View>
             ) : (
               <Text
