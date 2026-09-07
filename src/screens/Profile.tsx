@@ -42,6 +42,7 @@ import { useMotionPresets } from "../theme/motionPresets";
 import { askConfirm } from "../store/confirmStore";
 import { useAuthStore } from "../store/authStore";
 import { useUserStore } from "../store/userStore";
+import { usePlanStore } from "../store/planStore";
 import {
   Currency,
   Language,
@@ -51,9 +52,7 @@ import {
   usePreferencesStore,
 } from "../store/preferencesStore";
 import { useToastStore } from "../store/toastStore";
-import { useBankStore } from "../store/bankStore";
-import { useWalletStore } from "../store/walletStore";
-import { useReportsStore } from "../store/reportsStore";
+import { usePremiumOffer } from "../hooks/usePremiumOffer";
 import * as Haptics from "../utils/haptics";
 import {
   biometricSupport,
@@ -63,8 +62,10 @@ import {
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
 import ActionRow from "../components/ActionRow";
+import PremiumOfferSheet from "../components/PremiumOfferSheet";
 import { APP_ROUTES } from "../routes/routeNames";
 import CycleAnchorSheet from "../components/CycleAnchorSheet";
 import SectionTitle from "../components/SectionTitle";
@@ -221,7 +222,16 @@ export default function Profile() {
   const navigation = useNavigation();
   const { cardEntering, listItemEntering } = useMotionPresets();
   const { userName, logout } = useAuthStore();
-  const { me, isLoading, isSaving, fetchMe, updateName } = useUserStore();
+  const {
+    me,
+    stats,
+    isLoading,
+    isLoadingStats,
+    isSaving,
+    fetchMe,
+    fetchStats,
+    updateName,
+  } = useUserStore();
   const {
     theme,
     biometricLogin,
@@ -235,23 +245,10 @@ export default function Profile() {
     setViewDepth,
   } = usePreferencesStore();
   const showToast = useToastStore((s) => s.showToast);
-  const {
-    transactions: bankTxs,
-    isLoading: bankLoading,
-    fetchTransactions: fetchBankTxs,
-  } = useBankStore();
-  const {
-    transactions: walletTxs,
-    isLoading: walletLoading,
-    fetchTransactions: fetchWalletTxs,
-  } = useWalletStore();
-  const {
-    items: reports,
-    isLoading: reportsLoading,
-    fetch: fetchReports,
-  } = useReportsStore();
-
   const anchorDay = usePreferencesStore(selectCycleAnchorDay);
+  // `plan` já vem resolvido: um Plus com prazo vencido chega aqui como FREE
+  const isPlus = usePlanStore((s) => s.plan) === "PLUS";
+  const plusOffer = usePremiumOffer();
 
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -269,11 +266,12 @@ export default function Profile() {
 
   useEffect(() => {
     // O hub concentra dados que antes viviam em três telas: perfil (Conta),
-    // contadores das três fontes reais e o suporte a biometria do aparelho
+    // contadores das três fontes reais e o suporte a biometria do aparelho.
+    // Os contadores vêm contados do servidor: baixar as três listas para somar
+    // `length` custava 100 KB só de extrato e fazia desta uma das telas mais
+    // lentas do app
     fetchMe();
-    fetchReports();
-    fetchBankTxs();
-    fetchWalletTxs();
+    fetchStats();
     (async () => {
       const { available } = await biometricSupport();
       setBiometricAvailable(available);
@@ -512,20 +510,20 @@ export default function Profile() {
           <StatCard
             Icon={ReceiptText}
             label="Transações"
-            value={bankTxs.length}
-            loading={bankLoading && bankTxs.length === 0}
+            value={stats?.bankTransactions ?? 0}
+            loading={isLoadingStats && !stats}
           />
           <StatCard
             Icon={TrendingUp}
             label="Ativos"
-            value={walletTxs.length}
-            loading={walletLoading && walletTxs.length === 0}
+            value={stats?.walletTransactions ?? 0}
+            loading={isLoadingStats && !stats}
           />
           <StatCard
             Icon={FileText}
             label="Relatórios"
-            value={reports.length}
-            loading={reportsLoading && reports.length === 0}
+            value={stats?.reports ?? 0}
+            loading={isLoadingStats && !stats}
           />
         </Animated.View>
 
@@ -616,6 +614,19 @@ export default function Profile() {
             label="Família"
             description="Quem mora com você e o que cada um compartilha"
             onPress={() => navigation.navigate(APP_ROUTES.familia as never)}
+          />
+          {/* O plano é o único caminho DELIBERADO até a tela do Plus: a oferta
+              periódica pode ser recusada para sempre, e quem mudar de ideia
+              precisa de uma porta que não dependa de esperar um convite */}
+          <ActionRow
+            Icon={Sparkles}
+            label="Plano"
+            description={
+              isPlus
+                ? "Plus ativo — sem anúncios"
+                : "Gratuito · veja o que o Plus adiciona"
+            }
+            onPress={() => navigation.navigate(APP_ROUTES.plano as never)}
           />
         </Animated.View>
 
@@ -821,7 +832,14 @@ export default function Profile() {
             onPress={handleLogout}
           />
         </Animated.View>
+        {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
+            números dele. Some por completo no Plus */}
+        <AdSlot style={{ marginTop: spacing[4] }} />
       </ScrollView>
+
+      {/* Segunda tela de destino da oferta (a outra é a Home). As regras
+          de quando ela sobe estão em utils/premiumOffer */}
+      <PremiumOfferSheet visible={plusOffer.visible} onClose={plusOffer.close} />
 
       <CycleAnchorSheet
         visible={anchorSheetOpen}

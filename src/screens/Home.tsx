@@ -56,6 +56,8 @@ import PotStatesSheet from "../components/PotStatesSheet";
 import { useReviewStore } from "../store/reviewStore";
 
 import BlockGrid from "../components/BlockGrid";
+import AdSlot from "../components/AdSlot";
+import PremiumOfferSheet from "../components/PremiumOfferSheet";
 import CategoryIcon, { resolveCategoryColor } from "../components/CategoryIcon";
 import CycleAnchorSheet from "../components/CycleAnchorSheet";
 import CycleWindowChip from "../components/CycleWindowChip";
@@ -66,6 +68,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import IndicatorDetailSheet from "../components/IndicatorDetailSheet";
 import AssistantFAB from "../components/AssistantFAB";
 import { useBreakpoint } from "../hooks/useBreakpoint";
+import { usePremiumOffer } from "../hooks/usePremiumOffer";
 import { formatBRL, formatBRLCompact, formatDecimal, formatPercent } from "../utils/money";
 import { formatMonthLabel, formatWindowLabel } from "../utils/cycleWindow";
 import { favoriteDisplayItems } from "../utils/indicatorList";
@@ -117,6 +120,7 @@ export default function Home() {
   // no desktop eles se dividem em duas colunas em vez de virar uma fita de
   // 1180 px de largura por três telas de altura
   const { columns } = useBreakpoint();
+  const plusOffer = usePremiumOffer();
   const { cardEntering, listItemEntering } = useMotionPresets();
   // Preferência persistida: o "olhinho" sobrevive ao fechamento do app
   const hideBalance = usePreferencesStore((s) => s.hideBalance);
@@ -152,10 +156,11 @@ export default function Home() {
   const { transactions: walletTxs, fetchTransactions: fetchWallet } =
     useWalletStore();
   const { favorites } = useFavoritesStore();
-  const fetchQueue = useReviewStore((s) => s.fetchQueue);
-  const pendingReviewCount = useReviewStore((s) =>
-    s.pendingTransactionsCount(),
-  );
+  // Só a CONTAGEM: a Home escreve "N esperando você" e não desenha
+  // nenhuma das linhas. Buscar a fila agrupada custava 92 KB e 2,1 s a
+  // cada abertura para chegar a um número
+  const fetchPendingCount = useReviewStore((s) => s.fetchPendingCount);
+  const pendingReviewCount = useReviewStore((s) => s.pendingCount ?? 0);
   // Só a lista de séries (chamada leve): a projeção de saldo depende do saldo
   // base do extrato e vive na tela dedicada — aqui basta o que já está
   // comprometido, que sai das próprias séries
@@ -221,13 +226,13 @@ export default function Home() {
   // foco, que já cobre a montagem: uma busca só, sem duas correndo juntas
   useFocusEffect(
     useCallback(() => {
-      fetchQueue();
+      fetchPendingCount();
       fetchHomeMonthly();
       fetchRecurrences();
       fetchCommitted();
       fetchIncome();
     }, [
-      fetchQueue,
+      fetchPendingCount,
       fetchHomeMonthly,
       fetchRecurrences,
       fetchCommitted,
@@ -237,11 +242,14 @@ export default function Home() {
 
   const onRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Puxar para atualizar é pedido explícito: as buscas com janela de cache
+    // recebem `force`, senão o gesto não faria nada
     await Promise.all([
       fetchIndicators(),
       fetchNews(),
-      fetchWallet(),
+      fetchWallet(true),
       fetchHomeMonthly(),
+      fetchPendingCount(),
     ]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
@@ -1103,7 +1111,7 @@ export default function Home() {
                           </View>
                           <View
                             style={{
-                              marginTop: 5,
+                              marginTop: spacing[1],
                               height: 6,
                               borderRadius: radius.full,
                               backgroundColor: t.border.subtle,
@@ -1357,7 +1365,16 @@ export default function Home() {
         </Animated.View>,
           ]}
         </BlockGrid>
+
+        {/* Depois de tudo, e nunca entre o usuário e os números dele: o slot
+            é a última coisa do rolamento. Some por completo no Plus */}
+        <AdSlot style={{ marginTop: spacing[4] }} />
       </ScrollView>
+
+      {/* A oferta do Plus decide sozinha se sobe (regras em utils/premiumOffer:
+          nunca nas duas primeiras sessões, uma por sessão, 7 dias entre
+          convites, 30 depois de um "tenho interesse") */}
+      <PremiumOfferSheet visible={plusOffer.visible} onClose={plusOffer.close} />
 
       {/* Detalhes do indicador: sheet canônico compartilhado com as listas */}
       <IndicatorDetailSheet
