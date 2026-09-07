@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import api from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 
 export type ReportPeriod = "WEEKLY" | "MONTHLY" | "YEARLY";
 
@@ -44,8 +45,11 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         params: { period, page: 0, size: 20 },
       });
       set({ items: response.data?.content ?? [], isLoading: false });
-    } catch (e: any) {
-      set({ error: "Falha ao carregar relatórios", isLoading: false });
+    } catch (e) {
+      set({
+        error: describeLoadFailure(e, "Falha ao carregar relatórios"),
+        isLoading: false,
+      });
     }
   },
 

@@ -24,7 +24,32 @@ const operacao = (id: string, ativo = "PETR4") => ({
 describe("walletStore", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    useWalletStore.setState({ transactions: [], isLoading: false, error: null });
+    // `fetchedAt` entra no reset: sem ele, a janela de cache do teste anterior
+    // engoliria a busca deste
+    useWalletStore.setState({
+      transactions: [],
+      isLoading: false,
+      error: null,
+      fetchedAt: null,
+    });
+  });
+
+  it("Home e Carteira pedem a mesma lista: a segunda não sai", async () => {
+    mockApi.get.mockResolvedValue({ data: [operacao("t1")] });
+
+    await useWalletStore.getState().fetchTransactions();
+    await useWalletStore.getState().fetchTransactions();
+
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("com `force`, sai de novo", async () => {
+    mockApi.get.mockResolvedValue({ data: [operacao("t1")] });
+
+    await useWalletStore.getState().fetchTransactions();
+    await useWalletStore.getState().fetchTransactions(true);
+
+    expect(mockApi.get).toHaveBeenCalledTimes(2);
   });
 
   it("carrega as operações da carteira", async () => {

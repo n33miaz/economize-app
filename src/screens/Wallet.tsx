@@ -26,7 +26,9 @@ import { useWalletStore, Transaction } from "../store/walletStore";
 import { useIndicatorStore } from "../store/indicatorStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
+import ErrorState from "../components/ErrorState";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import ChartLegend from "../components/ChartLegend";
 import CustomModal from "../components/CustomModal";
 import Skeleton from "../components/Skeleton";
@@ -49,6 +51,7 @@ export default function Wallet() {
   const {
     transactions,
     isLoading,
+    error,
     addTransaction,
     removeTransaction,
     fetchTransactions,
@@ -360,10 +363,27 @@ export default function Wallet() {
               </Text>
             </>
           }
+          ListFooterComponent={
+            // Fim da lista: o slot nunca fica entre o usuário e os
+            // números dele. Devolve null no Plus, sem reservar espaço
+            <AdSlot style={{ marginTop: spacing[4] }} />
+          }
           ListEmptyComponent={
-            <Text className="text-textTertiary text-center mt-5 italic">
-              Nenhuma transação registrada.
-            </Text>
+            // Lista vazia por FALHA e lista vazia de verdade são coisas
+            // diferentes: "nenhuma transação registrada" afirma que a pessoa
+            // não tem ativo nenhum, e dizer isso quando a busca caiu é mentir
+            // sobre o patrimônio dela
+            error ? (
+              <ErrorState
+                title="Não foi possível carregar a carteira"
+                message={error}
+                onRetry={() => fetchTransactions(true)}
+              />
+            ) : (
+              <Text className="text-textTertiary text-center mt-5 italic">
+                Nenhuma transação registrada.
+              </Text>
+            )
           }
         />
       )}

@@ -6,6 +6,7 @@ import {
   getDebtOverview,
   getMonthlyAnalytics,
 } from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 import { getCycleAnchorDay } from "./preferencesStore";
 import { useRecurrenceStore } from "./recurrenceStore";
 import {
@@ -134,9 +135,12 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       // `selectedMonth` não é reescrito com `data.month`: em modo janela ele
       // volta null e a seleção do chip se perderia
       set({ data, debt, isLoading: false });
-    } catch {
+    } catch (e) {
       if (requestId !== monthlyRequestId) return;
-      set({ error: "Falha ao carregar a análise do período.", isLoading: false });
+      set({
+        error: describeLoadFailure(e, "Falha ao carregar a análise do período."),
+        isLoading: false,
+      });
     }
   },
 
