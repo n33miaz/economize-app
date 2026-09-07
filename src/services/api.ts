@@ -369,6 +369,21 @@ export interface BankTransaction {
    * conta ele é. A tela mostra "origem não informada" — nunca erro.
    */
   accountId: string | null;
+  /**
+   * Dinheiro do titular trocando de bolso (pagamento de fatura, Pix para si
+   * mesmo). Fica FORA das somas de receita e despesa — de todas elas.
+   */
+  internalTransfer: boolean;
+  /**
+   * A linha não deveria existir: entrou pela conexão bancária E por um arquivo,
+   * ou a pessoa a descartou. Sai de toda soma e continua no extrato com selo.
+   */
+  ignored: boolean;
+  /**
+   * Transferência entre pessoas da mesma casa. Sai SÓ da soma da Casa: aqui, na
+   * análise pessoal de quem recebeu, o dinheiro entrou mesmo.
+   */
+  familyTransfer: boolean;
 }
 
 export interface StatementUploadResult {
@@ -735,7 +750,23 @@ export interface AccountInvoice {
   transactionCount: number;
   /** Ciclo ainda aberto: o valor é parcial e cresce até o fechamento. */
   open: boolean;
+  /**
+   * Dinheiro já separado para pagar ESTA fatura (EC-181), ou `null` quando o
+   * dono não separou nada. Não é lançamento: nada saiu da conta, e por isso o
+   * extrato e as somas continuam iguais. Comparar com `total` é trabalho da
+   * tela — pode ser menor (cobre em parte) ou maior (a fatura ainda cresce).
+   */
+  reserve: InvoiceReserve | null;
   transactions: BankTransaction[];
+}
+
+export interface InvoiceReserve {
+  id: string;
+  amount: number;
+  /** Onde o dinheiro está parado; nulo quando foi separado fora do sistema. */
+  heldInAccountId: string | null;
+  heldInAccountName: string | null;
+  note: string | null;
 }
 
 export interface AccountInvoices {
@@ -1851,6 +1882,70 @@ export const getFamilyTransactions = async (params: {
     },
   });
   return response.data;
+};
+
+/**
+ * O que a varredura da casa encontrou — EC-189.
+ *
+ * `against` diz contra quantos outros membros houve nome completo para
+ * comparar: zero explica um resultado zerado sem o app ter de adivinhar se
+ * não achou nada ou não tinha como procurar.
+ */
+export interface FamilyTransferOutcome {
+  scanned: number;
+  marked: number;
+  against: number;
+}
+
+/**
+ * Desconta da casa o dinheiro que só circulou dentro dela — o Pix entre o
+ * casal, a mesada, o rateio da luz. Roda pela conta de quem chama: cada pessoa
+ * precisa rodar a sua. A marca vale SÓ para a visão da casa; na análise
+ * pessoal a linha continua lá, porque o dinheiro entrou mesmo.
+ */
+export const reconcileFamilyTransfers =
+  async (): Promise<FamilyTransferOutcome> => {
+    const response = await api.post<FamilyTransferOutcome>(
+      "/family/reconcile-transfers",
+    );
+    return response.data;
+  };
+
+/** Correção manual de uma linha: a decisão da pessoa vence a varredura. */
+export const setFamilyTransfer = async (
+  id: string,
+  familyTransfer: boolean,
+): Promise<BankTransaction> => {
+  const response = await api.patch<BankTransaction>(
+    `/transactions/${id}/family-transfer`,
+    { familyTransfer },
+  );
+  return response.data;
+};
+
+/**
+ * Registra que o valor da fatura já está separado — EC-181. Não cria
+ * lançamento nenhum: o dinheiro não saiu, e inventar um débito falsificaria o
+ * extrato. Chamar de novo sobrescreve, que é o comum enquanto a fatura cresce.
+ */
+export const saveInvoiceReserve = async (
+  accountId: string,
+  reference: string,
+  body: { amount: number; heldInAccountId?: string | null; note?: string | null },
+): Promise<InvoiceReserve> => {
+  const response = await api.put<InvoiceReserve>(
+    `/accounts/${accountId}/invoices/${reference}/reserve`,
+    body,
+  );
+  return response.data;
+};
+
+/** Desfaz a reserva: o dono gastou em outra coisa, ou a fatura já foi paga. */
+export const deleteInvoiceReserve = async (
+  accountId: string,
+  reference: string,
+): Promise<void> => {
+  await api.delete(`/accounts/${accountId}/invoices/${reference}/reserve`);
 };
 
 // --- Segundo fator (TOTP) ---

@@ -27,6 +27,9 @@ const tx = (
   uploadId: null,
   // Origem nula é o caso comum do histórico: a métrica não olha para ela
   accountId: null,
+  internalTransfer: false,
+  ignored: false,
+  familyTransfer: false,
 });
 
 describe("calculateBankMetrics", () => {

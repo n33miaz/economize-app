@@ -31,6 +31,9 @@ const bankTx: BankTransaction = {
   normalizedDescription: null,
   uploadId: null,
   accountId: null,
+  internalTransfer: false,
+  ignored: false,
+  familyTransfer: false,
 };
 
 const walletTx: WalletTransaction = {

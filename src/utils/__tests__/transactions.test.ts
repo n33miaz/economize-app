@@ -30,6 +30,9 @@ const tx = (overrides: Partial<BankTransaction> = {}): BankTransaction => ({
   normalizedDescription: "smartfit academia",
   uploadId: "u1",
   accountId: null,
+  internalTransfer: false,
+  ignored: false,
+  familyTransfer: false,
   ...overrides,
 });
 

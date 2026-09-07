@@ -81,6 +81,9 @@ function tx(overrides: Partial<BankTransaction> = {}): BankTransaction {
     normalizedDescription: "ifood rest",
     uploadId: null,
     accountId: null,
+    internalTransfer: false,
+    ignored: false,
+    familyTransfer: false,
     ...overrides,
   };
 }
@@ -98,6 +101,7 @@ function invoice(overrides: Partial<AccountInvoice> = {}): AccountInvoice {
     paymentsTotal: 900,
     transactionCount: 12,
     open: false,
+    reserve: null,
     transactions: [],
     ...overrides,
   };
