@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Baixe o Economize!</title>
+<meta name="description" content="Baixe a versão mais recente do Economize! para Android ou use a versão web no iPhone.">
+<meta name="theme-color" content="#0F0E0B">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+<!--
+  Página de download.
+
+  POR QUE UMA PÁGINA ESTÁTICA. É para onde o app manda quem está numa versão
+  que o servidor não aceita mais (o gate de atualização abre este endereço), e
+  também o que se cola numa mensagem para quem ainda não tem o app. Precisa
+  funcionar sempre — inclusive quando a API está hibernada ou fora do ar —, e
+  por isso o texto padrão já está no HTML: o script só ENRIQUECE (número da
+  versão, link do APK) quando consegue falar com a API.
+
+  SEM JS DE TERCEIROS, de propósito. Quem chega aqui pode estar num Android
+  velho, numa rede ruim, ou ter chegado por desconfiança ("por que me pediram
+  para baixar?"). Uma página que carrega rastreadores e fontes externas antes
+  de dizer o que é não ajuda em nada disso.
+
+  O link do APK vem da API (`apkUrl`). Enquanto o dono não publicar um, a
+  página diz "em breve" e aponta para a versão web — nunca para um arquivo
+  que não existe.
+-->
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    background:#0F0E0B;color:#EAE7DE;
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:24px}
+  .caixa{max-width:420px;width:100%}
+  .topo{text-align:center}
+  h1{font-size:24px;margin:0 0 6px;font-weight:700;letter-spacing:-.2px}
+  h2{font-size:13px;margin:0 0 10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#757166}
+  p{color:#AFABA1;font-size:14px;margin:0 0 14px}
+  .pote{width:88px;height:88px;margin:0 auto 18px;display:block}
+  .versao{display:inline-block;margin:0 0 20px;padding:6px 12px;border-radius:999px;
+    background:#22201B;border:1px solid #35332C;color:#AFABA1;font-size:13px;
+    font-variant-numeric:tabular-nums}
+  .versao b{color:#F2C14E;font-weight:700}
+  .btn{display:block;width:100%;text-align:center;background:#F2C14E;color:#0F0E0B;text-decoration:none;
+    padding:15px 22px;border-radius:999px;font-weight:700;font-size:15px}
+  .btn.desligado{background:#22201B;color:#757166;border:1px solid #35332C;cursor:default}
+  .sec{color:#F2C14E;text-decoration:none;font-weight:700}
+  .cartao{background:#181713;border:1px solid #282520;border-radius:18px;padding:18px 18px 8px;margin-top:16px}
+  ol{margin:0 0 10px;padding-left:20px;color:#AFABA1;font-size:14px}
+  ol li{margin-bottom:6px}
+  .nota{color:#757166;font-size:12px;margin:14px 0 0;text-align:center}
+  .oculto{display:none}
+</style>
+</head>
+<body>
+<div class="caixa">
+  <div class="topo">
+    <!-- A marca: o pote que enche. Mesma geometria do PotIcon do app -->
+    <svg class="pote" viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <clipPath id="interior">
+          <path d="M19 13.5V16.5C19 19.5 11.5 21 11.5 29V49Q11.5 58 20 58H44Q52.5 58 52.5 49V29C52.5 21 45 19.5 45 16.5V13.5Z"/>
+        </clipPath>
+      </defs>
+      <path d="M19 13.5V16.5C19 19.5 11.5 21 11.5 29V49Q11.5 58 20 58H44Q52.5 58 52.5 49V29C52.5 21 45 19.5 45 16.5V13.5Z"
+            fill="#F2C14E" fill-opacity=".1"/>
+      <g clip-path="url(#interior)">
+        <g transform="translate(30 47) rotate(-16)"><rect x="-8.5" y="-4.25" width="17" height="8.5" rx="1.6" fill="#BC8508"/></g>
+        <g transform="translate(36 43) rotate(9)"><rect x="-8.5" y="-4.25" width="17" height="8.5" rx="1.6" fill="#BC8508"/></g>
+        <circle cx="22.5" cy="52" r="5.2" fill="#F2C14E"/><circle cx="22.5" cy="52" r="3" fill="none" stroke="#0F0E0B" stroke-width="1.3"/>
+        <circle cx="41.5" cy="52" r="5.2" fill="#F2C14E"/><circle cx="41.5" cy="52" r="3" fill="none" stroke="#0F0E0B" stroke-width="1.3"/>
+        <circle cx="32" cy="51.5" r="5.4" fill="#F2C14E"/><circle cx="32" cy="51.5" r="3.1" fill="none" stroke="#0F0E0B" stroke-width="1.3"/>
+        <circle cx="27" cy="44.5" r="5.2" fill="#F2C14E"/><circle cx="27" cy="44.5" r="3" fill="none" stroke="#0F0E0B" stroke-width="1.3"/>
+        <circle cx="37.5" cy="44.5" r="5.2" fill="#F2C14E"/><circle cx="37.5" cy="44.5" r="3" fill="none" stroke="#0F0E0B" stroke-width="1.3"/>
+      </g>
+      <path d="M19 13.5V16.5C19 19.5 11.5 21 11.5 29V49Q11.5 58 20 58H44Q52.5 58 52.5 49V29C52.5 21 45 19.5 45 16.5V13.5"
+            fill="none" stroke="#F2C14E" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M16.5 30.5v12" stroke="#F2C14E" stroke-width="2" stroke-linecap="round" stroke-opacity=".4"/>
+      <rect x="15.5" y="6" width="33" height="8" rx="3" fill="#F2C14E"/>
+      <rect x="27.5" y="8.7" width="9" height="2.6" rx="1.3" fill="#0F0E0B"/>
+    </svg>
+
+    <h1>Baixe o Economize!</h1>
+    <p id="mensagem">Controle de gastos com importação de extrato, categorias automáticas e análise do mês.</p>
+    <span class="versao">Versão mais recente: <b id="versao">consultando…</b></span>
+
+    <a id="apk" class="btn oculto" href="#" rel="noopener">Baixar APK (Android)</a>
+    <span id="embreve" class="btn desligado">Em breve na Play Store</span>
+    <p id="alternativa" style="margin-top:14px">
+      Enquanto isso, <a class="sec" href="/">use a versão web</a> — funciona no
+      celular e no computador, sem instalar nada.
+    </p>
+  </div>
+
+  <div class="cartao">
+    <h2>No Android</h2>
+    <ol>
+      <li>Toque em <b>Baixar APK</b> e aguarde o arquivo terminar.</li>
+      <li>Abra o arquivo baixado (na notificação ou em <i>Downloads</i>).</li>
+      <li>Se o Android perguntar, <b>permita instalar</b> a partir do navegador. É só desta vez.</li>
+      <li>Toque em <b>Instalar</b>, abra o app e entre com sua conta.</li>
+    </ol>
+  </div>
+
+  <div class="cartao">
+    <h2>No iPhone</h2>
+    <ol>
+      <li>Abra <a class="sec" href="/">a versão web</a> no Safari.</li>
+      <li>Toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>.</li>
+      <li>O Economize! passa a abrir como um app, com ícone e tudo.</li>
+    </ol>
+  </div>
+
+  <p class="nota" id="rodape">Seus dados ficam na sua conta: atualizar não apaga nada.</p>
+</div>
+
+<script>
+(function () {
+  // O endereço público da API. É o MESMO que o app usa em produção; a página
+  // não tem como perguntar ao app, então repete o literal
+  var URL_VERSAO = "https://economize-api.onrender.com/api/v1/app/version";
+
+  var versao = document.getElementById("versao");
+  var mensagem = document.getElementById("mensagem");
+  var apk = document.getElementById("apk");
+  var emBreve = document.getElementById("embreve");
+
+  // Sem resposta, a página continua completa — só sem o número. É o caso da
+  // API hibernada (plano gratuito do Render), e quem chegou aqui não deve
+  // esperar um minuto olhando para "consultando…"
+  function semApi() {
+    versao.textContent = "veja no app";
+  }
+
+  if (typeof fetch !== "function") {
+    semApi();
+    return;
+  }
+
+  var controle = typeof AbortController === "function" ? new AbortController() : null;
+  var relogio = setTimeout(function () {
+    if (controle) controle.abort();
+  }, 12000);
+
+  fetch(URL_VERSAO, controle ? { signal: controle.signal } : undefined)
+    .then(function (resposta) {
+      if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+      return resposta.json();
+    })
+    .then(function (dados) {
+      clearTimeout(relogio);
+      if (dados && dados.latestVersion) versao.textContent = dados.latestVersion;
+      else semApi();
+      if (dados && dados.message) mensagem.textContent = dados.message;
+
+      // Só oferece o arquivo quando ele existe. `apkUrl` nulo é o estado
+      // normal enquanto o dono não publica — a página não inventa o link
+      if (dados && typeof dados.apkUrl === "string" && /^https?:\/\//.test(dados.apkUrl)) {
+        apk.href = dados.apkUrl;
+        apk.classList.remove("oculto");
+        emBreve.classList.add("oculto");
+      }
+    })
+    .catch(function () {
+      clearTimeout(relogio);
+      semApi();
+    });
+})();
+</script>
+</body>
+</html>
