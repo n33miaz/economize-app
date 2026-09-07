@@ -31,6 +31,7 @@ import {
 import ChartLegend from "../components/ChartLegend";
 import ErrorState from "../components/ErrorState";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
@@ -205,7 +206,7 @@ function ForecastMonthCard({
               flexDirection: "row",
               alignItems: "center",
               paddingHorizontal: spacing[2],
-              paddingVertical: 3,
+              paddingVertical: spacing[1],
               borderRadius: radius.full,
               backgroundColor: t.semantic.danger,
             }}
@@ -748,6 +749,9 @@ export default function BalanceForecast() {
               </Text>
             </>
           )}
+        {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
+            números dele. Some por completo no Plus */}
+        <AdSlot style={{ marginTop: spacing[4] }} />
         </ScrollView>
       )}
     </PageContainer>

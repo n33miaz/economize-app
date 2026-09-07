@@ -25,6 +25,7 @@ import type { Wish } from "../services/api";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import SectionTitle from "../components/SectionTitle";
 import CustomModal from "../components/CustomModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
@@ -288,6 +289,9 @@ export default function Wishes({ navigation }: any) {
               Novo desejo
             </Text>
           </Pressable>
+        {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
+            números dele. Some por completo no Plus */}
+        <AdSlot style={{ marginTop: spacing[4] }} />
         </ScrollView>
       </PageContainer>
 

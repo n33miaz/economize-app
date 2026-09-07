@@ -34,6 +34,7 @@ import ReportDetailSheet from "../components/ReportDetailSheet";
 import ReportPeriodSheet from "../components/ReportPeriodSheet";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
 import AssistantFAB, {
   ASSISTANT_FAB_HEIGHT,
@@ -450,6 +451,11 @@ export default function Reports() {
             onRefresh={() => fetch(tab)}
             tintColor={t.accent.neon}
           />
+        }
+        ListFooterComponent={
+          // Fim da lista: o slot nunca fica entre o usuário e os
+          // números dele. Devolve null no Plus, sem reservar espaço
+          <AdSlot style={{ marginTop: spacing[4] }} />
         }
         ListEmptyComponent={
           isLoading ? (

@@ -72,4 +72,32 @@ describe("preferencesStore", () => {
     expect(selectCycleAnchorDay(usePreferencesStore.getState())).toBe(1);
     expect(getCycleAnchorDay()).toBe(1);
   });
+
+  it("conta as sessões a partir do zero", () => {
+    expect(usePreferencesStore.getState().sessionCount).toBe(0);
+    usePreferencesStore.getState().bumpSessionCount();
+    usePreferencesStore.getState().bumpSessionCount();
+    expect(usePreferencesStore.getState().sessionCount).toBe(2);
+  });
+
+  it("guarda quando a oferta do Plus apareceu e quando houve interesse", () => {
+    expect(usePreferencesStore.getState().plusOfferLastShownAt).toBeNull();
+    expect(usePreferencesStore.getState().plusInterestAt).toBeNull();
+    usePreferencesStore.getState().markPlusOfferShown(1000);
+    usePreferencesStore.getState().markPlusInterest(2000);
+    expect(usePreferencesStore.getState().plusOfferLastShownAt).toBe(1000);
+    expect(usePreferencesStore.getState().plusInterestAt).toBe(2000);
+  });
+
+  it("reset zera também as marcas da oferta — 'apagar dados' apaga tudo", () => {
+    usePreferencesStore.getState().bumpSessionCount();
+    usePreferencesStore.getState().markPlusOfferShown(1000);
+    usePreferencesStore.getState().markPlusInterest(2000);
+
+    usePreferencesStore.getState().reset();
+
+    expect(usePreferencesStore.getState().sessionCount).toBe(0);
+    expect(usePreferencesStore.getState().plusOfferLastShownAt).toBeNull();
+    expect(usePreferencesStore.getState().plusInterestAt).toBeNull();
+  });
 });

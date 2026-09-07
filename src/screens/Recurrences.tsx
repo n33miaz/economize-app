@@ -38,6 +38,7 @@ import CategoryIcon from "../components/CategoryIcon";
 import ErrorState from "../components/ErrorState";
 import { formatMonthLabel } from "../components/MonthSelector";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
 import { formatBRL, formatBRLCompact } from "../utils/money";
@@ -82,7 +83,7 @@ function Badge({
         alignItems: "center",
         alignSelf: "flex-start",
         paddingHorizontal: spacing[2],
-        paddingVertical: 3,
+        paddingVertical: spacing[1],
         borderRadius: radius.full,
         backgroundColor: background,
       }}
@@ -740,6 +741,9 @@ export default function Recurrences() {
               ))
             )}
           </View>
+        {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
+            números dele. Some por completo no Plus */}
+        <AdSlot style={{ marginTop: spacing[4] }} />
         </ScrollView>
       )}
 

@@ -60,6 +60,25 @@ interface PreferencesState {
    * agosto não pode calar o de setembro.
    */
   mealVoucherPromptDismissedFor: string | null;
+  /**
+   * Quantas vezes o app foi aberto neste aparelho. Alimenta a regra "a oferta
+   * do Plus nunca aparece nas duas primeiras sessões": quem acabou de chegar
+   * ainda não viu valor nenhum, e pedir dinheiro antes disso é o jeito mais
+   * rápido de ensinar a fechar tudo que parece um anúncio.
+   */
+  sessionCount: number;
+  /**
+   * Quando a oferta do Plus foi exibida pela última vez (epoch ms). É o que
+   * garante os 7 dias de silêncio entre uma exibição e a próxima — e o
+   * "máximo uma por sessão", comparado com o início da sessão atual.
+   */
+  plusOfferLastShownAt: number | null;
+  /**
+   * Quando o usuário disse "tenho interesse" (epoch ms). Depois disso a
+   * oferta cala por 30 dias: quem já respondeu sim não precisa ser perguntado
+   * de novo enquanto o pagamento não existe.
+   */
+  plusInterestAt: number | null;
   hasHydrated: boolean;
 
   setTheme: (theme: ThemeMode) => void;
@@ -77,6 +96,10 @@ interface PreferencesState {
   setCycleAnchorDay: (day: number) => void;
   setPotAnnouncementSeen: (seen: boolean) => void;
   dismissMealVoucherPrompt: (landedOn: string) => void;
+  /** Uma abertura do app a mais. Chamado UMA vez por sessão, depois de hidratar. */
+  bumpSessionCount: () => void;
+  markPlusOfferShown: (at: number) => void;
+  markPlusInterest: (at: number) => void;
   reset: () => void;
 }
 
@@ -95,6 +118,9 @@ const initialState = {
   cycleAnchorDay: DEFAULT_CYCLE_ANCHOR_DAY,
   potAnnouncementSeen: false,
   mealVoucherPromptDismissedFor: null as string | null,
+  sessionCount: 0,
+  plusOfferLastShownAt: null as number | null,
+  plusInterestAt: null as number | null,
 };
 
 export const usePreferencesStore = create(
@@ -123,6 +149,10 @@ export const usePreferencesStore = create(
       setPotAnnouncementSeen: (potAnnouncementSeen) => set({ potAnnouncementSeen }),
       dismissMealVoucherPrompt: (landedOn) =>
         set({ mealVoucherPromptDismissedFor: landedOn }),
+      bumpSessionCount: () =>
+        set((state) => ({ sessionCount: state.sessionCount + 1 })),
+      markPlusOfferShown: (at) => set({ plusOfferLastShownAt: at }),
+      markPlusInterest: (at) => set({ plusInterestAt: at }),
       reset: () => set({ ...initialState }),
     }),
     {

@@ -47,6 +47,7 @@ import CycleWindowChip from "../components/CycleWindowChip";
 import MonthSelector from "../components/MonthSelector";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import { usePreferencesStore, selectCycleAnchorDay } from "../store/preferencesStore";
@@ -1599,6 +1600,9 @@ export default function Analytics() {
             </BlockGrid>
           </View>
         )}
+        {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
+            números dele. Some por completo no Plus */}
+        <AdSlot style={{ marginTop: spacing[4] }} />
       </ScrollView>
 
       <CycleAnchorSheet
