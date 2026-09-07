@@ -99,7 +99,7 @@ export default function FilterChipRow({
               <View
                 style={{
                   marginLeft: spacing[2],
-                  paddingHorizontal: 6,
+                  paddingHorizontal: spacing[2],
                   borderRadius: radius.full,
                   backgroundColor: active
                     ? "transparent"

@@ -136,7 +136,7 @@ export default function InvoiceCard({
               style={{
                 color: t.text.secondary,
                 fontSize: 12,
-                marginTop: 3,
+                marginTop: spacing[1],
                 fontVariant: ["tabular-nums"],
               }}
             >

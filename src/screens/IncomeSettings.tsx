@@ -434,7 +434,7 @@ export default function IncomeSettings() {
                             <BadgeCheck
                               size={14}
                               color={t.semantic.success}
-                              style={{ marginLeft: 6 }}
+                              style={{ marginLeft: spacing[2] }}
                             />
                           )}
                         </View>
