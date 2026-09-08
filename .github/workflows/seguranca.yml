@@ -59,11 +59,12 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - name: Auditar produção
-        # `--omit=dev` de propósito: CVE em ferramenta de build não chega ao
-        # aparelho de ninguém, e barrar por causa dela treina o time a ignorar
-        # o alerta. O relatório completo fica no passo seguinte, sem barrar
-        run: npm audit --omit=dev --audit-level=high
+      - name: Auditar o que vai no aparelho
+        # O critério está no script, com o porquê escrito: `npm audit` sozinho
+        # reprova este projeto sempre, porque o Expo e o React Native declaram o
+        # próprio ferramental de build como dependência de produção. Esteira que
+        # reprova sempre não é portão, é alarme que se aprende a ignorar
+        run: npm audit --omit=dev --json | node .github/scripts/auditar-dependencias.mjs
       - name: Relatório completo (não barra)
         if: always()
         run: npm audit || true
