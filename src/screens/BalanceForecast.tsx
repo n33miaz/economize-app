@@ -439,9 +439,18 @@ export default function BalanceForecast() {
   const bankAttempted = useRef(false);
 
   // O saldo base é o líquido do extrato já importado: é o único saldo que o
-  // app conhece, e mandá-lo é o que faz o acumulado significar alguma coisa
+  // app conhece, e mandá-lo é o que faz o acumulado significar alguma coisa.
+  //
+  // Fora da conta ficam as linhas que a Análise também não soma: dinheiro do
+  // titular trocando de bolso (entra e sai, e somar os dois lados aqui move o
+  // ponto de partida para os dois lados) e linha ignorada, que entrou por duas
+  // fontes e contaria em dobro. Medido no extrato do dono: 197 transferências
+  // próprias e 20 duplicatas.
   const startingBalance = useMemo(
-    () => calculateBankMetrics(transactions).total,
+    () =>
+      calculateBankMetrics(
+        transactions.filter((tx) => !tx.internalTransfer && !tx.ignored),
+      ).total,
     [transactions],
   );
 
