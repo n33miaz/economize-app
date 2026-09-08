@@ -1941,6 +1941,24 @@ export const setTransactionIgnored = async (
   return response.data;
 };
 
+/**
+ * O que a faxina mexeu. É a mesma rotina que roda sozinha depois de cada
+ * importação — este gatilho existe para reprocessar o histórico quando uma
+ * regra melhora.
+ */
+export interface TidyOutcome {
+  internalMarked: number;
+  familyMarked: number;
+  duplicatesMarked: number;
+  seriesCreated: number;
+  seriesUpdated: number;
+}
+
+export const tidyStatement = async (): Promise<TidyOutcome> => {
+  const response = await api.post<TidyOutcome>("/transactions/tidy");
+  return response.data;
+};
+
 /** Correção manual de uma linha: a decisão da pessoa vence a varredura. */
 export const setFamilyTransfer = async (
   id: string,

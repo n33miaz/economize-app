@@ -38,6 +38,8 @@ import { clearLocalData } from "../utils/localData";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
+import { tidyStatement } from "../services/api";
 import ActionRow from "../components/ActionRow";
 import SectionTitle from "../components/SectionTitle";
 
@@ -63,6 +65,34 @@ export default function AdvancedOptions() {
   const showToast = useToastStore((s) => s.showToast);
 
   const [exporting, setExporting] = useState(false);
+  const [tidying, setTidying] = useState(false);
+
+  const handleTidy = async () => {
+    if (tidying) return;
+    setTidying(true);
+    try {
+      const r = await tidyStatement();
+      const mexeu =
+        r.internalMarked + r.familyMarked + r.duplicatesMarked +
+        r.seriesCreated + r.seriesUpdated;
+      // O número por número, e não "pronto": a faxina mexe em quatro coisas
+      // diferentes, e o dono precisa saber em qual delas ela mexeu
+      showToast(
+        mexeu === 0
+          ? "Extrato já estava limpo: nada a marcar."
+          : `${r.internalMarked} própria(s), ${r.familyMarked} da casa, ` +
+            `${r.duplicatesMarked} duplicata(s), ${r.seriesCreated + r.seriesUpdated} recorrência(s).`,
+        "success",
+      );
+      // A previsão e a Análise leem estes números: sem recarregar, a tela
+      // seguinte mostraria o de antes
+      await useBankStore.getState().fetchTransactions();
+    } catch {
+      showToast("Não consegui reprocessar agora. Tente de novo.", "error");
+    } finally {
+      setTidying(false);
+    }
+  };
 
   const handleExport = async () => {
     if (exporting) return;
@@ -160,6 +190,18 @@ export default function AdvancedOptions() {
             disabled={exporting}
             right={
               exporting ? (
+                <ActivityIndicator size="small" color={t.accent.neon} />
+              ) : undefined
+            }
+          />
+          <ActionRow
+            Icon={Sparkles}
+            label={tidying ? "Reprocessando…" : "Reprocessar o extrato"}
+            description="Marca de novo transferência própria, dinheiro da casa e linha repetida, e refaz as recorrências"
+            onPress={handleTidy}
+            disabled={tidying}
+            right={
+              tidying ? (
                 <ActivityIndicator size="small" color={t.accent.neon} />
               ) : undefined
             }
