@@ -44,6 +44,17 @@ código novo não precisava existir.
 upgrade planejado quebra o app inteiro — já aconteceu neste projeto. A
 atualização dessas quatro é decisão, não rotina.
 
+## Como o merge entra
+
+**Merge commit**, e não rebase nem squash. A primeira versão da proteção exigia
+histórico linear, e isso obriga o merge a reescrever os commits — o que faz `homolog`
+divergir de `main` no instante seguinte ao merge. Como `homolog` também é protegido (sem
+force-push, com razão), ele fica impossível de realinhar sem afrouxar a regra.
+
+Com merge commit, `homolog` continua ancestral de `main`, tudo avança por fast-forward, e a
+proteção que importa fica de pé: check verde obrigatório, sem push direto, sem force-push,
+sem apagar branch.
+
 ## Commit
 
 Conventional Commits em inglês, imperativo, minúsculas, sem ponto final.
