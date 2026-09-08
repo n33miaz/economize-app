@@ -814,7 +814,7 @@ function BlockHeader({
       <View style={{ flex: 1, marginRight: spacing[3] }}>
         <Text
           accessibilityRole="header"
-          style={{ color: t.text.primary, fontSize: 17, fontWeight: "700" }}
+          style={{ color: t.text.primary, fontSize: 18, fontWeight: "700" }}
         >
           {title}
         </Text>
@@ -868,7 +868,7 @@ function EmptyBlock({
       <Text
         style={{
           color: t.text.primary,
-          fontSize: 17,
+          fontSize: 18,
           fontWeight: "700",
           textAlign: "center",
           marginBottom: spacing[2],

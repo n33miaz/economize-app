@@ -487,7 +487,7 @@ export default function Home() {
                     <Text
                       style={{
                         color: t.text.primary,
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: "700",
                         textAlign: "center",
                       }}
@@ -559,7 +559,7 @@ export default function Home() {
                     <Text
                       style={{
                         color: t.text.primary,
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: "700",
                         textAlign: "center",
                       }}

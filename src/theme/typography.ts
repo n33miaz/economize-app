@@ -1,5 +1,29 @@
 import type { TextStyle } from "react-native";
 
+/**
+ * A ESCALA — e por que ela tem estes degraus e não outros.
+ *
+ * Medido no código em 08/09/2026: o app usava **19 tamanhos de fonte** enquanto
+ * este arquivo declarava 11. Os oito de fora não eram todos iguais em peso:
+ * `13` aparecia 92 vezes e `15` outras 39, espalhados por mais de vinte telas —
+ * eles são degrau de verdade, e negar isso só tornava o arquivo uma ficção.
+ * Já `9`, `17`, `30`, `32` e `34` eram uma ou oito ocorrências avulsas.
+ *
+ * Então a escala passou a dizer a verdade: os que carregam peso entraram, os
+ * avulsos foram encostados no degrau vizinho. E `FONT_SIZES` abaixo existe para
+ * o teste conseguir cobrar isso — sem ele, a vigésima medida entra no próximo
+ * componente e ninguém percebe.
+ *
+ * <b>O que este arquivo NÃO resolve</b>: 12, 13, 14, 15 e 16 são cinco degraus
+ * dentro de quatro pixels. Enxugar isso reflui texto em vinte telas e precisa
+ * de olho na tela, um por um — continua aberto no EC-162.
+ */
+export const FONT_SIZES = [
+  10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 36, 40,
+] as const;
+
+export type FontSize = (typeof FONT_SIZES)[number];
+
 export const typography = {
   display: {
     fontFamily: "Roboto_700Bold",

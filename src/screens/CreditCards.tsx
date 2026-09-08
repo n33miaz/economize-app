@@ -102,7 +102,7 @@ function EmptyBlock({
       <Text
         style={{
           color: t.text.primary,
-          fontSize: 17,
+          fontSize: 18,
           fontWeight: "700",
           textAlign: "center",
           marginBottom: spacing[2],
