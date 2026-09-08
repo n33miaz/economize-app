@@ -15,11 +15,11 @@ import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore, type LoginOutcome } from "../../store/authStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useToastStore } from "../../store/toastStore";
+import { AUTH_MAX_WIDTH } from "../../utils/layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { biometricSupport, enrollBiometrics } from "../../utils/biometrics";
 
 // Formulário de login não ganha nada em ficar largo; 420 é a medida do cartão
-const AUTH_MAX_WIDTH = 420;
 
 /** A sessão retida enquanto o modal de biometria está no ar. */
 interface SessaoPendente {
