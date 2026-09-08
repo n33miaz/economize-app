@@ -1,0 +1,85 @@
+name: Segurança
+
+# Quatro varreduras que respondem a perguntas diferentes:
+#   1. entrou segredo no histórico?           (gitleaks)
+#   2. a dependência nova tem CVE?            (dependency-review, só em PR)
+#   3. o que já está instalado tem CVE?       (npm audit)
+#   4. o código tem padrão inseguro?          (CodeQL)
+on:
+  push:
+    branches: ["develop", "homolog", "main"]
+  pull_request:
+    branches: ["develop", "homolog", "main"]
+  schedule:
+    # CVE nova aparece sem ninguém mexer no código
+    - cron: "0 9 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguranca-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  segredos:
+    name: Segredos no histórico
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Histórico inteiro: segredo que vazou há vinte commits continua
+          # vazado, mesmo que o arquivo já tenha sido removido depois. E o app
+          # carrega chave de API pública no bundle por construção
+          # (EXPO_PUBLIC_*), então o que NÃO pode vazar é exatamente o resto
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencias:
+    name: Dependência nova com CVE
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
+
+  auditoria:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Auditar produção
+        # `--omit=dev` de propósito: CVE em ferramenta de build não chega ao
+        # aparelho de ninguém, e barrar por causa dela treina o time a ignorar
+        # o alerta. O relatório completo fica no passo seguinte, sem barrar
+        run: npm audit --omit=dev --audit-level=high
+      - name: Relatório completo (não barra)
+        if: always()
+        run: npm audit || true
+
+  codeql:
+    name: CodeQL (TypeScript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
