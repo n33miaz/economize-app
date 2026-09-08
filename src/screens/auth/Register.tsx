@@ -12,6 +12,7 @@ import Animated from "react-native-reanimated";
 
 import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore } from "../../store/authStore";
+import { AUTH_MAX_WIDTH } from "../../utils/layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../../theme/motionPresets";
 import {
@@ -59,7 +60,7 @@ export default function Register({ navigation }: any) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-background justify-center px-6"
       // Mesmo teto do Login: a tela de auth não passa pelo PageContainer
-      style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}
+      style={{ width: "100%", maxWidth: AUTH_MAX_WIDTH, alignSelf: "center" }}
     >
       <TouchableOpacity
         className="absolute top-14 left-6 w-10 h-10 bg-elevated rounded-xl justify-center items-center"
@@ -71,12 +72,15 @@ export default function Register({ navigation }: any) {
         <ArrowLeft size={20} color={t.text.primary} />
       </TouchableOpacity>
 
-      <Animated.View entering={cardEntering} className="mb-10 mt-10">
+      {/* Só margem embaixo: o contêiner já centraliza, e o `mt-10` empurrava
+          o bloco inteiro para baixo do centro — visível no aparelho, onde a
+          tela abria com um vazio no topo e o botão quase no rodapé */}
+      <Animated.View entering={cardEntering} className="mb-10">
         <Text className="text-3xl font-bold text-textPrimary">
           Criar Conta
         </Text>
         <Text className="text-textSecondary mt-2">
-          Comece a gerenciar seus investimentos
+          Organize seu dinheiro a partir do seu extrato
         </Text>
       </Animated.View>
 

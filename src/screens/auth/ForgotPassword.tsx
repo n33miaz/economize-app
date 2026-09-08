@@ -14,6 +14,7 @@ import axios from "axios";
 
 import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { forgotPassword } from "../../services/api";
+import { AUTH_MAX_WIDTH } from "../../utils/layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../../theme/motionPresets";
 
@@ -53,7 +54,7 @@ export default function ForgotPassword({ navigation }: any) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-background justify-center px-6"
       // Mesmo teto do Login: a tela de auth não passa pelo PageContainer
-      style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}
+      style={{ width: "100%", maxWidth: AUTH_MAX_WIDTH, alignSelf: "center" }}
     >
       <TouchableOpacity
         className="absolute top-14 left-6 w-10 h-10 bg-elevated rounded-xl justify-center items-center"

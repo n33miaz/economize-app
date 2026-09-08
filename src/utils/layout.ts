@@ -75,3 +75,13 @@ export function padRowsForColumns<T>(
 
   return [...items, ...Array.from({ length: missing }, () => null)];
 }
+
+/**
+ * Teto das telas de autenticação. Elas não passam pelo `PageContainer` —
+ * são anteriores à navegação — e sem teto o formulário atravessa os 1440px
+ * do monitor de ponta a ponta.
+ *
+ * Mora aqui, e não dentro do Login, porque as três telas de auth usam o
+ * mesmo valor: duas o repetiam como 420 solto, e um dia iam divergir.
+ */
+export const AUTH_MAX_WIDTH = 420;
