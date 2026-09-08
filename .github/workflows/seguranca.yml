@@ -34,7 +34,7 @@ jobs:
           # (EXPO_PUBLIC_*), então o que NÃO pode vazar é exatamente o resto
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
