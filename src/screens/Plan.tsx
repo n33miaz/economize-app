@@ -58,7 +58,7 @@ function PlanCard({
           style={{
             flex: 1,
             color: t.text.primary,
-            fontSize: 17,
+            fontSize: 18,
             fontWeight: "700",
           }}
         >

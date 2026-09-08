@@ -113,7 +113,7 @@ export default function AdSlot({ variant = "banner", style }: AdSlotProps) {
           top: 6,
           right: 12,
           color: t.text.tertiary,
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: "700",
           letterSpacing: 0.8,
           textTransform: "uppercase",

@@ -55,7 +55,7 @@ export default function ReportPeriodSheet({
             style={{
               marginLeft: spacing[2],
               color: t.text.primary,
-              fontSize: 17,
+              fontSize: 18,
               fontWeight: "700",
             }}
           >

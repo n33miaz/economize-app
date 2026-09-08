@@ -535,7 +535,7 @@ export default function Recurrences() {
                 adjustsFontSizeToFit
                 style={{
                   color: t.text.primary,
-                  fontSize: 30,
+                  fontSize: 28,
                   lineHeight: 36,
                   fontWeight: "700",
                   fontVariant: ["tabular-nums"],
