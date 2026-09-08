@@ -2,8 +2,15 @@
 # `expo export --platform web` transforma a MESMA base do app nativo num site;
 # não existe segundo código-fonte para manter.
 #
-# Ao conectar este repositório em "New > Blueprint", o Render cria o site e passa
-# a publicar a cada push na main.
+# Ao conectar este repositório em "New > Blueprint", o Render cria os sites e passa
+# a publicar a cada push.
+#
+# SÃO DOIS, e a diferença entre eles é o branch — e a API para onde apontam:
+#   economize-web          ← main      — fala com a API de produção
+#   economize-web-homolog  ← homolog   — fala com a API de homologação
+#
+# Apontar homologação para a API de produção seria pior do que não ter homologação:
+# daria a sensação de ambiente separado enquanto se escreve no banco de verdade.
 services:
   - type: web
     name: economize-web
@@ -12,6 +19,9 @@ services:
     # então um cache do Metro sobrevivente publica o bundle com a URL antiga
     buildCommand: npm ci && npx expo export --platform web --output-dir dist --clear
     staticPublishPath: ./dist
+    # Explícito de propósito: com dois sites no mesmo arquivo, o branch deixa
+    # de ser detalhe e passa a ser a única coisa que os separa
+    branch: main
     autoDeploy: true
     envVars:
       # O Metro embute esta variável no bundle em tempo de build — por isso ela
@@ -24,6 +34,29 @@ services:
     routes:
       # O app é uma SPA: qualquer rota que não seja arquivo cai no index.html,
       # senão dar F5 em /analise devolveria 404
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # --------------------------------------------------------------------------
+  # HOMOLOGAÇÃO — o mesmo site, do branch `homolog`, falando com a API de
+  # homologação. É aqui que a tela nova é vista antes de chegar ao dono.
+  # --------------------------------------------------------------------------
+  - type: web
+    name: economize-web-homolog
+    runtime: static
+    buildCommand: npm ci && npx expo export --platform web --output-dir dist --clear
+    staticPublishPath: ./dist
+    branch: homolog
+    autoDeploy: true
+    envVars:
+      # A URL é inlinada no bundle em tempo de build: é ELA que decide em qual
+      # banco o teste vai escrever, e por isso nunca pode ser a de produção
+      - key: EXPO_PUBLIC_API_BASE_URL
+        value: https://economize-api-homolog.onrender.com/api/v1
+      - key: NODE_VERSION
+        value: "20"
+    routes:
       - type: rewrite
         source: /*
         destination: /index.html
