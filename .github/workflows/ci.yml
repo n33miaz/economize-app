@@ -1,10 +1,20 @@
 name: Economize CI
 
+# O fluxo é develop → homolog → main. A esteira roda nos três, e nos PRs entre
+# eles: sem isso a proteção de branch não tem em que se apoiar, porque ela exige
+# um check que tenha CORRIDO naquele commit.
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["develop", "homolog", "main"]
   pull_request:
-    branches: ["main", "master"]
+    branches: ["develop", "homolog", "main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   mobile:
@@ -28,4 +38,16 @@ jobs:
         run: npm run lint --if-present
 
       - name: Test
-        run: npm test -- --ci
+        # `--coverage` de propósito: as catracas de cobertura vivem no
+        # package.json e só são COBRADAS quando a flag está presente. Sem ela a
+        # esteira rodava os testes e deixava a cobertura cair sem avisar
+        run: npm test -- --ci --coverage
+
+      - name: Guardar o relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore

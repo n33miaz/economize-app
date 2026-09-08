@@ -1,0 +1,42 @@
+# Atualização de dependência que chega como PR, e não como surpresa no dia em
+# que alguém for buildar. O PR cai em `develop`, que é onde o trabalho acontece.
+#
+# **Expo é a exceção**: subir `expo` ou `react-native` fora de um upgrade
+# planejado quebra o app inteiro, e a pilha de estilo deste projeto (NativeWind,
+# css-interop, Reanimated) já provou ser frágil a isso. Elas ficam ignoradas de
+# propósito — a atualização delas é decisão, não rotina.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Sao_Paulo
+    target-branch: develop
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "nativewind"
+      - dependency-name: "react-native-css-interop"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+    groups:
+      testes:
+        patterns: ["jest*", "@testing-library/*", "@types/jest"]
+      tipos:
+        patterns: ["@types/*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    target-branch: develop
+    commit-message:
+      prefix: chore
