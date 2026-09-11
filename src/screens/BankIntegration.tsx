@@ -38,7 +38,11 @@ import type {
   BankTransaction,
   FamilyTransaction,
 } from "../services/api";
+import FlipCard, { useFlip } from "../components/FlipCard";
+import ProvenanceBack from "../components/ProvenanceBack";
+import { summarizeProvenance } from "../utils/provenanceSummary";
 import { useAccountsStore } from "../store/accountsStore";
+import { useImportSourcesStore } from "../store/importSourcesStore";
 import { useBankStore } from "../store/bankStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { parseConnectReturn, useConnectorStore } from "../store/connectorStore";
@@ -312,6 +316,9 @@ export default function BankIntegration() {
   );
   const accounts = useAccountsStore((s) => s.accounts);
   const accountsById = useAccountsStore((s) => s.byId);
+  // O mapa dos arquivos importados, para o verso nomear a fonte em vez de
+  // mostrar um UUID (EC-195 carregou ele uma vez; aqui é só leitura)
+  const sourcesById = useImportSourcesStore((s) => s.byId);
   const accountsError = useAccountsStore((s) => s.error);
   const isLoadingAccounts = useAccountsStore((s) => s.isLoading);
   const fetchAccounts = useAccountsStore((s) => s.fetchAccounts);
@@ -384,6 +391,14 @@ export default function BankIntegration() {
   // impedir, entrando pela porta dos fundos no topo desta tela.
   const metricsScope =
     selectedAccount?.type === "CREDIT_CARD" ? "CREDIT_CARD" : "BANK";
+  // EC-225: de onde os números acima foram somados. Sai das MESMAS linhas que
+  // as métricas usam — resumir um conjunto maior descreveria outro número
+  const procedencia = useMemo(
+    () => summarizeProvenance(visibleTransactions, accountsById, sourcesById),
+    [visibleTransactions, accountsById, sourcesById],
+  );
+  const { flipped: origemAberta, toggle: virarOrigem } = useFlip();
+
   const metricRows = useMemo(
     () => statementMetrics(visibleTransactions, metricsScope),
     [visibleTransactions, metricsScope],
@@ -1052,6 +1067,19 @@ export default function BankIntegration() {
             {!inFamilyScope && (
             <>
             <Animated.View entering={cardEntering} className="mb-4">
+              {/* EC-225: o bloco inteiro gira, e não cada número. Os três saem
+                  do MESMO conjunto de linhas, então três versos iguais seriam
+                  a mesma resposta repetida — um gesto, uma resposta */}
+              <FlipCard
+                flipped={origemAberta}
+                back={<ProvenanceBack summary={procedencia} />}
+                front={
+                  <TouchableOpacity
+                    onPress={virarOrigem}
+                    activeOpacity={0.9}
+                    accessibilityRole="button"
+                    accessibilityLabel="Ver de onde estes números foram somados"
+                  >
               {/* Os números vêm prontos do escopo: três no idioma da conta
                   (Entradas/Saídas/Líquido), dois no idioma do cartão
                   (Compras/Estornos e pagamentos). Alta/baixa usa
@@ -1073,6 +1101,9 @@ export default function BankIntegration() {
                   {scopeNote}
                 </Text>
               )}
+                  </TouchableOpacity>
+                }
+              />
             </Animated.View>
 
             {chartData.length > 0 && (
