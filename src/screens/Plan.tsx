@@ -202,7 +202,7 @@ export default function Plan() {
             padding: spacing[4],
           }}
         >
-          <PotIcon size={56} level={isPlus ? 1 : 0.5} />
+          <PotIcon size={56} level={isPlus ? 1 : 0.5} animate />
           <View style={{ flex: 1, marginLeft: spacing[4] }}>
             <Text style={{ color: t.text.tertiary, fontSize: 12 }}>
               Seu plano

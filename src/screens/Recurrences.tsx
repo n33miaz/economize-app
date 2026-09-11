@@ -39,6 +39,7 @@ import { useRecurrenceStore } from "../store/recurrenceStore";
 import { useToastStore } from "../store/toastStore";
 import AssistantFAB from "../components/AssistantFAB";
 import CategoryIcon from "../components/CategoryIcon";
+import FirstTimeCard from "../components/FirstTimeCard";
 import ErrorState from "../components/ErrorState";
 import { formatMonthLabel } from "../components/MonthSelector";
 import PageContainer from "../components/PageContainer";
@@ -632,6 +633,12 @@ export default function Recurrences() {
               </View>
             </TouchableOpacity>
           </Animated.View>
+
+          <FirstTimeCard
+            id="recorrencias-o-que-sao"
+            title="De onde saem estas séries"
+            body="O app procura no seu extrato o que se repete e propõe cada série; nada aqui foi digitado por você. Descartar uma série tira ela da previsão de saldo, e a varredura não a recria."
+          />
 
           {/* O caça-assinaturas lê as MESMAS séries da lista abaixo: é a
               leitura "quanto disto é cobrança que eu poderia cancelar", e por
