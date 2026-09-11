@@ -33,6 +33,7 @@ import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import WishCard from "../components/WishCard";
+import WishContributionSheet from "../components/WishContributionSheet";
 
 export default function Wishes({ navigation }: any) {
   const t = useTheme();
@@ -50,6 +51,20 @@ export default function Wishes({ navigation }: any) {
     remove,
     purchase,
   } = useWishStore();
+
+  // EC-205: a meta que está recebendo dinheiro. Null = folha fechada
+  const [aportando, setAportando] = useState<Wish | null>(null);
+
+  // A sobra que o app MEDIU, e o ciclo dela — vira a proposta de um toque.
+  // Null quando não há ciclo fechado: sem medida não há o que propor, e
+  // inventar um valor aqui seria afirmar que a pessoa guardou algo
+  const sobraMedida = useMemo(() => {
+    const valor = baseline?.monthlyLeftover;
+    if (valor == null || valor <= 0) return null;
+    const agora = new Date();
+    const mes = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+    return { amount: valor, cycleMonth: mes };
+  }, [baseline]);
 
   // Puxar para atualizar: o gesto que a plataforma inteira ensinou
   // nao pode faltar numa tela de dados
@@ -418,6 +433,25 @@ export default function Wishes({ navigation }: any) {
                         : "Transformar em meta"}
                     </Text>
                   </Pressable>
+                  {detalheVivo.status === "GOAL" && (
+                    <Pressable
+                      onPress={() => setAportando(detalheVivo)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Guardar dinheiro para ${detalheVivo.name}`}
+                      // Borda âmbar, e não fundo âmbar: a tela já gasta as
+                      // cinco superfícies de accent que o orçamento permite, e
+                      // o destaque aqui se resolve com contorno e texto
+                      className="h-12 rounded-xl items-center justify-center mb-2 border"
+                      style={{
+                        backgroundColor: t.background.elevated,
+                        borderColor: t.accent.neon,
+                      }}
+                    >
+                      <Text className="font-bold text-sm" style={{ color: t.accent.neon }}>
+                        Guardar dinheiro aqui
+                      </Text>
+                    </Pressable>
+                  )}
                   <Pressable
                     onPress={() => registrarCompra(detalheVivo)}
                     accessibilityRole="button"
@@ -451,6 +485,15 @@ export default function Wishes({ navigation }: any) {
           </ScrollView>
         )}
       </CustomModal>
+
+      {/* EC-205: guardar dinheiro numa meta, com o extrato do que já entrou */}
+      <WishContributionSheet
+        visible={aportando !== null}
+        wish={aportando}
+        leftover={sobraMedida}
+        onClose={() => setAportando(null)}
+        onSaved={fetch}
+      />
     </View>
   );
 }
