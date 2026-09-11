@@ -28,6 +28,7 @@ import { useToastStore } from "../store/toastStore";
 import * as Haptics from "../utils/haptics";
 import Card from "../components/Card";
 import ErrorState from "../components/ErrorState";
+import FirstTimeCard from "../components/FirstTimeCard";
 import PageContainer from "../components/PageContainer";
 import ScreenHeader from "../components/ScreenHeader";
 import SectionTitle from "../components/SectionTitle";
@@ -145,6 +146,11 @@ export default function Watchmen() {
             />
           }
         >
+          <FirstTimeCard
+            id="vigias-o-que-sao"
+            title="Por que estes números mudam sozinhos"
+            body="Depois de cada extrato importado, seis varreduras tiram das somas o que nunca foi movimento — dinheiro seu trocando de conta, aplicação, repasse de casa, linha repetida e compra estornada. Aqui você vê o que cada uma fez, e desfaz se discordar."
+          />
           <SectionTitle>Quem trabalha aqui</SectionTitle>
           <Text
             style={{
