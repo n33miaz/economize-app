@@ -25,6 +25,7 @@ import {
   isCalendarMonthWindow,
   monthKeyOf,
 } from "./cycleWindow";
+import { vale as materialidade } from "./materiality";
 
 // --- Rótulos ---
 
@@ -717,7 +718,13 @@ export function splitForecastMonth(month: ForecastMonth): ForecastMonthSplit {
   };
 }
 
-/** Mês fecha no vermelho: é o que a tela precisa destacar com cor de risco. */
+/**
+ * Mês fecha no vermelho: é o que a tela precisa destacar com cor de risco.
+ *
+ * SEM piso de propósito. A cor descreve o número, não interrompe ninguém: um
+ * mês que fecha em −R$ 0,13 fechou negativo, e pintá-lo de verde seria mentir.
+ * O piso governa o alerta, não a cor (ver `firstRiskMonth`).
+ */
 export function isMonthAtRisk(month: ForecastMonth): boolean {
   return month.cumulativeNet < 0;
 }
@@ -726,11 +733,21 @@ export function isMonthAtRisk(month: ForecastMonth): boolean {
  * Primeiro período da janela que fecha negativo — o alerta que vale mostrar.
  * Devolve o período INTEIRO (com `start`/`end`), e não só o `month`: é do
  * recorte que sai o rótulo do alerta, pela mesma regra da tela de previsão.
+ *
+ * Com PISO (EC-212), e é aqui que ele muda de comportamento em relação a
+ * `isMonthAtRisk`: um mês que fecha em −R$ 0,13 **é** negativo e a linha dele
+ * na Previsão continua vermelha, porque a cor descreve o número. Mas ele não
+ * ganha o alerta da Home, porque alerta interrompe — e interromper alguém por
+ * treze centavos é o defeito que se mediu no concorrente.
  */
 export function firstRiskMonth(
   months: ForecastMonth[] | null | undefined,
 ): ForecastMonth | null {
-  return months?.find(isMonthAtRisk) ?? null;
+  return (
+    months?.find(
+      (month) => isMonthAtRisk(month) && materialidade(month.cumulativeNet),
+    ) ?? null
+  );
 }
 
 /** O que a resposta precisa ter para o app escrever o nome de um período. */
