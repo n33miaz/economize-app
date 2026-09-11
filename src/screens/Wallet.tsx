@@ -27,6 +27,8 @@ import { useIndicatorStore } from "../store/indicatorStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import ErrorState from "../components/ErrorState";
+import FreshnessStamp from "../components/FreshnessStamp";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import ChartLegend from "../components/ChartLegend";
@@ -57,6 +59,14 @@ export default function Wallet() {
     fetchTransactions,
   } = useWalletStore();
   const { indicators } = useIndicatorStore();
+  // O saldo estimado é cotação vezes quantidade: ele vale o que a cotação
+  // vale, e a cotação tem hora. Sem o carimbo, um preço de ontem aparece com
+  // a mesma cara de um preço de agora
+  const cotacoesLidasEm = useIndicatorStore((s) => s.lastFetched);
+
+  // Puxar para atualizar: o gesto que a plataforma inteira ensinou
+  // nao pode faltar numa tela de dados
+  const { control: refreshControl } = usePullToRefresh(() => fetchTransactions());
 
   const [modalVisible, setModalVisible] = useState(false);
   const [code, setCode] = useState("USD");
@@ -301,6 +311,7 @@ export default function Wallet() {
         </View>
       ) : (
         <FlatList
+            refreshControl={refreshControl}
           data={transactions}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
@@ -333,6 +344,11 @@ export default function Wallet() {
                   >
                     {formatBRLCompact(totalBalance)}
                   </Text>
+                  <FreshnessStamp
+                    at={cotacoesLidasEm}
+                    prefix="cotações lidas"
+                    style={{ marginTop: 2 }}
+                  />
                 </View>
                 <View className="bg-accentMuted p-3 rounded-2xl">
                   <WalletIcon size={24} color={t.accent.neon} />
