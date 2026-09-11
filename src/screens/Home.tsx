@@ -24,7 +24,11 @@ import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
 import Upload from "lucide-react-native/dist/esm/icons/upload";
 import type { LucideIcon } from "lucide-react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useIsFocused,
+  useNavigation,
+} from "@react-navigation/native";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
@@ -253,11 +257,16 @@ export default function Home() {
   // EC-147: o anúncio acontece UMA vez, e só quando já há ciclo para mostrar —
   // explicar os estados do pote sobre uma tela vazia não ensina nada, e queimar
   // o anúncio no primeiro acesso desperdiça a única chance de contar isso
+  // E só com a Home NA FRENTE: a aba fica montada por baixo das outras telas,
+  // e a folha é um Modal — aberta com a pessoa em Relatórios, ela cobria
+  // Relatórios. Aconteceu na prova em navegador: o mês chegou depois de a
+  // pessoa já ter saído da Home
+  const homeEmFoco = useIsFocused();
   useEffect(() => {
-    if (potAnnouncementSeen || potSheetOpen) return;
+    if (!homeEmFoco || potAnnouncementSeen || potSheetOpen) return;
     if (!performance || performance.income <= 0) return;
     setPotSheetOpen(true);
-  }, [potAnnouncementSeen, potSheetOpen, performance]);
+  }, [homeEmFoco, potAnnouncementSeen, potSheetOpen, performance]);
 
   const fecharAnuncioDoPote = useCallback(() => {
     setPotSheetOpen(false);
