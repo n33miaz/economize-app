@@ -30,6 +30,9 @@ jest.mock("../../services/api", () => ({
     .mockResolvedValue({ totalSeries: 0, openSeries: 0, remainingTotal: 0, series: [] }),
 }));
 
+// Trocável por teste: o anúncio do pote depende de a Home estar na frente
+const mockUseIsFocused = jest.fn(() => true);
+
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
     navigate: jest.fn(),
@@ -38,7 +41,7 @@ jest.mock("@react-navigation/native", () => ({
     getState: () => ({ index: 0, routes: [{ name: "Principal" }] }),
   }),
   useRoute: () => ({ params: {} }),
-  useIsFocused: () => true,
+  useIsFocused: () => mockUseIsFocused(),
   useFocusEffect: (efeito: () => void | (() => void)) => {
     const React = require("react");
     React.useEffect(efeito, []);
@@ -129,7 +132,28 @@ const montar = () =>
 describe("Início", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseIsFocused.mockReturnValue(true);
     prepararStores();
+  });
+
+  it("o anúncio do pote abre uma vez, com a Home na frente e um ciclo para mostrar", async () => {
+    usePreferencesStore.setState({ potAnnouncementSeen: false } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Seu pote conta o mês")).toBeTruthy());
+  });
+
+  it("com a Home por baixo de outra tela, o anúncio do pote espera", async () => {
+    // A aba fica montada enquanto a pessoa está em Relatórios; a folha é um
+    // Modal e cobriria Relatórios. Foi visto na prova em navegador
+    usePreferencesStore.setState({ potAnnouncementSeen: false } as never);
+    mockUseIsFocused.mockReturnValue(false);
+
+    const { queryByText, getByText } = montar();
+
+    await waitFor(() => expect(getByText(/Olá/)).toBeTruthy());
+    expect(queryByText("Seu pote conta o mês")).toBeNull();
   });
 
   it("abre com o mês respondido", async () => {
