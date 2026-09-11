@@ -10,7 +10,6 @@ import {
 import ArrowDownRight from "lucide-react-native/dist/esm/icons/arrow-down-right";
 import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
 import CalendarDays from "lucide-react-native/dist/esm/icons/calendar-days";
-import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import ClipboardList from "lucide-react-native/dist/esm/icons/clipboard-list";
@@ -49,6 +48,7 @@ import MonthSelector from "../components/MonthSelector";
 import ScreenHeader from "../components/ScreenHeader";
 import AssistantFAB from "../components/AssistantFAB";
 import FirstTimeCard from "../components/FirstTimeCard";
+import PotEmptyState from "../components/PotEmptyState";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
@@ -703,73 +703,19 @@ function PendingReviewBanner({
 
 /** Vazio global: o usuário ainda não importou nenhum extrato. */
 function GlobalEmpty({ onImport }: { onImport: () => void }) {
-  const t = useAppTheme();
   const { cardEntering } = useMotionPresets();
   return (
-    <Animated.View
-      entering={cardEntering}
-      style={{
-        alignItems: "center",
-        paddingHorizontal: spacing[6],
-        marginTop: spacing[12],
-      }}
-    >
-      <View
-        style={{
-          width: 80,
-          height: 80,
-          borderRadius: radius.full,
-          backgroundColor: t.accent.neonMuted,
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: spacing[4],
-        }}
-      >
-        <ChartPie size={36} color={t.accent.neon} />
-      </View>
-      <Text
-        style={{
-          color: t.text.primary,
-          fontSize: 18,
-          fontWeight: "700",
-          textAlign: "center",
-        }}
-      >
-        Sua análise começa com um extrato
-      </Text>
-      <Text
-        style={{
-          color: t.text.secondary,
-          fontSize: 14,
-          lineHeight: 20,
-          textAlign: "center",
-          marginTop: spacing[2],
-        }}
-      >
-        Importe um extrato bancário e veja seus meses consolidados por
-        categoria, com comparação mês a mês.
-      </Text>
-      <TouchableOpacity
-        onPress={onImport}
-        activeOpacity={0.85}
-        accessibilityLabel="Importar extrato"
-        accessibilityRole="button"
-        style={{
-          marginTop: spacing[6],
-          height: 48,
-          paddingHorizontal: spacing[8],
-          borderRadius: radius.full,
-          backgroundColor: t.accent.neon,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text
-          style={{ color: t.text.inverse, fontSize: 14, fontWeight: "700" }}
-        >
-          Importar extrato
-        </Text>
-      </TouchableOpacity>
+    <Animated.View entering={cardEntering} style={{ marginTop: spacing[8] }}>
+      {/* EC-231: o pote VAZIO diz "não há nada aqui ainda" sem precisar da
+          frase — e a frase fica livre para dizer o que fazer. Um glifo
+          genérico num disco âmbar diria o mesmo que qualquer outro app */}
+      <PotEmptyState
+        mood="comecar"
+        title="Sua análise começa com um extrato"
+        body="Importe um extrato bancário e veja seus meses consolidados por categoria, com comparação mês a mês."
+        actionLabel="Importar extrato"
+        onAction={onImport}
+      />
     </Animated.View>
   );
 }
