@@ -109,6 +109,8 @@ describe("Desejos", () => {
     expect(
       getByLabelText(/^Nenhum desejo ainda\. Cadastre algo que você quer comprar/),
     ).toBeTruthy();
+    // EC-228: a primeira visita explica o que "horas da sua vida" quer dizer
+    expect(getByText("O preço em horas da sua vida")).toBeTruthy();
   });
 
   it("mostra o desejo cadastrado", async () => {

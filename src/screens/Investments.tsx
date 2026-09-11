@@ -69,6 +69,7 @@ import { formatBRL, formatBRLCompact, formatPercent } from "../utils/money";
 import BlockGrid from "../components/BlockGrid";
 import CustomModal from "../components/CustomModal";
 import ErrorState from "../components/ErrorState";
+import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
 import InvestmentInterestSheet from "../components/InvestmentInterestSheet";
 import InvestmentPositionSheet from "../components/InvestmentPositionSheet";
@@ -731,6 +732,11 @@ export default function Investments() {
           />
         }
       >
+        <FirstTimeCard
+          id="investimentos-de-onde-vem"
+          title="De onde vêm estas posições"
+          body="Juntamos o que veio do banco conectado, o que o extrato mostrou como aplicação e o que você cadastrou à mão. Aplicar não é gastar: nada daqui entra como despesa do mês."
+        />
         <BlockGrid columns={columns} weights={BLOCK_WEIGHTS}>
           {[resumo, indicadores, tesouro, posicoes, movimentacoes, radar]}
         </BlockGrid>

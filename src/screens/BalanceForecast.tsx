@@ -33,6 +33,7 @@ import {
 } from "../store/recurrenceStore";
 import ChartLegend from "../components/ChartLegend";
 import ErrorState from "../components/ErrorState";
+import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
 import AssistantFAB from "../components/AssistantFAB";
 import { getInstallments } from "../services/api";
@@ -616,6 +617,12 @@ export default function BalanceForecast() {
             value={String(window) as `${ForecastWindow}`}
             onChange={handleWindowChange}
             size="md"
+          />
+
+          <FirstTimeCard
+            id="previsao-medido-informado"
+            title="Medido é uma coisa, informado é outra"
+            body="Linha detectada no extrato leva o valor que o banco registrou; a que você digitou leva marca própria. A projeção soma as duas, mas nunca as confunde."
           />
 
           {/* Falha no refetch (trocar de janela, atualizar) mantém os dados

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
@@ -419,6 +420,14 @@ export default function Reports() {
             </TouchableOpacity>
           );
         })}
+      </View>
+
+      <View style={{ paddingHorizontal: spacing[5] }}>
+        <FirstTimeCard
+          id="relatorios-o-que-fecha"
+          title="O que um relatório fecha"
+          body="Cada relatório congela um período: receitas, despesas, saldo e a categoria que mais pesou. Gerar de novo não altera os anteriores — é o histórico que você compara."
+        />
       </View>
 
       <FlatList

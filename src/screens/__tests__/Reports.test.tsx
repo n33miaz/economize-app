@@ -91,6 +91,8 @@ describe("Relatórios", () => {
     // — são DOIS botões com o mesmo rótulo, o do cabeçalho e o do vazio
     expect(getByText("Nenhum relatório mensais ainda")).toBeTruthy();
     expect(getAllByLabelText("Gerar relatório")).toHaveLength(2);
+    // EC-228: a primeira visita diz o que um relatório fecha
+    expect(getByText("O que um relatório fecha")).toBeTruthy();
   });
 
   it("no Plus o espaço de anúncio não é reservado", async () => {

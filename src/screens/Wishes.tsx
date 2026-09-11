@@ -31,6 +31,7 @@ import CustomModal from "../components/CustomModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
+import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
 import WishCard from "../components/WishCard";
 import WishContributionSheet from "../components/WishContributionSheet";
@@ -188,6 +189,12 @@ export default function Wishes({ navigation }: any) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: spacing[10] }}
         >
+          <FirstTimeCard
+            id="desejos-horas-de-vida"
+            title="O preço em horas da sua vida"
+            body="Cada desejo mostra quantas horas de trabalho ele custa, calculadas com a renda e a jornada que você informar. É para comparar, não para julgar — e o aporte que você registra faz a barra andar."
+          />
+
           {/* O valor da hora é o que dá sentido a todo o resto da tela */}
           {hourlyLine && (
             <View className="bg-cardBackground rounded-2xl p-4 border border-border">
