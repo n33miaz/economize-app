@@ -38,9 +38,13 @@ import { bankKeyFor } from "../utils/bankBrand";
 import BankLogo from "../components/BankLogo";
 import BlockGrid from "../components/BlockGrid";
 import ErrorState from "../components/ErrorState";
+import { useLoadingDeadline } from "../hooks/useLoadingDeadline";
 import FilterChipRow from "../components/FilterChipRow";
 import InvoiceCard from "../components/InvoiceCard";
 import InvoiceReserveSheet from "../components/InvoiceReserveSheet";
+import AssistantFAB from "../components/AssistantFAB";
+import FirstTimeCard from "../components/FirstTimeCard";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
@@ -179,6 +183,10 @@ export default function CreditCards() {
   const categoryItems = useCategoriesStore((s) => s.items);
   const fetchCategories = useCategoriesStore((s) => s.fetch);
 
+  // Puxar para atualizar: o gesto que a plataforma inteira ensinou
+  // nao pode faltar numa tela de dados
+  const { control: refreshControl } = usePullToRefresh(() => fetchAccounts(true));
+
   const [selectedId, setSelectedId] = useState<string | null>(
     requestedId ?? null,
   );
@@ -222,6 +230,9 @@ export default function CreditCards() {
     [cards, selectedId],
   );
   const slot = selectedId ? invoicesByAccount[selectedId] : undefined;
+  // Antes dos returns antecipados de propósito: hook não pode ficar depois de
+  // saída condicional. O prazo do esqueleto (EC-216) é lido lá embaixo
+  const faturaDemorouDemais = useLoadingDeadline(!slot || slot.isLoading);
   const payload = slot?.data;
   const approximate = payload
     ? invoiceCycleIsApproximate(payload.cycleSource)
@@ -360,6 +371,15 @@ export default function CreditCards() {
 
   const listHeader = (
     <View style={{ paddingTop: spacing[4] }}>
+      {/* EC-228: a primeira vez explica, DENTRO da tela e na posição onde a
+          dúvida acontece. Não é tour: tour é pedágio */}
+      <View style={{ paddingHorizontal: spacing[5] }}>
+        <FirstTimeCard
+          id="fatura-ciclo"
+          title="O ciclo desta fatura"
+          body="O período segue o dia de fechamento que o banco informa — quando ele não informa, o corte é o mês do calendário, e a tela avisa."
+        />
+      </View>
       {cards.length > 1 && (
         <View style={{ paddingHorizontal: spacing[5], marginBottom: spacing[4] }}>
           <FilterChipRow
@@ -368,6 +388,9 @@ export default function CreditCards() {
             options={cards.map((card) => ({
               key: card.id,
               label: accountDisplayName(card),
+              // EC-229: reconhecer o roxo do Nubank e mais rapido do que ler
+              // "Ultravioleta ····1234" numa fileira rolante
+              brand: card.institution ?? (bankKeyFor(card.name) ? card.name : null),
             }))}
             value={selectedId ?? cards[0].id}
             onChange={setSelectedId}
@@ -533,6 +556,17 @@ export default function CreditCards() {
   );
 
   const renderEmpty = () => {
+    // EC-216: esqueleto tem prazo. Esta é exatamente a aba que ficava eterna
+    // no concorrente — Faturas nunca terminava de carregar, sem erro e sem
+    // botão. Passado o prazo, a promessa "está vindo" vira mentira animada
+    if (isLoadingInvoices && faturaDemorouDemais) {
+      return (
+        <ErrorState
+          message="A fatura está demorando mais do que deveria. Pode ser a conexão com a instituição."
+          onRetry={() => selectedId && fetchInvoices(selectedId, Number(months))}
+        />
+      );
+    }
     if (isLoadingInvoices) {
       return (
         <View style={{ paddingHorizontal: spacing[5] }}>
@@ -570,6 +604,7 @@ export default function CreditCards() {
     <PageContainer>
       {header}
       <FlatList
+            refreshControl={refreshControl}
         data={timeline}
         keyExtractor={(item) => item.key}
         // Memoizado: um objeto literal novo a cada render invalida a
@@ -660,6 +695,9 @@ export default function CreditCards() {
           if (selectedId) fetchInvoices(selectedId, Number(months));
         }}
       />
+    {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
+        qual tela foi aberto, e sugere as perguntas dela */}
+    <AssistantFAB origin="fatura" />
     </PageContainer>
   );
 }

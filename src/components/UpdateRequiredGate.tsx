@@ -1,5 +1,13 @@
-import React, { useEffect, useRef } from "react";
-import { AppState, Linking, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  AppState,
+  Linking,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import PotIcon from "./PotIcon";
@@ -42,6 +50,7 @@ export default function UpdateRequiredGate({ children }: Props) {
   const info = useVersionStore((s) => s.info);
   const check = useVersionStore((s) => s.check);
   const backgroundedAt = useRef<number | null>(null);
+  const [conferindo, setConferindo] = useState(false);
 
   // Na abertura, sempre — a resposta de ontem não vale hoje
   useEffect(() => {
@@ -66,7 +75,35 @@ export default function UpdateRequiredGate({ children }: Props) {
 
   if (status !== "upgrade-required") return <>{children}</>;
 
-  const downloadUrl = info?.downloadUrl || DEFAULT_DOWNLOAD_URL;
+  /**
+   * O ARQUIVO quando ele existe; a página quando não (EC-233).
+   *
+   * Mandar quem já está travado para uma página que diz "em breve" é a pior
+   * saída possível. Quando o servidor publica o `apkUrl`, o botão baixa
+   * direto; sem ele, a página ainda é melhor que nada, e o rótulo muda para
+   * não prometer um download que não vai começar.
+   */
+  const apk = info?.apkUrl?.trim() || null;
+  const downloadUrl = apk ?? info?.downloadUrl ?? DEFAULT_DOWNLOAD_URL;
+  const rotuloDoBotao = apk ? "Baixar nova versão" : "Abrir a página de download";
+
+  /**
+   * A saída para o caso em que o ERRO é nosso.
+   *
+   * Com a mínima igual à última publicada (EC-232), um
+   * `APP_LATEST_VERSION` configurado errado no servidor tranca TODA instalação
+   * — e a pessoa não tem como saber se o problema é dela ou nosso. Este
+   * botão não burla o gate: ele só pergunta de novo. Se o servidor
+   * continuar recusando, a tela continua.
+   */
+  const conferirDeNovo = async () => {
+    setConferindo(true);
+    try {
+      await check();
+    } finally {
+      setConferindo(false);
+    }
+  };
 
   return (
     <View
@@ -81,9 +118,12 @@ export default function UpdateRequiredGate({ children }: Props) {
         paddingBottom: insets.bottom + spacing[6],
       }}
     >
-      <View style={{ marginBottom: spacing[8] }}>
+      {/* Entrada suave: a tela aparece por cima de tudo, e um corte seco
+          parece pane. 240ms é o bastante para o olho registrar que a tela
+          MUDOU sem virar espera */}
+      <Animated.View entering={FadeIn.duration(240)} style={{ marginBottom: spacing[8] }}>
         <PotIcon size={112} level={0.75} />
-      </View>
+      </Animated.View>
 
       <Text
         accessibilityRole="header"
@@ -111,26 +151,52 @@ export default function UpdateRequiredGate({ children }: Props) {
         um minuto.
       </Text>
 
-      <TouchableOpacity
-        onPress={() => Linking.openURL(downloadUrl)}
-        activeOpacity={0.85}
-        accessibilityLabel="Baixar nova versão"
-        accessibilityRole="button"
-        style={{
-          width: "100%",
-          maxWidth: 320,
-          backgroundColor: t.accent.neon,
-          paddingVertical: spacing[4],
-          borderRadius: radius.full,
-          alignItems: "center",
-        }}
+      <Animated.View
+        entering={FadeInDown.duration(280).delay(80)}
+        style={{ width: "100%", maxWidth: 320, alignItems: "center" }}
       >
-        <Text
-          style={{ color: t.text.inverse, fontWeight: "700", fontSize: 16 }}
+        <TouchableOpacity
+          onPress={() => Linking.openURL(downloadUrl)}
+          activeOpacity={0.85}
+          accessibilityLabel={rotuloDoBotao}
+          accessibilityRole="button"
+          style={{
+            width: "100%",
+            backgroundColor: t.accent.neon,
+            paddingVertical: spacing[4],
+            borderRadius: radius.full,
+            alignItems: "center",
+          }}
         >
-          Baixar nova versão
-        </Text>
-      </TouchableOpacity>
+          <Text
+            style={{ color: t.text.inverse, fontWeight: "700", fontSize: 16 }}
+          >
+            {rotuloDoBotao}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={conferirDeNovo}
+          disabled={conferindo}
+          activeOpacity={0.7}
+          accessibilityLabel="Conferir de novo"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: conferindo }}
+          style={{
+            marginTop: spacing[3],
+            minHeight: 44,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: spacing[2],
+          }}
+        >
+          {conferindo ? <ActivityIndicator size="small" color={t.text.secondary} /> : null}
+          <Text style={{ color: t.text.secondary, fontSize: 14, fontWeight: "700" }}>
+            {conferindo ? "Conferindo…" : "Conferir de novo"}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
 
       <Text
         style={{

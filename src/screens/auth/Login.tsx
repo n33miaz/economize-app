@@ -15,6 +15,7 @@ import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore, type LoginOutcome } from "../../store/authStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useToastStore } from "../../store/toastStore";
+import { APP_VERSION } from "../../utils/appVersion";
 import { AUTH_MAX_WIDTH } from "../../utils/layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { biometricSupport, enrollBiometrics } from "../../utils/biometrics";
@@ -307,6 +308,19 @@ export default function Login({ navigation }: any) {
               <Text className="text-primary font-bold">Cadastre-se</Text>
             </Text>
           </TouchableOpacity>
+
+          {/* A versão do build, na única tela que todo mundo vê antes de
+              entrar. Existe para o suporte: quando alguém relata um defeito,
+              a primeira pergunta é "qual versão?" — e a resposta tem de estar
+              na tela, não em Ajustes do Android. Fica discreta de propósito:
+              é informação de diagnóstico, não de produto. */}
+          <Text
+            className="mt-8 text-center text-xs"
+            style={{ color: t.text.tertiary }}
+            accessibilityLabel={`Versão do aplicativo ${APP_VERSION}`}
+          >
+            versão {APP_VERSION}
+          </Text>
         </>
       )}
 

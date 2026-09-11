@@ -613,9 +613,7 @@ export function treasuryRateLabel(bond: TreasuryBond): string | null {
 
 // --- Datas ---
 
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
+const DAY = 24 * 60 * 60_000;
 
 /** "15/03/2027" — data curta com ano, para vencimentos. */
 export function formatShortDate(iso: string | null | undefined): string | null {
@@ -633,26 +631,12 @@ export function maturityLabel(iso: string | null | undefined): string | null {
 }
 
 /**
- * "agora", "há 5 min", "há 2 h", "há 3 dias" ou a data curta. Para o
- * "atualizado há …" do resumo; `null` sem data.
+ * Reexportado de `utils/freshness`, que é onde a idade de um número passou a
+ * ser dita — uma vez só, para nenhuma tela escrever "agora" por conta própria
+ * (EC-215). Fica visível daqui porque a tela de Investimentos já chamava por
+ * este nome, e trocar 3 importações não vale uma quebra de contrato.
  */
-export function formatRelativeTime(
-  iso: string | null | undefined,
-  now: number = Date.now(),
-): string | null {
-  if (!iso) return null;
-  const time = new Date(iso).getTime();
-  if (!Number.isFinite(time)) return null;
-  const diff = Math.max(0, now - time);
-  if (diff < MINUTE) return "agora";
-  if (diff < HOUR) return `há ${Math.floor(diff / MINUTE)} min`;
-  if (diff < DAY) return `há ${Math.floor(diff / HOUR)} h`;
-  if (diff < 7 * DAY) {
-    const days = Math.floor(diff / DAY);
-    return `há ${days} ${days === 1 ? "dia" : "dias"}`;
-  }
-  return formatShortDate(iso) ?? null;
-}
+export { formatRelativeTime } from "./freshness";
 
 /**
  * De que dia é o número quando a fonte não atualizou: "dado de ontem" é o

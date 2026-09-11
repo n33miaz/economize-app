@@ -59,7 +59,18 @@ describe("AssistantFAB", () => {
 
     fireEvent.press(getByLabelText("Fale com o Nino"));
 
-    expect(mockNavigate).toHaveBeenCalledWith("IA Assist");
+    // Sem origem declarada, nenhum parametro viaja junto (EC-201)
+    expect(mockNavigate).toHaveBeenCalledWith("IA Assist", undefined);
+  });
+
+  it("leva a origem junto quando a tela declara de onde a porta abre", () => {
+    const { getByLabelText } = montar({ origin: "fatura" });
+
+    // O rotulo tambem muda: dizer sobre O QUE se vai falar e o que
+    // transforma um botao numa porta
+    fireEvent.press(getByLabelText("Pergunte sobre a fatura"));
+
+    expect(mockNavigate).toHaveBeenCalledWith("IA Assist", { origin: "fatura" });
   });
 
   it("o rótulo pode mudar, e é ele que o leitor de tela anuncia", () => {

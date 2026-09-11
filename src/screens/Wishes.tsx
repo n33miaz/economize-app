@@ -7,7 +7,7 @@ import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import TrendingDown from "lucide-react-native/dist/esm/icons/trending-down";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { spacing } from "../theme/ds";
+import { SHEET_PADDING, spacing } from "../theme/ds";
 import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
@@ -24,6 +24,7 @@ import { APP_ROUTES } from "../routes/routeNames";
 import type { Wish } from "../services/api";
 
 import ScreenHeader from "../components/ScreenHeader";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import SectionTitle from "../components/SectionTitle";
@@ -32,14 +33,6 @@ import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import WishCard from "../components/WishCard";
-
-// O CustomModal entrega só a folha; o respiro lateral é de quem usa, como em
-// Categorias e Carteira. Sem ele o conteúdo cola nas duas bordas.
-const SHEET_PADDING = {
-  paddingHorizontal: spacing[5],
-  paddingTop: spacing[3],
-  paddingBottom: spacing[6],
-} as const;
 
 export default function Wishes({ navigation }: any) {
   const t = useTheme();
@@ -57,6 +50,10 @@ export default function Wishes({ navigation }: any) {
     remove,
     purchase,
   } = useWishStore();
+
+  // Puxar para atualizar: o gesto que a plataforma inteira ensinou
+  // nao pode faltar numa tela de dados
+  const { control: refreshControl } = usePullToRefresh(() => fetch());
 
   const [formOpen, setFormOpen] = useState(false);
   const [nome, setNome] = useState("");
@@ -336,6 +333,7 @@ export default function Wishes({ navigation }: any) {
       <CustomModal visible={!!detalheVivo} onClose={() => setDetalhe(null)}>
         {detalheVivo && (
           <ScrollView
+            refreshControl={refreshControl}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={SHEET_PADDING}
           >

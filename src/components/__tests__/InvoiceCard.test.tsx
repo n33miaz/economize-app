@@ -28,6 +28,8 @@ function tx(overrides: Partial<BankTransaction> = {}): BankTransaction {
     internalTransfer: false,
     ignored: false,
     familyTransfer: false,
+  refunded: false,
+  refundOfId: null,
     ...overrides,
   };
 }

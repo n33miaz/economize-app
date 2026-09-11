@@ -5,7 +5,7 @@ import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 
 import CustomModal from "./CustomModal";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { todayIso } from "../utils/cycleWindow";
 import { reportWindows, type ReportWindow } from "../utils/reportPeriods";
 import type { ReportPeriod } from "../store/reportsStore";
@@ -48,7 +48,7 @@ export default function ReportPeriodSheet({
 
   return (
     <CustomModal visible={visible} onClose={onClose}>
-      <View style={{ padding: spacing[5], paddingTop: spacing[2] }}>
+      <View style={SHEET_PADDING}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <CalendarRange size={18} color={t.accent.neon} />
           <Text

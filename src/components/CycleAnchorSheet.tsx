@@ -5,7 +5,7 @@ import Info from "lucide-react-native/dist/esm/icons/info";
 import X from "lucide-react-native/dist/esm/icons/x";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
 import {
   MAX_CYCLE_ANCHOR_DAY,
@@ -114,13 +114,7 @@ export default function CycleAnchorSheet({
 
   return (
     <CustomModal visible={visible} onClose={onClose}>
-      <View
-        style={{
-          paddingHorizontal: spacing[5],
-          paddingTop: spacing[3],
-          paddingBottom: spacing[6],
-        }}
-      >
+      <View style={SHEET_PADDING}>
         <View
           style={{
             flexDirection: "row",

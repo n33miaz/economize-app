@@ -103,7 +103,7 @@ describe("UpdateRequiredGate", () => {
       ),
     ).toBeTruthy();
     expect(getByText(/a mínima é 2\.3\.0/)).toBeTruthy();
-    expect(getByLabelText("Baixar nova versão")).toBeTruthy();
+    expect(getByLabelText("Abrir a página de download")).toBeTruthy();
     // Sem saída: não há "agora não" nem "entrar assim mesmo"
     expect(queryByText(/agora não/i)).toBeNull();
   });
@@ -112,7 +112,7 @@ describe("UpdateRequiredGate", () => {
     useVersionStore.setState({ status: "upgrade-required", info: INFO });
     const { getByLabelText } = montar();
 
-    fireEvent.press(getByLabelText("Baixar nova versão"));
+    fireEvent.press(getByLabelText("Abrir a página de download"));
 
     expect(openUrl).toHaveBeenCalledWith("https://economize-web.onrender.com/baixar");
   });
@@ -121,7 +121,7 @@ describe("UpdateRequiredGate", () => {
     useVersionStore.setState({ status: "upgrade-required", info: null });
     const { getByLabelText } = montar();
 
-    fireEvent.press(getByLabelText("Baixar nova versão"));
+    fireEvent.press(getByLabelText("Abrir a página de download"));
 
     expect(openUrl).toHaveBeenCalledWith("https://economize-web.onrender.com/baixar");
   });
@@ -155,5 +155,35 @@ describe("UpdateRequiredGate", () => {
 
     now.mockRestore();
     addListener.mockRestore();
+  });
+
+  it("com o APK publicado, o botão baixa o ARQUIVO e promete isso", () => {
+    // Mandar quem ja esta travado para uma pagina que diz "em breve" e a
+    // pior saida possivel (EC-233)
+    useVersionStore.setState({
+      status: "upgrade-required",
+      info: { ...INFO, apkUrl: "https://github.com/x/releases/economize-2.3.0.apk" },
+    });
+    const { getByLabelText } = montar();
+
+    fireEvent.press(getByLabelText("Baixar nova versão"));
+
+    expect(openUrl).toHaveBeenCalledWith(
+      "https://github.com/x/releases/economize-2.3.0.apk",
+    );
+  });
+
+  it("tem 'conferir de novo' — a saida para quando o erro e NOSSO", () => {
+    // Com a minima igual a ultima publicada, um APP_LATEST_VERSION errado no
+    // servidor tranca toda instalacao. O botao nao burla o gate: pergunta de
+    // novo, e se o servidor continuar recusando a tela continua
+    useVersionStore.setState({ status: "upgrade-required", info: INFO });
+    const { getByLabelText } = montar();
+
+    fireEvent.press(getByLabelText("Conferir de novo"));
+
+    // O servidor continua recusando, entao a tela continua: o botao pergunta,
+    // nao burla
+    expect(getByLabelText("Abrir a página de download")).toBeTruthy();
   });
 });

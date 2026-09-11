@@ -15,7 +15,7 @@ import SendHorizontal from "lucide-react-native/dist/esm/icons/send-horizontal";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import X from "lucide-react-native/dist/esm/icons/x";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
@@ -27,13 +27,13 @@ import { radius, spacing } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
+import {
+  assistantSuggestions,
+  type AssistantOrigin,
+} from "../utils/assistantEntry";
 
-const SUGGESTIONS = [
-  "Quanto gastei esse mês?",
-  "Resumo da semana",
-  "Dicas pra economizar",
-  "Como diversificar minha carteira?",
-];
+// As sugestões agora vem da ORIGEM da porta (EC-201): quem abriu o chat na
+// tela de fatura pergunta sobre fatura. Ver `utils/assistantEntry`
 
 // Sem animação de entrada: numa lista invertida os presets FadeInUp/Down
 // apontam para a direção errada e causam flicker ao paginar o histórico
@@ -159,6 +159,7 @@ function MessageBubble({
 export default function AiAssistant() {
   const t = useTheme();
   const navigation = useNavigation();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
   const sendPress = usePressScale();
   const [inputText, setInputText] = useState("");
@@ -211,6 +212,10 @@ export default function AiAssistant() {
   };
 
   const showSuggestions = messages.length <= 1;
+  // De qual tela a porta foi aberta (EC-201). Cast local e pontual, como nas
+  // outras telas que recebem parametro: o projeto nao tem ParamList tipado
+  const origem = (route.params as { origin?: AssistantOrigin } | undefined)?.origin;
+  const sugestoes = assistantSuggestions(origem);
 
   return (
     <PageContainer>
@@ -335,7 +340,7 @@ export default function AiAssistant() {
               gap: spacing[2],
             }}
           >
-            {SUGGESTIONS.map((suggestion) => (
+            {sugestoes.map((suggestion) => (
               <TouchableOpacity
                 key={suggestion}
                 onPress={() => handleSend(suggestion)}

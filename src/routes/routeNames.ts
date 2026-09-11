@@ -30,6 +30,9 @@ export const APP_ROUTES = {
   previsao: "Previsão",
   agendamento: "Agendamento",
   revisao: "Revisão",
+  // EC-202: as varreduras que rodam sozinhas prestando contas. Alcançada
+  // pelas Opções avançadas, ao lado do gatilho manual da mesma faxina
+  vigias: "Vigias",
   alterarSenha: "Alterar Senha",
   seguranca: "Segurança",
   opcoesIa: "Opções de IA",

@@ -6,7 +6,7 @@ import X from "lucide-react-native/dist/esm/icons/x";
 
 import CustomModal from "./CustomModal";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { selectPlans, usePlanStore } from "../store/planStore";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { useToastStore } from "../store/toastStore";
@@ -72,13 +72,7 @@ export default function PremiumOfferSheet({ visible, onClose }: Props) {
 
   return (
     <CustomModal visible={visible} onClose={dismiss}>
-      <View
-        style={{
-          paddingHorizontal: spacing[5],
-          paddingTop: spacing[3],
-          paddingBottom: spacing[6],
-        }}
-      >
+      <View style={SHEET_PADDING}>
         <View
           style={{
             flexDirection: "row",

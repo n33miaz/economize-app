@@ -300,6 +300,9 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   [APP_ROUTES.agendamento]: null,
   [APP_ROUTES.alterarSenha]: null,
   [APP_ROUTES.seguranca]: null,
+  // Prestação de contas das varreduras: abre das Opções avançadas, e um dia
+  // pode abrir do Extrato — a pílula segue de onde o usuário veio
+  [APP_ROUTES.vigias]: null,
   // Ajuste de conta, aberto pelo Perfil — não é destino do trilho, então a
   // pílula fica com o destino de onde o usuário veio
   [APP_ROUTES.opcoesIa]: null,

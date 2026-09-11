@@ -10,7 +10,13 @@ import { useCategoriesStore } from "../../store/categoriesStore";
 import { usePlanStore } from "../../store/planStore";
 import { useRecurrenceStore } from "../../store/recurrenceStore";
 
-jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+jest.mock("../../services/api", () => ({
+  __esModule: true,
+  default: {},
+  // O caça-assinaturas (EC-203) é leitura adicional: a tela tem de montar
+  // igual com ele recusando, e é isso que o mock rejeitado prova
+  getSubscriptions: jest.fn().mockRejectedValue(new Error("sem rede")),
+}));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({

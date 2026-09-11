@@ -4,12 +4,23 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
+import { bankKeyFor } from "../utils/bankBrand";
+import BankLogo from "./BankLogo";
 
 export interface ChipOption {
   key: string;
   label: string;
   /** Quantidade opcional ao lado do rótulo — some quando é `undefined`. */
   count?: number;
+  /**
+   * Instituição do chip, quando ele filtra por origem (EC-229).
+   *
+   * Reconhecer o roxo do Nubank é mais rápido do que ler "Ultravioleta
+   * ····1234" numa fileira rolante. O logo entra quando a marca é conhecida;
+   * quando não é, o chip fica como sempre foi — nada de placeholder cinza,
+   * que só acrescenta ruído sem acrescentar reconhecimento.
+   */
+  brand?: string | null;
 }
 
 interface FilterChipRowProps {
@@ -84,6 +95,13 @@ export default function FilterChipRow({
               borderColor: active ? t.accent.neon : t.border.subtle,
             }}
           >
+            {bankKeyFor(option.brand) === null ? null : (
+              <BankLogo
+                institution={option.brand}
+                size={16}
+                style={{ marginRight: spacing[2] }}
+              />
+            )}
             <Text
               numberOfLines={1}
               style={{

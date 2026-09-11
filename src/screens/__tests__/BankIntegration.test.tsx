@@ -14,7 +14,14 @@ import { useFamilyStore } from "../../store/familyStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 
-jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+// A conferencia de saldo (EC-196) sai na entrada da tela. Aqui ela devolve
+// vazio: o que estes testes cobrem e a tela de conexoes, nao o aviso -- que
+// tem suite propria em BalanceCheckNotice.test.tsx
+jest.mock("../../services/api", () => ({
+  __esModule: true,
+  default: {},
+  getBalanceCheck: jest.fn().mockResolvedValue({ accountsChecked: 0, findings: [] }),
+}));
 
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
 

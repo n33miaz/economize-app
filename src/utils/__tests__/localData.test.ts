@@ -24,6 +24,8 @@ const cartao: ConnectorAccount = {
   statementClosingDay: 10,
   statementDueDay: 17,
   linked: true,
+  reportedBalance: null,
+  reportedBalanceAt: null,
 };
 
 const lancamento = {

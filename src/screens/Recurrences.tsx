@@ -24,7 +24,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 import * as Haptics from "../utils/haptics";
 
-import type { RecurringSeries } from "../services/api";
+import {
+  type RecurringSeries,
+  type SubscriptionReport,
+  getSubscriptions,
+} from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -41,6 +45,7 @@ import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
+import SubscriptionsCard from "../components/SubscriptionsCard";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import {
   type SeriesMonthState,
@@ -363,6 +368,7 @@ export default function Recurrences() {
   const categoriesCount = useCategoriesStore((s) => s.items.length);
 
   const [filter, setFilter] = useState<ListFilter>("ACTIVE");
+  const [assinaturas, setAssinaturas] = useState<SubscriptionReport | null>(null);
 
   // Recarrega a cada foco (e não só na montagem): importar extrato e revisar
   // acontecem em outras telas e mudam tanto as séries quanto o estado do mês
@@ -370,6 +376,12 @@ export default function Recurrences() {
     useCallback(() => {
       fetchSeries();
       fetchMonthState();
+      // Caça-assinaturas (EC-203): best-effort, como o resto das leituras
+      // adicionais. Uma falha aqui tira o card e mantém a lista — ele lê as
+      // MESMAS séries que já estão na tela, então nunca é a resposta principal
+      getSubscriptions()
+        .then(setAssinaturas)
+        .catch(() => setAssinaturas(null));
     }, [fetchSeries, fetchMonthState]),
   );
 
@@ -385,6 +397,10 @@ export default function Recurrences() {
       fetchSeries(),
       fetchMonthState(),
       filter === "DISMISSED" ? fetchDismissed() : Promise.resolve(),
+      // Descartar uma série muda a caça: o gesto de puxar tem de refletir isso
+      getSubscriptions()
+        .then(setAssinaturas)
+        .catch(() => setAssinaturas(null)),
     ]);
   }, [fetchSeries, fetchMonthState, fetchDismissed, filter]);
 
@@ -617,6 +633,16 @@ export default function Recurrences() {
             </TouchableOpacity>
           </Animated.View>
 
+          {/* O caça-assinaturas lê as MESMAS séries da lista abaixo: é a
+              leitura "quanto disto é cobrança que eu poderia cancelar", e por
+              isso vem antes dos botões de varrer e agendar */}
+          {filter === "ACTIVE" ? (
+            <SubscriptionsCard
+              report={assinaturas}
+              onOpen={(assinatura) => openForm(assinatura.seriesId)}
+            />
+          ) : null}
+
           {/* Varredura e agendamento manual: as duas formas de a lista crescer */}
           <View
             style={{
@@ -747,7 +773,7 @@ export default function Recurrences() {
         </ScrollView>
       )}
 
-      <AssistantFAB />
+      <AssistantFAB origin="recorrencias" />
     </PageContainer>
   );
 }

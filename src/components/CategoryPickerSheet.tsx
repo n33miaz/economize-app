@@ -18,7 +18,7 @@ import type { Category } from "../services/api";
 import { useCategoriesStore } from "../store/categoriesStore";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import {
   buildCategoryTree,
   categoryPath,
@@ -159,13 +159,7 @@ export default function CategoryPickerSheet({
 
   return (
     <CustomModal visible={visible} onClose={onClose}>
-      <View
-        style={{
-          paddingHorizontal: spacing[5],
-          paddingTop: spacing[3],
-          paddingBottom: spacing[6],
-        }}
-      >
+      <View style={SHEET_PADDING}>
         <View
           style={{
             flexDirection: "row",
