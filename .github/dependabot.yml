@@ -43,6 +43,16 @@ updates:
       # Zustand 5 muda a API do seletor. É upgrade planejado, não rotina
       - dependency-name: "zustand"
         update-types: ["version-update:semver-major"]
+      # A cadeia de build acompanha o SDK, não o calendário do npm:
+      # `eslint-config-expo` versiona junto do Expo (a 57 é a linha do SDK 54),
+      # e o major do Babel quebra o bundle do Metro antes de quebrar um teste
+      - dependency-name: "eslint-config-expo"
+      - dependency-name: "@babel/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@babel/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "metro"
+      - dependency-name: "metro-*"
     groups:
       testes:
         patterns: ["jest*", "@testing-library/*", "@types/jest"]
