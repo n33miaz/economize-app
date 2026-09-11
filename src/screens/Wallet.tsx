@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import WalletIcon from "lucide-react-native/dist/esm/icons/wallet";
 import X from "lucide-react-native/dist/esm/icons/x";
 import { PieChart } from "react-native-gifted-charts";
@@ -273,7 +273,7 @@ export default function Wallet() {
           accessibilityRole="button"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Trash2 size={18} color={t.text.tertiary} />
+          <Trash size={18} color={t.text.tertiary} />
         </TouchableOpacity>
       </Animated.View>
     );

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Target from "lucide-react-native/dist/esm/icons/target";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import TrendingDown from "lucide-react-native/dist/esm/icons/trending-down";
 
 import { useTheme } from "../theme/ThemeProvider";
@@ -474,7 +474,7 @@ export default function Wishes({ navigation }: any) {
                 className="h-12 rounded-xl items-center justify-center flex-row"
                 style={{ backgroundColor: t.semantic.dangerMuted }}
               >
-                <Trash2 size={16} color={t.semantic.danger} />
+                <Trash size={16} color={t.semantic.danger} />
                 <Text
                   className="font-bold text-sm ml-2"
                   style={{ color: t.semantic.danger }}

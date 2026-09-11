@@ -4,7 +4,7 @@ import BadgeCheck from "lucide-react-native/dist/esm/icons/badge-check";
 import CircleAlert from "lucide-react-native/dist/esm/icons/circle-alert";
 import ExternalLink from "lucide-react-native/dist/esm/icons/external-link";
 import KeyRound from "lucide-react-native/dist/esm/icons/key-round";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import Animated from "react-native-reanimated";
 
 import { useTheme } from "../theme/ThemeProvider";
@@ -338,7 +338,7 @@ export default function AiSettings() {
                   <Animated.View entering={listItemEntering(3)} className="mt-7">
                     <SectionTitle>Sua chave</SectionTitle>
                     <ActionRow
-                      Icon={Trash2}
+                      Icon={Trash}
                       label="Remover minha chave"
                       description="Volta a usar a chave do servidor"
                       destructive
