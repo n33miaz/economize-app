@@ -53,6 +53,13 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "metro"
       - dependency-name: "metro-*"
+      # O TypeScript é casado com o `eslint-config-expo` e o
+      # `@typescript-eslint` desta linha de SDK. O major (a 7 é o compilador
+      # nativo) quebra o `tsc` e o lint antes de quebrar um teste
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript-eslint/*"
+        update-types: ["version-update:semver-major"]
     groups:
       testes:
         patterns: ["jest*", "@testing-library/*", "@types/jest"]

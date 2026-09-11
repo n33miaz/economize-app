@@ -52,6 +52,30 @@ código novo não precisava existir.
 upgrade planejado quebra o app inteiro — já aconteceu neste projeto. A
 atualização dessas quatro é decisão, não rotina.
 
+O `ignore` cobre também os **pacotes com escopo** (`@expo/*`,
+`@react-native*/*`), o major de `@babel/*`, `metro`, `eslint-config-expo`,
+`typescript` e `react-test-renderer`. O padrão sem escopo não casa com o
+escopado, e foi por essa fresta que chegaram PRs subindo `@expo/metro-runtime`
+para a linha do SDK 54 num app no SDK 52.
+
+Em uma frase: **a cadeia de build acompanha o SDK, não o calendário do npm.**
+
+## Os alertas de segurança que não fecham hoje
+
+O painel do GitHub mostra ~80 alertas neste repositório, e **nenhum deles é do
+código que vai no aparelho**. Todos vêm de dependência transitiva do
+`expo@52`: `@xmldom/xmldom` entra por `@expo/cli` e `@expo/config-plugins`
+(leitura de plist para build iOS), `tar` e `undici` pelo mesmo caminho.
+
+Eles só fecham com o **upgrade de SDK**, que é justamente o que está
+congelado acima. Não adianta forçar `npm audit fix --force`: ele sobe o Expo e
+quebra o app.
+
+Como ler o número, então: **o que importa é a lista não crescer por
+dependência DIRETA nova**, e é isso que o job "Dependência nova com CVE" da
+esteira cobra em cada PR. O bolo transitivo do SDK é dívida conhecida, com
+data marcada para sumir — a do próximo upgrade.
+
 ## Como o merge entra
 
 **Merge commit**, e não rebase nem squash. A primeira versão da proteção exigia
