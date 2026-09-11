@@ -42,10 +42,13 @@ import { typography } from "../theme/typography";
 import { useMotionPresets } from "../theme/motionPresets";
 import BlockGrid from "../components/BlockGrid";
 import CategoryIcon, { resolveCategoryColor } from "../components/CategoryIcon";
+import BudgetPanel from "../components/BudgetPanel";
 import CycleAnchorSheet from "../components/CycleAnchorSheet";
 import CycleWindowChip from "../components/CycleWindowChip";
 import MonthSelector from "../components/MonthSelector";
 import ScreenHeader from "../components/ScreenHeader";
+import AssistantFAB from "../components/AssistantFAB";
+import FirstTimeCard from "../components/FirstTimeCard";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
@@ -1272,6 +1275,14 @@ export default function Analytics() {
   const fetchCategories = useCategoriesStore((s) => s.fetch);
   const inFamilyScope = hasFamily && scope === "family";
 
+  // O recorte que a visão pessoal está lendo, na mesma gramática que a casa
+  // usa — é ele que o painel de tetos recebe, para o limite mensal ser
+  // esticado (ou encolhido) para o tamanho do ciclo que está na tela
+  const personalRange = useMemo(
+    () => (selectedMonth ? analysisRangeForMonth(anchorDay, selectedMonth) : null),
+    [anchorDay, selectedMonth],
+  );
+
   const loadFamily = useCallback(() => {
     const month = useAnalyticsStore.getState().selectedMonth;
     if (!month) return;
@@ -1436,6 +1447,15 @@ export default function Analytics() {
           />
         }
       >
+        {/* EC-228: a primeira vez explica o que NÃO entra nestas somas.
+            E a duvida numero um de quem compara o app com o extrato */}
+        <View style={{ paddingHorizontal: spacing[5] }}>
+          <FirstTimeCard
+            id="analise-o-que-sai"
+            title="O que fica de fora destas somas"
+            body="Transferência entre contas suas, aplicação, resgate e par de estorno não entram: existem no extrato, mas não são gasto nem receita."
+          />
+        </View>
         <View style={{ marginBottom: periodKeys.length > 0 ? spacing[1] : 0 }}>
           <MonthSelector
             months={periodKeys}
@@ -1598,6 +1618,13 @@ export default function Analytics() {
             ),
               ]}
             </BlockGrid>
+
+            {/* Depois do ranking, e não antes: o teto qualifica um número que
+                a pessoa acabou de ler. Só na visão pessoal — teto é do
+                usuário sobre uma categoria, e a casa não tem um */}
+            <View style={{ paddingHorizontal: spacing[5] }}>
+              <BudgetPanel range={personalRange} />
+            </View>
           </View>
         )}
         {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
@@ -1609,6 +1636,9 @@ export default function Analytics() {
         visible={anchorSheetOpen}
         onClose={() => setAnchorSheetOpen(false)}
       />
+    {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
+        qual tela foi aberto, e sugere as perguntas dela */}
+    <AssistantFAB origin="analise" />
     </PageContainer>
   );
 }
