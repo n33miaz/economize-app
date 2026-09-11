@@ -22,13 +22,21 @@ Recebe merge de `develop`. O Render publica em `economize-web-homolog`, que
 aponta para a **API de homologação** — a URL é embutida no bundle em tempo de
 build, então é ela que decide em qual banco o teste escreve.
 
+O portão aqui é **o mesmo da `main`**: suíte, varredura de segredo, CodeQL e
+`npm audit`, todos obrigatórios. Por um tempo `homolog` cobrou menos, e o
+efeito era o contrário do que o ambiente existe para fazer — um segredo vazado
+ou um achado de CodeQL só aparecia no último portão, quando já estava em
+homologação.
+
 ## main
 
 Recebe merge de `homolog`, **por pull request e com a esteira verde** — é o que
 a proteção de branch exige. O Render publica em `economize-web` no mesmo
 instante, e é por isso que o portão está no GitHub e não no Render.
 
-Não há push direto em `main`.
+Não há push direto em `main` — e a regra **vale para o administrador também**.
+Proteção que o dono contorna num clique é combinado, não portão; quem quiser
+passar por cima precisa desligá-la antes, de propósito e à vista.
 
 ## Cobertura
 
