@@ -22,6 +22,12 @@ import { useWishStore } from "../../store/wishStore";
 jest.mock("../../services/api", () => ({
   __esModule: true,
   default: { get: jest.fn().mockResolvedValue({ data: { articles: [] } }) },
+  // O calendário do mês (EC-235) sai na entrada da tela. Vazio aqui: estes
+  // testes cobrem os blocos da Home, e a grade tem suíte própria
+  getDailyTotals: jest.fn().mockResolvedValue([]),
+  getInstallments: jest
+    .fn()
+    .mockResolvedValue({ totalSeries: 0, openSeries: 0, remainingTotal: 0, series: [] }),
 }));
 
 jest.mock("@react-navigation/native", () => ({
