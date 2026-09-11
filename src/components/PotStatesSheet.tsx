@@ -68,7 +68,7 @@ export default function PotStatesSheet({
             className="flex-row items-center rounded-2xl p-4 mt-4"
             style={{ backgroundColor: t.accent.neonMuted }}
           >
-            <PotIcon size={56} level={atual.level} tone={atual.tone} />
+            <PotIcon size={56} level={atual.level} tone={atual.tone} animate />
             <View className="flex-1 ml-4">
               <Text className="text-[11px] text-textSecondary">
                 Seu ciclo agora

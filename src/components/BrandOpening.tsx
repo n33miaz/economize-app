@@ -156,7 +156,7 @@ export default function BrandOpening({
         ]}
       />
       <Animated.View style={potStyle}>
-        <PotIcon size={size} level={level} tone={tone} />
+        <PotIcon size={size} level={level} tone={tone} animate />
       </Animated.View>
     </View>
   );
