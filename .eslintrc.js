@@ -27,6 +27,15 @@ module.exports = {
       // do arquivo vira erro de no-undef
       files: ["jest.setup.js", "**/__tests__/**", "**/*.test.{ts,tsx}"],
       env: { jest: true },
+      rules: {
+        // `exhaustive-deps` existe para pegar closure velha dentro de um
+        // componente de verdade. Num arquivo de teste a única "chamada de
+        // hook" que ele enxerga é o dublê de `useFocusEffect` — um
+        // `React.useEffect(efeito, [])` que roda uma vez DE PROPÓSITO, que é
+        // justamente o que o foco faz. Eram 17 avisos do mesmo dublê, e
+        // aviso que sempre aparece ensina a não ler a lista.
+        "react-hooks/exhaustive-deps": "off",
+      },
     },
   ],
 };
