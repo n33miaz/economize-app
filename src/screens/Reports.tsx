@@ -101,6 +101,12 @@ function ReportCard({
     <Animated.View entering={listItemEntering(index)}>
       {/* O card inteiro abre o detalhe (EC-047): a quebra por categoria já
           vinha do servidor e não tinha por onde ser vista */}
+      {/* Os dois toques — abrir o detalhe e excluir — são IRMÃOS, não pai e
+          filho: botão dentro de botão é HTML inválido na web (o React avisa a
+          cada render) e o leitor de tela anuncia os dois como um só. A lixeira
+          fica absoluta no canto, sobre o card, e o cabeçalho reserva o espaço
+          dela à direita */}
+      <View style={{ position: "relative", marginBottom: spacing[3] }}>
       <TouchableOpacity
         onPress={onPress}
         accessibilityRole="button"
@@ -114,7 +120,6 @@ function ReportCard({
           padding: spacing[4],
           borderWidth: 1,
           borderColor: t.border.subtle,
-          marginBottom: spacing[3],
         }}
       >
       <View
@@ -122,6 +127,7 @@ function ReportCard({
           flexDirection: "row",
           justifyContent: "space-between",
           marginBottom: spacing[2],
+          paddingRight: 28,
         }}
       >
         <Text
@@ -135,28 +141,13 @@ function ReportCard({
         >
           {PERIOD_LABELS[item.period]}
         </Text>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ color: t.text.secondary, fontSize: 12 }}>
-            {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
-                pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
-                ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
-            {formatDayMonthShort(item.startDate)} →{" "}
-            {formatDayMonthShort(item.endDate)}
-          </Text>
-          <TouchableOpacity
-            onPress={excluir}
-            accessibilityRole="button"
-            accessibilityLabel={`Excluir relatório de ${formatDayMonthShort(
-              item.startDate,
-            )} a ${formatDayMonthShort(item.endDate)}`}
-            // O ícone tem 16 px para não competir com os números do card; o
-            // hitSlop leva a área de toque aos 44 px que a a11y exige
-            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-            style={{ marginLeft: spacing[3] }}
-          >
-            <Trash2 size={16} color={t.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        <Text style={{ color: t.text.secondary, fontSize: 12 }}>
+          {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
+              pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
+              ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
+          {formatDayMonthShort(item.startDate)} →{" "}
+          {formatDayMonthShort(item.endDate)}
+        </Text>
       </View>
 
       {/* Três valores dividem a largura do card, e o card já pode estar numa
@@ -252,6 +243,20 @@ function ReportCard({
         </Text>
       )}
       </TouchableOpacity>
+      <TouchableOpacity
+        onPress={excluir}
+        accessibilityRole="button"
+        accessibilityLabel={`Excluir relatório de ${formatDayMonthShort(
+          item.startDate,
+        )} a ${formatDayMonthShort(item.endDate)}`}
+        // O ícone tem 16 px para não competir com os números do card; o
+        // hitSlop leva a área de toque aos 44 px que a a11y exige
+        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+        style={{ position: "absolute", top: spacing[4], right: spacing[4] }}
+      >
+        <Trash2 size={16} color={t.text.tertiary} />
+      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }
