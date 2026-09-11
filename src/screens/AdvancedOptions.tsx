@@ -12,7 +12,7 @@ import CircleAlert from "lucide-react-native/dist/esm/icons/circle-alert";
 import Eye from "lucide-react-native/dist/esm/icons/eye";
 import LifeBuoy from "lucide-react-native/dist/esm/icons/life-buoy";
 import FileUp from "lucide-react-native/dist/esm/icons/file-up";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import { useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
 
@@ -236,7 +236,7 @@ export default function AdvancedOptions() {
             onPress={() => navigation.navigate(APP_ROUTES.vigias as never)}
           />
           <ActionRow
-            Icon={Trash2}
+            Icon={Trash}
             label="Apagar dados locais"
             description="Limpa este aparelho e encerra a sessão"
             destructive

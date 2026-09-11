@@ -10,7 +10,7 @@ import ArchiveRestore from "lucide-react-native/dist/esm/icons/archive-restore";
 import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
@@ -267,7 +267,7 @@ function CategoryRow({
                 justifyContent: "center",
               }}
             >
-              <Trash2 size={18} color={t.semantic.danger} />
+              <Trash size={18} color={t.semantic.danger} />
             </TouchableOpacity>
           )}
         </View>

@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -255,7 +255,7 @@ function ReportCard({
         hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
         style={{ position: "absolute", top: spacing[4], right: spacing[4] }}
       >
-        <Trash2 size={16} color={t.text.tertiary} />
+        <Trash size={16} color={t.text.tertiary} />
       </TouchableOpacity>
       </View>
     </Animated.View>
