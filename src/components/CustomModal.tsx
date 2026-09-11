@@ -69,7 +69,9 @@ export default function CustomModal({
         },
       );
     }
-  }, [visible, reducedMotion]);
+    // Os dois valores compartilhados são estáveis (useSharedValue); estão na
+    // lista pelo lint, e não redisparam a coreografia
+  }, [visible, reducedMotion, backdropOpacity, modalTranslateY]);
 
   useEffect(() => {
     const backAction = () => {

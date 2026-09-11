@@ -264,11 +264,13 @@ export default function Home() {
     if (!potAnnouncementSeen) setPotAnnouncementSeen(true);
   }, [potAnnouncementSeen, setPotAnnouncementSeen]);
 
+  // As três buscas vêm de store ou de useCallback estável: entram na lista
+  // por honestidade com o lint, e rodam uma vez, na montagem
   useEffect(() => {
     fetchIndicators();
     fetchNews();
     fetchWallet();
-  }, []);
+  }, [fetchIndicators, fetchNews, fetchWallet]);
 
   // Importar extrato ou revisar acontece em outras telas — revalida a cada
   // foco, que já cobre a montagem: uma busca só, sem duas correndo juntas
@@ -312,7 +314,7 @@ export default function Home() {
       fetchPendingCount(),
     ]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, []);
+  }, [fetchIndicators, fetchNews, fetchWallet, fetchHomeMonthly, fetchPendingCount]);
 
   const walletBalance = useMemo(() => {
     return walletTxs.reduce((total, tx) => {

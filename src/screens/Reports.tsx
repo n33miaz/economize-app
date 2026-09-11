@@ -279,9 +279,11 @@ export default function Reports() {
   const categorias = useCategoriesStore((s) => s.items);
   const fetchCategorias = useCategoriesStore((s) => s.fetch);
 
+  // `fetch` vem do store e não muda de identidade: entra na lista por
+  // honestidade com o lint, não porque redispare
   useEffect(() => {
     fetch(tab);
-  }, [tab]);
+  }, [tab, fetch]);
 
   useEffect(() => {
     if (categorias.length === 0) fetchCategorias();
