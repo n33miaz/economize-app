@@ -15,7 +15,7 @@ import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Radar from "lucide-react-native/dist/esm/icons/radar";
 import Repeat from "lucide-react-native/dist/esm/icons/repeat";
 import RotateCcw from "lucide-react-native/dist/esm/icons/rotate-ccw";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
 import type { LucideIcon } from "lucide-react-native";
@@ -302,7 +302,7 @@ function SeriesCard({
         {dismissedList ? (
           <RotateCcw size={18} color={t.accent.neon} />
         ) : (
-          <Trash2 size={18} color={t.text.tertiary} />
+          <Trash size={18} color={t.text.tertiary} />
         )}
       </TouchableOpacity>
       </View>

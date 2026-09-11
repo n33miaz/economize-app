@@ -56,8 +56,9 @@ updates:
       # O TypeScript é casado com o `eslint-config-expo` e o
       # `@typescript-eslint` desta linha de SDK. O major (a 7 é o compilador
       # nativo) quebra o `tsc` e o lint antes de quebrar um teste
+      # ...e nem o minor: o 5.9 já passa do teto do @typescript-eslint desta
+      # linha (5.5). O TypeScript sobe junto com o SDK, e só com ele
       - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "@typescript-eslint/*"
         update-types: ["version-update:semver-major"]
       # O NativeWind 4 compila em cima do Tailwind 3; o 4 troca o motor e a

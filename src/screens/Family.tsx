@@ -15,7 +15,7 @@ import KeyRound from "lucide-react-native/dist/esm/icons/key-round";
 import LogOut from "lucide-react-native/dist/esm/icons/log-out";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
 import Scissors from "lucide-react-native/dist/esm/icons/scissors";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import UserPlus from "lucide-react-native/dist/esm/icons/user-plus";
 
 import type { AppTheme } from "../theme/colors";
@@ -107,7 +107,7 @@ function MemberRow({
           accessibilityLabel={`Remover ${member.name}`}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Trash2 size={16} color={t.semantic.danger} />
+          <Trash size={16} color={t.semantic.danger} />
         </Pressable>
       )}
     </View>
@@ -889,7 +889,7 @@ export default function Family() {
               <View style={{ marginTop: spacing[6] }}>
                 {isOwner ? (
                   <ActionRow
-                    Icon={Trash2}
+                    Icon={Trash}
                     label="Apagar a casa"
                     description="Acaba para todo mundo, não só para você"
                     destructive

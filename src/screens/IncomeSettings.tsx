@@ -5,7 +5,7 @@ import Banknote from "lucide-react-native/dist/esm/icons/banknote";
 import CalendarClock from "lucide-react-native/dist/esm/icons/calendar-clock";
 import Clock from "lucide-react-native/dist/esm/icons/clock";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { SHEET_PADDING, spacing } from "../theme/ds";
@@ -446,7 +446,7 @@ export default function IncomeSettings() {
                         accessibilityLabel={`Remover ${source.name}`}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        <Trash2 size={16} color={t.semantic.danger} />
+                        <Trash size={16} color={t.semantic.danger} />
                       </Pressable>
                     </View>
 

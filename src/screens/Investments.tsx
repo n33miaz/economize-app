@@ -15,7 +15,7 @@ import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import RefreshCw from "lucide-react-native/dist/esm/icons/refresh-cw";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import X from "lucide-react-native/dist/esm/icons/x";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
@@ -1458,7 +1458,7 @@ function PositionRow({
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ padding: spacing[1] }}
               >
-                <Trash2 size={16} color={t.text.tertiary} />
+                <Trash size={16} color={t.text.tertiary} />
               </TouchableOpacity>
             </>
           ) : null}

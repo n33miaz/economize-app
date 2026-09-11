@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import SendHorizontal from "lucide-react-native/dist/esm/icons/send-horizontal";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
-import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import Trash from "lucide-react-native/dist/esm/icons/trash";
 import X from "lucide-react-native/dist/esm/icons/x";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -313,7 +313,7 @@ export default function AiAssistant() {
                   paddingVertical: spacing[3],
                 }}
               >
-                <Trash2 size={13} color={t.text.tertiary} />
+                <Trash size={13} color={t.text.tertiary} />
                 <Text
                   style={{
                     color: t.text.tertiary,
