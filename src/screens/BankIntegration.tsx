@@ -32,7 +32,12 @@ import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
-import type { BankTransaction, FamilyTransaction } from "../services/api";
+import { getBalanceCheck } from "../services/api";
+import type {
+  BalanceFinding,
+  BankTransaction,
+  FamilyTransaction,
+} from "../services/api";
 import { useAccountsStore } from "../store/accountsStore";
 import { useBankStore } from "../store/bankStore";
 import { useCategoriesStore } from "../store/categoriesStore";
@@ -46,6 +51,7 @@ import { useToastStore } from "../store/toastStore";
 import { askConfirm } from "../store/confirmStore";
 import PageContainer from "../components/PageContainer";
 import ActionRow from "../components/ActionRow";
+import BalanceCheckNotice from "../components/BalanceCheckNotice";
 import AssistantFAB from "../components/AssistantFAB";
 import BankLogo from "../components/BankLogo";
 import ErrorState from "../components/ErrorState";
@@ -55,6 +61,9 @@ import CycleAnchorSheet from "../components/CycleAnchorSheet";
 import CycleWindowChip from "../components/CycleWindowChip";
 import FamilyScopeToggle from "../components/FamilyScopeToggle";
 import FilterChipRow from "../components/FilterChipRow";
+import { bankKeyFor } from "../utils/bankBrand";
+import { useWaitingLine } from "../hooks/useWaitingLine";
+import FreshnessStamp from "../components/FreshnessStamp";
 import MemberBadge from "../components/MemberBadge";
 import OriginBadge from "../components/OriginBadge";
 import Skeleton from "../components/Skeleton";
@@ -319,6 +328,14 @@ export default function BankIntegration() {
   const finishConnect = useConnectorStore((s) => s.finishConnect);
   const unlink = useConnectorStore((s) => s.unlink);
   const isLinking = useConnectorStore((s) => s.isLinking);
+  // EC-224: a legenda diz o que esta acontecendo de verdade, na ordem real
+  // das varreduras -- e para de prometer passado o prazo
+  const legendaDaImportacao = useWaitingLine("import", isImporting);
+  // A conferência entre o saldo que o banco informa e o que o app mostra
+  // (EC-196). Mora aqui, e não na Home, porque é nesta tela que o usuário vem
+  // entender de onde os números vêm — e foi exatamente entre estas duas telas
+  // que o concorrente se contradisse
+  const [avisosDeSaldo, setAvisosDeSaldo] = useState<BalanceFinding[]>([]);
   // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
   const { width: windowWidth } = useWindowDimensions();
   const chartWidth = Math.min(windowWidth - 80, MAX_CHART_WIDTH);
@@ -396,6 +413,12 @@ export default function BankIntegration() {
       fetchAccounts();
       // conexões do usuário: a guarda de `enabled` mora no próprio store
       fetchItems();
+      // a conferência de saldo é best-effort: ela existe para AVISAR, e uma
+      // falha nela não pode tirar a tela do ar nem virar toast — o usuário
+      // veio aqui ver as conexões, não o resultado da conferência
+      getBalanceCheck()
+        .then((relatorio) => setAvisosDeSaldo(relatorio.findings))
+        .catch(() => setAvisosDeSaldo([]));
     }, [
       fetchTransactions,
       fetchCategories,
@@ -836,7 +859,7 @@ export default function BankIntegration() {
     return (
       <PageContainer style={{ flex: 1, position: "relative" }}>
         <StatementSkeleton />
-        <AssistantFAB />
+        <AssistantFAB origin="extrato" />
       </PageContainer>
     );
   }
@@ -846,8 +869,16 @@ export default function BankIntegration() {
   if (!inFamilyScope && bankError && !isLoading && transactions.length === 0) {
     return (
       <PageContainer style={{ flex: 1, position: "relative" }}>
-        <ErrorState message={bankError} onRetry={fetchTransactions} />
-        <AssistantFAB />
+        {/* EC-216: a porta que NÃO depende do que falhou. Se a leitura do
+            servidor caiu, importar o arquivo continua funcionando — oferecer
+            só "tentar de novo" é mandar a pessoa bater na mesma porta */}
+        <ErrorState
+          message={bankError}
+          onRetry={fetchTransactions}
+          fallbackLabel="Importar extrato de um arquivo"
+          onFallback={handleImport}
+        />
+        <AssistantFAB origin="extrato" />
       </PageContainer>
     );
   }
@@ -956,6 +987,14 @@ export default function BankIntegration() {
                     key: option.key,
                     label: option.label,
                     count: option.count,
+                    // EC-229: reconhecer o roxo do Nubank e mais rapido do
+                    // que ler o nome do cartao numa fileira rolante. "Tudo"
+                    // e "Sem origem" nao tem conta, entao ficam sem logo
+                    brand:
+                      option.account?.institution ??
+                      (option.account && bankKeyFor(option.account.name)
+                        ? option.account.name
+                        : null),
                   }))}
                   value={activeOrigin}
                   onChange={setOriginFilter}
@@ -1106,6 +1145,8 @@ export default function BankIntegration() {
                     : "Conecte seu banco pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica."}
                 </Text>
 
+                <BalanceCheckNotice findings={avisosDeSaldo} />
+
                 {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
                     conectar deixou de ser configuração de servidor. O nome é
                     a INSTITUIÇÃO — o nome do conector no provedor nunca entra */}
@@ -1129,11 +1170,14 @@ export default function BankIntegration() {
                         >
                           {nome}
                         </Text>
-                        <Text className="text-xs text-textTertiary mt-0.5">
-                          {conexao.lastSyncedAt
-                            ? `Sincronizado em ${formatDayMonthShort(conexao.lastSyncedAt)}`
-                            : "Ainda não sincronizado"}
-                        </Text>
+                        {/* Dia e mês não diziam se a leitura tinha uma hora
+                            ou onze; o carimbo diz, e muda de cor passado um
+                            dia sem sincronizar */}
+                        <FreshnessStamp
+                          at={conexao.lastSyncedAt}
+                          prefix="sincronizado"
+                          style={{ marginTop: 2 }}
+                        />
                       </View>
                       <TouchableOpacity
                         onPress={() => handleDesconectar(conexao.id, nome)}
@@ -1256,7 +1300,7 @@ export default function BankIntegration() {
                         <Upload size={14} color={t.accent.neon} />
                       )}
                       <Text className="text-accent text-xs font-bold ml-1">
-                        {isImporting ? "Importando" : "Importar"}
+                        {isImporting ? (legendaDaImportacao ?? "Importando") : "Importar"}
                       </Text>
                     </TouchableOpacity>
                   </Animated.View>
@@ -1371,7 +1415,7 @@ export default function BankIntegration() {
         onClose={() => setAnchorSheetOpen(false)}
       />
 
-      <AssistantFAB />
+      <AssistantFAB origin="extrato" />
     </PageContainer>
   );
 }
