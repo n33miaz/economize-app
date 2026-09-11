@@ -79,12 +79,22 @@ interface PreferencesState {
    * de novo enquanto o pagamento não existe.
    */
   plusInterestAt: number | null;
+  /**
+   * Os cartões de "primeira vez" que o usuário já dispensou (EC-228).
+   *
+   * Lista de ids, e não um booleano por tela: cada cartão novo teria de
+   * inventar um campo, e um deles seria esquecido. Dispensar é DEFINITIVO —
+   * um cartão que volta ensina que o X não funciona, e a partir daí o
+   * usuário para de fechar qualquer coisa.
+   */
+  dismissedHints: string[];
   hasHydrated: boolean;
 
   setTheme: (theme: ThemeMode) => void;
   toggleBiometric: () => void;
   setBiometric: (enabled: boolean) => void;
   setBiometricChoiceMade: (made: boolean) => void;
+  dismissHint: (id: string) => void;
   setDefaultCurrency: (currency: Currency) => void;
   toggleHideBalance: () => void;
   setLanguage: (language: Language) => void;
@@ -104,6 +114,9 @@ interface PreferencesState {
 }
 
 const initialState = {
+  // EC-228: os cartoes de primeira vez ja dispensados. Lista vazia e o
+  // estado de quem nunca dispensou nada -- e de quem instalou agora
+  dismissedHints: [] as string[],
   theme: "dark" as ThemeMode,
   biometricLogin: false,
   biometricChoiceMade: false,
@@ -130,6 +143,14 @@ export const usePreferencesStore = create(
       hasHydrated: false,
 
       setTheme: (theme) => set({ theme }),
+      // Dispensar e definitivo. O Set intermediario evita a lista crescer
+      // com repeticao quando dois cartoes iguais existem em telas irmas
+      dismissHint: (id) =>
+        set((state) => ({
+          dismissedHints: state.dismissedHints.includes(id)
+            ? state.dismissedHints
+            : [...state.dismissedHints, id],
+        })),
       toggleBiometric: () =>
         set((state) => ({ biometricLogin: !state.biometricLogin })),
       setBiometric: (enabled) => set({ biometricLogin: enabled }),
