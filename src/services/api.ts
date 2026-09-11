@@ -2499,7 +2499,90 @@ export interface PlansResponse {
   /** Enquanto `false`, o app só registra interesse — não há como pagar. */
   checkoutAvailable: boolean;
   interestRegistered: boolean;
+  /**
+   * Até quando o plano pago vale. Null em gratuito e no Plus sem prazo.
+   *
+   * É o número que permite dizer a DATA exata em vez de "sua assinatura
+   * continua ativa" — a frase que não responde nada a quem acabou de cancelar.
+   */
+  activeUntil: string | null;
+  /** Quando a pessoa pediu para sair; null = não pediu (EC-208). */
+  cancelledAt: string | null;
 }
+
+export interface CancelPlanOutcome {
+  cancelledAt: string;
+  /** Até quando o acesso pago continua; null quando não havia prazo. */
+  activeUntil: string | null;
+  /** A frase pronta do servidor — a tela não recompõe a regra. */
+  message: string;
+}
+
+/**
+ * Cancela a renovação do plano pago (EC-208).
+ *
+ * O acesso NÃO é cortado na hora: quem pagou até o dia 20 usa até o dia 20.
+ * Idempotente — cancelar de novo devolve a mesma resposta, porque quem toca
+ * duas vezes está inseguro e um erro na segunda confirma o medo.
+ */
+export const cancelPlan = async (): Promise<CancelPlanOutcome> => {
+  const response = await api.post<CancelPlanOutcome>("/plans/cancel");
+  return response.data;
+};
+
+/** O assunto de um chamado (EC-209) — lista curta, para não virar triagem. */
+export type SupportSubject =
+  | "NUMERO_ERRADO"
+  | "IMPORTACAO"
+  | "CONEXAO"
+  | "COBRANCA"
+  | "CONTA"
+  | "OUTRO";
+
+export type SupportStatus = "OPEN" | "ANSWERED" | "CLOSED";
+
+export interface SupportTicket {
+  id: string;
+  subject: SupportSubject;
+  message: string;
+  status: SupportStatus;
+  /** Até quando prometemos responder — gravado no chamado, não numa frase. */
+  respondBy: string;
+  answer: string | null;
+  answeredAt: string | null;
+  /** O prazo passou sem resposta. A tela precisa poder dizer isso. */
+  overdue: boolean;
+  createdAt: string;
+}
+
+/**
+ * Abre um chamado que sobrevive a fechar o app.
+ *
+ * A tela e a versão viajam junto: sem elas, metade dos chamados começa com uma
+ * ida e volta só para descobrir onde a pessoa estava — e cada ida e volta
+ * custa um dia.
+ */
+export const openSupportTicket = async (payload: {
+  subject: SupportSubject;
+  message: string;
+  appVersion?: string | null;
+  screen?: string | null;
+}): Promise<SupportTicket> => {
+  const response = await api.post<SupportTicket>("/support/tickets", payload);
+  return response.data;
+};
+
+/** Os chamados da pessoa — é esta lista que prova que nada sumiu. */
+export const getSupportTickets = async (): Promise<SupportTicket[]> => {
+  const response = await api.get<SupportTicket[]>("/support/tickets");
+  return response.data;
+};
+
+/** Encerrar é da pessoa: quem resolveu sozinho não espera alguém fechar. */
+export const closeSupportTicket = async (id: string): Promise<SupportTicket> => {
+  const response = await api.post<SupportTicket>(`/support/tickets/${id}/close`);
+  return response.data;
+};
 
 export const getPlans = async (): Promise<PlansResponse> => {
   const response = await api.get<PlansResponse>("/plans");

@@ -10,6 +10,7 @@ import {
 import Bell from "lucide-react-native/dist/esm/icons/bell";
 import CircleAlert from "lucide-react-native/dist/esm/icons/circle-alert";
 import Eye from "lucide-react-native/dist/esm/icons/eye";
+import LifeBuoy from "lucide-react-native/dist/esm/icons/life-buoy";
 import FileUp from "lucide-react-native/dist/esm/icons/file-up";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import { useNavigation } from "@react-navigation/native";
@@ -221,6 +222,13 @@ export default function AdvancedOptions() {
           />
           {/* Ao lado do gatilho manual da MESMA faxina: quem acabou de
               reprocessar é exatamente quem quer ver o que mudou */}
+          {/* EC-209: falar com uma pessoa fica junto do que é conta e ajuda */}
+          <ActionRow
+            Icon={LifeBuoy}
+            label="Falar com uma pessoa"
+            description="Chamado com prazo, que não some quando você fecha o app"
+            onPress={() => navigation.navigate(APP_ROUTES.suporte as never)}
+          />
           <ActionRow
             Icon={Eye}
             label="Vigias do extrato"
