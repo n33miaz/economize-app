@@ -1140,7 +1140,13 @@ function WatchCard({
     .join(". ");
 
   return (
-    <Animated.View style={[{ minWidth: 150, maxWidth: 190 }, pressStyle]}>
+    // O "x" de deixar de acompanhar é IRMÃO do card, não filho: botão dentro
+    // de botão é HTML inválido na web (o React avisava a cada render) e o
+    // leitor de tela anunciava os dois como um só. Ele fica absoluto no canto
+    // e o rótulo reserva o espaço à direita
+    <Animated.View
+      style={[{ minWidth: 150, maxWidth: 190, position: "relative" }, pressStyle]}
+    >
       <TouchableOpacity
         onPress={onPress}
         onLongPress={onRemove}
@@ -1158,29 +1164,31 @@ function WatchCard({
           minHeight: 112,
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-          <Text
-            numberOfLines={2}
-            style={{
-              flex: 1,
-              color: t.text.secondary,
-              fontSize: 12,
-              fontWeight: "700",
-              marginRight: spacing[2],
-            }}
-          >
-            {card.label}
-          </Text>
-          <TouchableOpacity
-            onPress={onRemove}
-            accessibilityLabel={`Deixar de acompanhar ${card.label}`}
-            accessibilityRole="button"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ marginTop: -4, marginRight: -6, padding: 4 }}
-          >
-            <X size={14} color={t.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        <Text
+          numberOfLines={2}
+          style={{
+            color: t.text.secondary,
+            fontSize: 12,
+            fontWeight: "700",
+      <TouchableOpacity
+        onPress={onRemove}
+        accessibilityLabel={`Deixar de acompanhar ${card.label}`}
+        accessibilityRole="button"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{
+          position: "absolute",
+          top: spacing[3],
+          right: spacing[3],
+          padding: 4,
+        }}
+      >
+        <X size={14} color={t.text.tertiary} />
+      </TouchableOpacity>
+            marginRight: spacing[5],
+          }}
+        >
+          {card.label}
+        </Text>
         <Text
           numberOfLines={1}
           style={[
