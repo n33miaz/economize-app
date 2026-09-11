@@ -44,6 +44,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
 import { calculateBankMetrics } from "../utils/bankMetrics";
+import { declaredCaveat, forecastOrigin } from "../utils/forecastOrigin";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import {
   forecastItemWhen,
@@ -86,13 +87,14 @@ function ForecastRow({
   // ocorrências): o selo assume a conta — "semanal" ao lado de um valor 4,3×
   // maior que a cobrança confundiria.
   const when = forecastItemWhen(item);
+  const origem = forecastOrigin(item);
 
   return (
     <View
       accessible
       accessibilityLabel={`${item.displayName}, ${when.spoken}, ${
         isIncome ? "entrada" : "saída"
-      } de ${formatBRL(item.amount)}${
+      } de ${formatBRL(item.amount)}, ${origem.spoken}${
         settled ? `, já liquidada neste ${periodNoun}` : ""
       }`}
       style={{
@@ -122,18 +124,31 @@ function ForecastRow({
           {when.label}
         </Text>
       </View>
-      <Text
-        numberOfLines={1}
-        style={{
-          flex: 1,
-          marginHorizontal: spacing[3],
-          color: settled ? t.text.secondary : t.text.primary,
-          fontSize: 13,
-          fontWeight: "600",
-        }}
-      >
-        {item.displayName}
-      </Text>
+      <View style={{ flex: 1, marginHorizontal: spacing[3] }}>
+        <Text
+          numberOfLines={1}
+          style={{
+            color: settled ? t.text.secondary : t.text.primary,
+            fontSize: 13,
+            fontWeight: "600",
+          }}
+        >
+          {item.displayName}
+        </Text>
+        {/* EC-206: medido e informado não podem ter a mesma cara. O primeiro
+            tem histórico no extrato; o segundo é intenção de quem digitou — e
+            sem a marca, a previsão parece mais firme do que é */}
+        <Text
+          numberOfLines={1}
+          style={{
+            color: origem.kind === "declared" ? t.semantic.warning : t.text.tertiary,
+            fontSize: 10,
+            marginTop: 1,
+          }}
+        >
+          {origem.badge}
+        </Text>
+      </View>
       <Text
         style={{
           color,
@@ -356,6 +371,20 @@ function ForecastMonthCard({
 
       {expanded && (
         <View style={{ marginTop: spacing[2], gap: spacing[1] }}>
+          {/* EC-206: quanto deste período é estimativa da pessoa. Só aparece
+              quando pesa (10%+): ressalva que aparece sempre não é lida, que é
+              a mesma lição do piso de materialidade */}
+          {declaredCaveat(month.items) ? (
+            <Text
+              style={{
+                color: t.text.tertiary,
+                fontSize: 11,
+                marginBottom: spacing[1],
+              }}
+            >
+              {declaredCaveat(month.items)}
+            </Text>
+          ) : null}
           {split.pendingItems.map((item) => (
             <ForecastRow
               key={item.seriesId}
