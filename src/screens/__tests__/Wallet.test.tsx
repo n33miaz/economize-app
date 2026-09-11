@@ -75,6 +75,9 @@ describe("Carteira", () => {
     await waitFor(() =>
       expect(getByText("Nenhuma transação registrada.")).toBeTruthy(),
     );
+    // EC-231: a alocação vazia é o pote, não um glifo de pizza
+    expect(getByText("Sem ativos ainda")).toBeTruthy();
+    expect(getByText("Adicione ativos para visualizar sua alocação.")).toBeTruthy();
   });
 
   it("falha de leitura se explica na própria tela", async () => {

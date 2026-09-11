@@ -102,9 +102,15 @@ describe("Desejos", () => {
   });
 
   it("sem desejo nenhum a tela abre e convida a criar", async () => {
-    const { getByText } = montar();
+    const { getByText, getByLabelText } = montar();
 
     await waitFor(() => expect(getByText("Desejos")).toBeTruthy());
+    // EC-231: o vazio é contado pelo pote, numa frase só para quem ouve
+    expect(
+      getByLabelText(/^Nenhum desejo ainda\. Cadastre algo que você quer comprar/),
+    ).toBeTruthy();
+    // EC-228: a primeira visita explica o que "horas da sua vida" quer dizer
+    expect(getByText("O preço em horas da sua vida")).toBeTruthy();
   });
 
   it("mostra o desejo cadastrado", async () => {

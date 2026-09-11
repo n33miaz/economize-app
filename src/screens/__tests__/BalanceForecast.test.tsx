@@ -95,9 +95,12 @@ describe("Perspectiva de saldo", () => {
       hasLoadedForecastOnce: true,
     } as never);
 
-    const { getByText } = montar();
+    const { getByText, getByLabelText } = montar();
 
     await waitFor(() => expect(getByText("Perspectiva de saldo")).toBeTruthy());
+    // EC-231: o vazio é o pote, e o botão de volta continua existindo
+    expect(getByText("Ainda não há o que projetar")).toBeTruthy();
+    expect(getByLabelText("Voltar para recorrências")).toBeTruthy();
   });
 
   it("falha ao projetar se explica sem derrubar a tela", async () => {

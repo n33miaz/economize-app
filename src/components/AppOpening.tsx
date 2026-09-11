@@ -81,16 +81,21 @@ export default function AppOpening({ children }: { children: React.ReactNode }) 
           justifyContent: "center",
         }}
       >
-        <BrandOpening ready={ready || estourou} size={112} onSettled={finish} />
+        {/* O nome fica ACIMA do pote, e não abaixo, por causa da coreografia:
+            o pote nasce 128 px abaixo do lugar dele e sobe até lá. Embaixo,
+            o nome ficava coberto pelo pote durante a espera inteira — o Login
+            resolve revelando o nome só depois da subida, mas aqui a cortina
+            sai junto com a subida, e o nome nunca apareceria */}
         <Text
           style={{
             color: t.text.tertiary,
             fontSize: 13,
-            marginTop: spacing[6],
+            marginBottom: spacing[6],
           }}
         >
           Economize!
         </Text>
+        <BrandOpening ready={ready || estourou} size={112} onSettled={finish} />
       </Animated.View>
     </View>
   );

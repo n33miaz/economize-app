@@ -334,10 +334,15 @@ export default function AiAssistant() {
             horizontal
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            // Na web o ScrollView nasce com flexGrow 1 e os chips esticavam
+            // até virar círculos do tamanho da tela. A faixa de sugestões tem a
+            // altura do próprio conteúdo, e os chips ficam centrados nela
+            style={{ flexGrow: 0, flexShrink: 0 }}
             contentContainerStyle={{
               paddingHorizontal: spacing[5],
               paddingBottom: spacing[3],
               gap: spacing[2],
+              alignItems: "center",
             }}
           >
             {sugestoes.map((suggestion) => (
