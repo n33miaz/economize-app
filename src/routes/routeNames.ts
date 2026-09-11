@@ -30,6 +30,9 @@ export const APP_ROUTES = {
   previsao: "Previsão",
   agendamento: "Agendamento",
   revisao: "Revisão",
+  // EC-209: falar com uma pessoa, com prazo e histórico. Alcançada pelas
+  // Opções avançadas, junto do resto que é "conta e ajuda"
+  suporte: "Suporte",
   // EC-202: as varreduras que rodam sozinhas prestando contas. Alcançada
   // pelas Opções avançadas, ao lado do gatilho manual da mesma faxina
   vigias: "Vigias",

@@ -303,6 +303,8 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   // Prestação de contas das varreduras: abre das Opções avançadas, e um dia
   // pode abrir do Extrato — a pílula segue de onde o usuário veio
   [APP_ROUTES.vigias]: null,
+  // Suporte abre de onde o problema aconteceu; a pílula segue a origem
+  [APP_ROUTES.suporte]: null,
   // Ajuste de conta, aberto pelo Perfil — não é destino do trilho, então a
   // pílula fica com o destino de onde o usuário veio
   [APP_ROUTES.opcoesIa]: null,

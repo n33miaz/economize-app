@@ -62,6 +62,9 @@ const CATALOGO: PlansResponse = {
   ],
   checkoutAvailable: false,
   interestRegistered: false,
+  // Conta gratuita: sem prazo e sem cancelamento (EC-208)
+  activeUntil: null,
+  cancelledAt: null,
 };
 
 /**
