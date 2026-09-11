@@ -137,7 +137,7 @@ export function gapPrompt(gap: WishGap): GapPrompt {
       return {
         title: "Confirme o quanto você recebe",
         reason:
-          "O valor da sua hora sai daí. Preferimos não calcular a calcular por cima de um palpite.",
+          "O valor da sua hora sai daí. Preferimos não calcular por cima de um palpite.",
         action: "Confirmar renda",
       };
     case "HISTORY":
