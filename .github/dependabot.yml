@@ -60,6 +60,23 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@typescript-eslint/*"
         update-types: ["version-update:semver-major"]
+      # O NativeWind 4 compila em cima do Tailwind 3; o 4 troca o motor e a
+      # sintaxe de configuração. E o `eslint-config-expo` desta linha é
+      # escrito para o ESLint 8 — o 9+ só aceita flat config
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # A suíte de teste também acompanha o SDK: `jest-expo` versiona junto do
+      # Expo, a Testing Library 14 pede React Native 0.78 e o Jest 30 puxa a
+      # cadeia inteira de transformadores
+      - dependency-name: "jest-expo"
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/*"
+        update-types: ["version-update:semver-major"]
     groups:
       testes:
         patterns: ["jest*", "@testing-library/*", "@types/jest"]

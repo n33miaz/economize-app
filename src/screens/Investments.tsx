@@ -16,7 +16,6 @@ import Pencil from "lucide-react-native/dist/esm/icons/pencil";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import RefreshCw from "lucide-react-native/dist/esm/icons/refresh-cw";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
-import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import X from "lucide-react-native/dist/esm/icons/x";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
@@ -70,6 +69,8 @@ import { formatBRL, formatBRLCompact, formatPercent } from "../utils/money";
 import BlockGrid from "../components/BlockGrid";
 import CustomModal from "../components/CustomModal";
 import ErrorState from "../components/ErrorState";
+import FirstTimeCard from "../components/FirstTimeCard";
+import PotEmptyState from "../components/PotEmptyState";
 import InvestmentInterestSheet from "../components/InvestmentInterestSheet";
 import InvestmentPositionSheet from "../components/InvestmentPositionSheet";
 import AssistantFAB from "../components/AssistantFAB";
@@ -731,6 +732,11 @@ export default function Investments() {
           />
         }
       >
+        <FirstTimeCard
+          id="investimentos-de-onde-vem"
+          title="De onde vêm estas posições"
+          body="Juntamos o que veio do banco conectado, o que o extrato mostrou como aplicação e o que você cadastrou à mão. Aplicar não é gastar: nada daqui entra como despesa do mês."
+        />
         <BlockGrid columns={columns} weights={BLOCK_WEIGHTS}>
           {[resumo, indicadores, tesouro, posicoes, movimentacoes, radar]}
         </BlockGrid>
@@ -844,93 +850,32 @@ function EmptyBlock({
   message: string;
   actions: { label: string; onPress: () => void; secondary?: boolean }[];
 }) {
+  const principal = actions.find((a) => !a.secondary);
+  const secundaria = actions.find((a) => a.secondary);
   return (
     <View
       style={{
-        alignItems: "center",
         backgroundColor: t.background.surface,
         borderRadius: radius["3xl"],
         borderWidth: 1,
         borderStyle: "dashed",
         borderColor: t.border.default,
-        padding: spacing[8],
       }}
     >
-      <View
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: radius.full,
-          backgroundColor: t.background.elevated,
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: spacing[4],
-        }}
-      >
-        <TrendingUp size={34} color={t.accent.neon} />
-      </View>
-      <Text
-        style={{
-          color: t.text.primary,
-          fontSize: 18,
-          fontWeight: "700",
-          textAlign: "center",
-          marginBottom: spacing[2],
-        }}
-      >
-        {title}
-      </Text>
-      <Text
-        style={{
-          color: t.text.secondary,
-          fontSize: 13,
-          lineHeight: 19,
-          textAlign: "center",
-        }}
-      >
-        {message}
-      </Text>
-      {actions.length > 0 ? (
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            gap: spacing[3],
-            marginTop: spacing[5],
-          }}
-        >
-          {actions.map((action) => (
-            <TouchableOpacity
-              key={action.label}
-              onPress={action.onPress}
-              accessibilityLabel={action.label}
-              accessibilityRole="button"
-              activeOpacity={0.85}
-              style={{
-                height: 48,
-                paddingHorizontal: spacing[6],
-                borderRadius: radius.full,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: action.secondary ? "transparent" : t.accent.neon,
-                borderWidth: action.secondary ? 1 : 0,
-                borderColor: t.border.strong,
-              }}
-            >
-              <Text
-                style={{
-                  color: action.secondary ? t.text.primary : t.text.inverse,
-                  fontSize: 14,
-                  fontWeight: "700",
-                }}
-              >
-                {action.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
+      {/* EC-231: o pote vazio no lugar do glifo de tendência num disco. A
+          primeira ação é a principal (conectar), a segunda vem como fantasma
+          (cadastrar à mão) — e o PotEmptyState só desenha a segunda quando
+          existe a primeira */}
+      <PotEmptyState
+        mood="comecar"
+        size={72}
+        title={title}
+        body={message}
+        actionLabel={principal?.label}
+        onAction={principal?.onPress}
+        secondaryActionLabel={secundaria?.label}
+        onSecondaryAction={secundaria?.onPress}
+      />
     </View>
   );
 }
@@ -1140,7 +1085,13 @@ function WatchCard({
     .join(". ");
 
   return (
-    <Animated.View style={[{ minWidth: 150, maxWidth: 190 }, pressStyle]}>
+    // O "x" de deixar de acompanhar é IRMÃO do card, não filho: botão dentro
+    // de botão é HTML inválido na web (o React avisava a cada render) e o
+    // leitor de tela anunciava os dois como um só. Ele fica absoluto no canto
+    // e o rótulo reserva o espaço à direita
+    <Animated.View
+      style={[{ minWidth: 150, maxWidth: 190, position: "relative" }, pressStyle]}
+    >
       <TouchableOpacity
         onPress={onPress}
         onLongPress={onRemove}
@@ -1158,29 +1109,17 @@ function WatchCard({
           minHeight: 112,
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-          <Text
-            numberOfLines={2}
-            style={{
-              flex: 1,
-              color: t.text.secondary,
-              fontSize: 12,
-              fontWeight: "700",
-              marginRight: spacing[2],
-            }}
-          >
-            {card.label}
-          </Text>
-          <TouchableOpacity
-            onPress={onRemove}
-            accessibilityLabel={`Deixar de acompanhar ${card.label}`}
-            accessibilityRole="button"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ marginTop: -4, marginRight: -6, padding: 4 }}
-          >
-            <X size={14} color={t.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        <Text
+          numberOfLines={2}
+          style={{
+            color: t.text.secondary,
+            fontSize: 12,
+            fontWeight: "700",
+            marginRight: spacing[5],
+          }}
+        >
+          {card.label}
+        </Text>
         <Text
           numberOfLines={1}
           style={[
@@ -1230,6 +1169,20 @@ function WatchCard({
             {card.staleNote}
           </Text>
         ) : null}
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={onRemove}
+        accessibilityLabel={`Deixar de acompanhar ${card.label}`}
+        accessibilityRole="button"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{
+          position: "absolute",
+          top: spacing[3],
+          right: spacing[3],
+          padding: 4,
+        }}
+      >
+        <X size={14} color={t.text.tertiary} />
       </TouchableOpacity>
     </Animated.View>
   );

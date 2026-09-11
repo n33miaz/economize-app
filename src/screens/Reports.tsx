@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import FileText from "lucide-react-native/dist/esm/icons/file-text";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import FirstTimeCard from "../components/FirstTimeCard";
+import PotEmptyState from "../components/PotEmptyState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
@@ -101,6 +102,12 @@ function ReportCard({
     <Animated.View entering={listItemEntering(index)}>
       {/* O card inteiro abre o detalhe (EC-047): a quebra por categoria já
           vinha do servidor e não tinha por onde ser vista */}
+      {/* Os dois toques — abrir o detalhe e excluir — são IRMÃOS, não pai e
+          filho: botão dentro de botão é HTML inválido na web (o React avisa a
+          cada render) e o leitor de tela anuncia os dois como um só. A lixeira
+          fica absoluta no canto, sobre o card, e o cabeçalho reserva o espaço
+          dela à direita */}
+      <View style={{ position: "relative", marginBottom: spacing[3] }}>
       <TouchableOpacity
         onPress={onPress}
         accessibilityRole="button"
@@ -114,7 +121,6 @@ function ReportCard({
           padding: spacing[4],
           borderWidth: 1,
           borderColor: t.border.subtle,
-          marginBottom: spacing[3],
         }}
       >
       <View
@@ -122,6 +128,7 @@ function ReportCard({
           flexDirection: "row",
           justifyContent: "space-between",
           marginBottom: spacing[2],
+          paddingRight: 28,
         }}
       >
         <Text
@@ -135,28 +142,13 @@ function ReportCard({
         >
           {PERIOD_LABELS[item.period]}
         </Text>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ color: t.text.secondary, fontSize: 12 }}>
-            {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
-                pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
-                ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
-            {formatDayMonthShort(item.startDate)} →{" "}
-            {formatDayMonthShort(item.endDate)}
-          </Text>
-          <TouchableOpacity
-            onPress={excluir}
-            accessibilityRole="button"
-            accessibilityLabel={`Excluir relatório de ${formatDayMonthShort(
-              item.startDate,
-            )} a ${formatDayMonthShort(item.endDate)}`}
-            // O ícone tem 16 px para não competir com os números do card; o
-            // hitSlop leva a área de toque aos 44 px que a a11y exige
-            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-            style={{ marginLeft: spacing[3] }}
-          >
-            <Trash2 size={16} color={t.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        <Text style={{ color: t.text.secondary, fontSize: 12 }}>
+          {/* Em UTC: o início do relatório mensal é o dia da âncora escolhida
+              pelo usuário (mandado como meia-noite UTC), e no fuso do aparelho
+              ele aparecia como véspera — "11 ago" para quem escolheu o dia 12 */}
+          {formatDayMonthShort(item.startDate)} →{" "}
+          {formatDayMonthShort(item.endDate)}
+        </Text>
       </View>
 
       {/* Três valores dividem a largura do card, e o card já pode estar numa
@@ -252,6 +244,20 @@ function ReportCard({
         </Text>
       )}
       </TouchableOpacity>
+      <TouchableOpacity
+        onPress={excluir}
+        accessibilityRole="button"
+        accessibilityLabel={`Excluir relatório de ${formatDayMonthShort(
+          item.startDate,
+        )} a ${formatDayMonthShort(item.endDate)}`}
+        // O ícone tem 16 px para não competir com os números do card; o
+        // hitSlop leva a área de toque aos 44 px que a a11y exige
+        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+        style={{ position: "absolute", top: spacing[4], right: spacing[4] }}
+      >
+        <Trash2 size={16} color={t.text.tertiary} />
+      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }
@@ -274,9 +280,11 @@ export default function Reports() {
   const categorias = useCategoriesStore((s) => s.items);
   const fetchCategorias = useCategoriesStore((s) => s.fetch);
 
+  // `fetch` vem do store e não muda de identidade: entra na lista por
+  // honestidade com o lint, não porque redispare
   useEffect(() => {
     fetch(tab);
-  }, [tab]);
+  }, [tab, fetch]);
 
   useEffect(() => {
     if (categorias.length === 0) fetchCategorias();
@@ -414,6 +422,14 @@ export default function Reports() {
         })}
       </View>
 
+      <View style={{ paddingHorizontal: spacing[5] }}>
+        <FirstTimeCard
+          id="relatorios-o-que-fecha"
+          title="O que um relatório fecha"
+          body="Cada relatório congela um período: receitas, despesas, saldo e a categoria que mais pesou. Gerar de novo não altera os anteriores — é o histórico que você compara."
+        />
+      </View>
+
       <FlatList
         // O RN não aceita `numColumns` mudando em voo: a chave remonta a lista
         // quando a janela cruza o breakpoint
@@ -467,20 +483,16 @@ export default function Reports() {
               ))}
             </View>
           ) : (
-            <View style={{ alignItems: "center", marginTop: spacing[10] }}>
-              <FileText size={48} color={t.text.tertiary} />
-              <Text
-                style={{
-                  color: t.text.secondary,
-                  marginTop: spacing[3],
-                  textAlign: "center",
-                  paddingHorizontal: spacing[6],
-                }}
-              >
-                Nenhum relatório {PERIOD_LABELS[tab].toLowerCase()} ainda. Toque
-                em "Gerar" para criar o primeiro.
-              </Text>
-            </View>
+            // EC-231: o pote vazio conta o estado; a frase fica livre para
+            // dizer o que fazer, e o botão repete o "Gerar" do cabeçalho para
+            // quem chegou até aqui sem vê-lo
+            <PotEmptyState
+              mood="comecar"
+              title={`Nenhum relatório ${PERIOD_LABELS[tab].toLowerCase()} ainda`}
+              body="Um relatório congela um período: receitas, despesas, saldo e a categoria que mais pesou. Gere o primeiro para começar a comparar."
+              actionLabel="Gerar relatório"
+              onAction={handleGenerate}
+            />
           )
         }
       />

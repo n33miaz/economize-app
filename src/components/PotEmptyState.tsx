@@ -46,6 +46,13 @@ interface Props {
   /** O que fazer a seguir. Sem ele, o vazio é só um beco. */
   actionLabel?: string;
   onAction?: () => void;
+  /**
+   * Segundo caminho, desenhado como fantasma: "cadastrar à mão" ao lado de
+   * "conectar banco". Só aparece junto do primeiro — sozinho, o segundo
+   * caminho é o primeiro.
+   */
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
   size?: number;
 }
 
@@ -55,6 +62,8 @@ export default function PotEmptyState({
   body,
   actionLabel,
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
   size = 96,
 }: Props) {
   const t = useTheme();
@@ -115,6 +124,28 @@ export default function PotEmptyState({
         >
           <Text style={{ color: t.text.inverse, fontSize: 14, fontWeight: "700" }}>
             {actionLabel}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {actionLabel && onAction && secondaryActionLabel && onSecondaryAction ? (
+        <TouchableOpacity
+          onPress={onSecondaryAction}
+          accessibilityRole="button"
+          accessibilityLabel={secondaryActionLabel}
+          style={{
+            marginTop: spacing[3],
+            paddingHorizontal: spacing[5],
+            height: 44,
+            borderRadius: radius.xl,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: t.border.strong,
+          }}
+        >
+          <Text style={{ color: t.text.primary, fontSize: 14, fontWeight: "700" }}>
+            {secondaryActionLabel}
           </Text>
         </TouchableOpacity>
       ) : null}

@@ -262,6 +262,8 @@ describe("Investments", () => {
     );
     expect(getByText("Conecte seu banco ou cadastre à mão.")).toBeTruthy();
     expect(getByLabelText("Cadastrar à mão")).toBeTruthy();
+    // EC-228: a primeira visita explica de onde as posições vêm
+    expect(getByText("De onde vêm estas posições")).toBeTruthy();
 
     fireEvent.press(getByLabelText("Conectar banco"));
     // Conectar é no Extrato, a aba irmã — não uma tela nova

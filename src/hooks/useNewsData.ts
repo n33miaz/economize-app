@@ -7,7 +7,7 @@ import {
   useNewsStore,
 } from "../store/newsStore";
 
-interface UseNewsDataParams extends NewsQuery {}
+type UseNewsDataParams = NewsQuery;
 
 interface UseNewsData {
   articles: NewsArticle[];

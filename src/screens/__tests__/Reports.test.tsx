@@ -84,9 +84,15 @@ describe("Relatórios", () => {
   it("sem relatório nenhum a tela continua de pé", async () => {
     useReportsStore.setState({ items: [] } as never);
 
-    const { getByText } = montar();
+    const { getByText, getAllByLabelText } = montar();
 
     await waitFor(() => expect(getByText("Relatórios")).toBeTruthy());
+    // EC-231: o pote vazio, com o "Gerar" repetido para quem chegou sem vê-lo
+    // — são DOIS botões com o mesmo rótulo, o do cabeçalho e o do vazio
+    expect(getByText("Nenhum relatório mensais ainda")).toBeTruthy();
+    expect(getAllByLabelText("Gerar relatório")).toHaveLength(2);
+    // EC-228: a primeira visita diz o que um relatório fecha
+    expect(getByText("O que um relatório fecha")).toBeTruthy();
   });
 
   it("no Plus o espaço de anúncio não é reservado", async () => {
