@@ -1847,6 +1847,56 @@ export const purchaseWish = async (
   return response.data;
 };
 
+/** Um aporte numa meta (EC-205) — a linha que explica o saldo dela. */
+export interface WishContribution {
+  id: string;
+  /** Positivo guarda, negativo devolve. */
+  amount: number;
+  /**
+   * `MEASURED` veio da sobra que o app apurou; `DECLARED` a pessoa digitou.
+   *
+   * A distinção aparece na tela: apresentar como medido o que foi informado é
+   * exatamente o que o EC-206 proíbe na previsão, e vale igual aqui.
+   */
+  origin: "MEASURED" | "DECLARED";
+  /** `YYYY-MM` do ciclo de onde a sobra saiu; null no aporte digitado. */
+  cycleMonth: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface WishContributionResult {
+  contribution: WishContribution;
+  /** O saldo da meta DEPOIS do aporte. */
+  savedAmount: number;
+}
+
+/**
+ * Guarda dinheiro numa meta.
+ *
+ * `cycleMonth` marca o aporte como medido e trava o ciclo: a sobra de setembro
+ * entra uma vez só, por mais vezes que alguém toque no botão. Valor negativo
+ * devolve — sai do saldo e fica no histórico, que é o desfazer honesto.
+ */
+export const contributeToWish = async (
+  id: string,
+  payload: { amount: number; cycleMonth?: string | null; note?: string | null },
+): Promise<WishContributionResult> => {
+  const response = await api.post<WishContributionResult>(
+    `/wishes/${id}/contributions`,
+    payload,
+  );
+  return response.data;
+};
+
+/** O extrato de uma meta, do aporte mais novo para o mais velho. */
+export const getWishContributions = async (
+  id: string,
+): Promise<WishContribution[]> => {
+  const response = await api.get<WishContribution[]>(`/wishes/${id}/contributions`);
+  return response.data;
+};
+
 export const getIncomeOverview = async (): Promise<IncomeOverview> => {
   const response = await api.get<IncomeOverview>("/income");
   return response.data;
