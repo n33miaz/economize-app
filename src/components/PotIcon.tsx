@@ -8,6 +8,7 @@ import Svg, {
   Rect,
 } from "react-native-svg";
 
+import { useFillingLevel } from "../hooks/useFillingLevel";
 import { useTheme } from "../theme/ThemeProvider";
 
 /**
@@ -41,6 +42,15 @@ interface PotIconProps {
   /** Moeda pairando sobre a boca; a abertura do app anima a queda dela. */
   coinY?: number;
   coinOpacity?: number;
+  /**
+   * Enche moeda por moeda até o nível, em vez de nascer cheio (EC-223).
+   *
+   * <p>Opcional de propósito. O pote de 44 px do cabeçalho remonta a cada
+   * foco da tela, e enchê-lo toda vez viraria piscada; ele nasce cheio. Ligue
+   * onde o pote é o assunto — a tela de plano, o bloqueio de atualização, a
+   * abertura do app.
+   */
+  animate?: boolean;
 }
 
 const OURO_ESCURO = "#BC8508";
@@ -56,6 +66,7 @@ export default function PotIcon({
   tone = "brand",
   coinY,
   coinOpacity = 0,
+  animate = false,
 }: PotIconProps) {
   const t = useTheme();
   const traco =
@@ -68,7 +79,9 @@ export default function PotIcon({
   // desenha o anel, o cifrão e o corte do cofre em qualquer tema
   const vazado = t.background.base;
 
-  const n = Math.max(0, Math.min(1, level));
+  // O nível DESENHADO: igual ao recebido, ou subindo até ele quando a tela
+  // pede o enchimento
+  const n = useFillingLevel(level, animate);
 
   const moeda = (cx: number, cy: number, r: number, key: string) => (
     <G key={key}>

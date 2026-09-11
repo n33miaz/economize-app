@@ -122,7 +122,7 @@ export default function UpdateRequiredGate({ children }: Props) {
           parece pane. 240ms é o bastante para o olho registrar que a tela
           MUDOU sem virar espera */}
       <Animated.View entering={FadeIn.duration(240)} style={{ marginBottom: spacing[8] }}>
-        <PotIcon size={112} level={0.75} />
+        <PotIcon size={112} level={0.75} animate />
       </Animated.View>
 
       <Text

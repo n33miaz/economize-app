@@ -21,12 +21,28 @@ updates:
     ignore:
       - dependency-name: "expo"
       - dependency-name: "expo-*"
+      # Pacote com ESCOPO não casa com o padrão sem escopo: "expo-*" não pega
+      # "@expo/metro-runtime", e foi por essa fresta que chegou um PR subindo
+      # esse pacote de 4.0.1 para 57.0.15 — a linha do SDK 54, contra um app no
+      # SDK 52. Mesma história em "@react-native-async-storage/async-storage",
+      # que o Expo 52 fixa em 1.23.1 e o PR queria levar para 3.1.1
+      - dependency-name: "@expo/*"
       - dependency-name: "react-native"
       - dependency-name: "react-native-*"
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-async-storage/*"
+      - dependency-name: "@react-native-community/*"
       - dependency-name: "nativewind"
       - dependency-name: "react-native-css-interop"
       - dependency-name: "react"
       - dependency-name: "react-dom"
+      # O Expo 52 casa com o React 18; react-test-renderer acompanha a versão
+      # do React, e subi-lo sozinho quebra toda a suíte de render
+      - dependency-name: "react-test-renderer"
+      - dependency-name: "@types/react-test-renderer"
+      # Zustand 5 muda a API do seletor. É upgrade planejado, não rotina
+      - dependency-name: "zustand"
+        update-types: ["version-update:semver-major"]
     groups:
       testes:
         patterns: ["jest*", "@testing-library/*", "@types/jest"]
