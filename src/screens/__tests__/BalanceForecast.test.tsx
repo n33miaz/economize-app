@@ -10,7 +10,16 @@ import { useBankStore } from "../../store/bankStore";
 import { usePlanStore } from "../../store/planStore";
 import { useRecurrenceStore } from "../../store/recurrenceStore";
 
-jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+// A linha do tempo (EC-226) busca os parcelamentos na entrada. Aqui ela
+// devolve vazio: o que estes testes cobrem e a previsao, e a linha tem
+// suite propria em CommitmentTimeline.test.tsx
+jest.mock("../../services/api", () => ({
+  __esModule: true,
+  default: {},
+  getInstallments: jest
+    .fn()
+    .mockResolvedValue({ totalSeries: 0, openSeries: 0, remainingTotal: 0, series: [] }),
+}));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({

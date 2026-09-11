@@ -17,7 +17,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import * as Haptics from "../utils/haptics";
 
-import type { ForecastItem, ForecastMonth } from "../services/api";
+import type {
+  ForecastItem,
+  ForecastMonth,
+  InstallmentOverview,
+} from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
@@ -30,6 +34,10 @@ import {
 } from "../store/recurrenceStore";
 import ChartLegend from "../components/ChartLegend";
 import ErrorState from "../components/ErrorState";
+import AssistantFAB from "../components/AssistantFAB";
+import { getInstallments } from "../services/api";
+import CommitmentTimeline from "../components/CommitmentTimeline";
+import { buildCommitmentTimeline } from "../utils/commitmentTimeline";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
@@ -449,7 +457,9 @@ export default function BalanceForecast() {
   const startingBalance = useMemo(
     () =>
       calculateBankMetrics(
-        transactions.filter((tx) => !tx.internalTransfer && !tx.ignored),
+        transactions.filter(
+          (tx) => !tx.internalTransfer && !tx.ignored && !tx.refunded,
+        ),
       ).total,
     [transactions],
   );
@@ -470,6 +480,15 @@ export default function BalanceForecast() {
     if (!baselineReady) return;
     fetchForecast(window, startingBalance);
   }, [baselineReady, window, startingBalance, fetchForecast]);
+
+  // Parcelamentos: best-effort, uma vez. Sao a terceira fonte da linha do
+  // tempo (EC-226) e uma falha aqui so tira as parcelas dela -- a previsao
+  // inteira nao pode cair por causa de um bloco a mais
+  useEffect(() => {
+    getInstallments()
+      .then(setParcelamentos)
+      .catch(() => setParcelamentos(null));
+  }, []);
 
   const handleWindowChange = useCallback((next: string) => {
     setWindow(Number(next) as ForecastWindow);
@@ -492,6 +511,16 @@ export default function BalanceForecast() {
   }, [fetchTransactions, fetchForecast, window, startingBalance]);
 
   const months = useMemo(() => forecast?.months ?? [], [forecast]);
+  // EC-226: seis meses à frente com o que JÁ tem dono. As três fontes
+  // (parcela, fatura prevista e recorrência) somadas respondem quanto de
+  // cada mês está comprometido antes de ele começar
+  const [parcelamentos, setParcelamentos] = useState<InstallmentOverview | null>(
+    null,
+  );
+  const linhaDoTempo = useMemo(
+    () => buildCommitmentTimeline(months, parcelamentos),
+    [months, parcelamentos],
+  );
 
   // Totais da janela alimentam a legenda: a regra do design system pede legenda
   // a partir de duas séries, e são exatamente estas duas
@@ -725,6 +754,19 @@ export default function BalanceForecast() {
                 />
               </Animated.View>
 
+              {/* A linha do tempo ANTES da lista: a barra responde "qual
+                  mês aperta" num relance, e a lista responde "por quê".
+                  Comparar seis valores em reais exigiria ler seis números e
+                  lembrar dos anteriores */}
+              {linhaDoTempo.length > 0 ? (
+                <View style={{ marginTop: spacing[4] }}>
+                  <CommitmentTimeline
+                    months={linhaDoTempo}
+                    showValues
+                  />
+                </View>
+              ) : null}
+
               <View style={{ marginTop: spacing[4] }}>
                 {/* Identidade do card pelo `start` do recorte, que é o que o
                     rótulo descreve — `month` é só o mês em que o período
@@ -763,6 +805,9 @@ export default function BalanceForecast() {
         <AdSlot style={{ marginTop: spacing[4] }} />
         </ScrollView>
       )}
+    {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
+        qual tela foi aberto, e sugere as perguntas dela */}
+    <AssistantFAB origin="previsao" />
     </PageContainer>
   );
 }
