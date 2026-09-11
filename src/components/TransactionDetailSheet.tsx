@@ -13,6 +13,7 @@ import X from "lucide-react-native/dist/esm/icons/x";
 
 import type { BankTransaction, Category } from "../services/api";
 import {
+  applyReview,
   getApiErrorStatus,
   setFamilyTransfer,
   setInternalTransfer,
@@ -20,12 +21,13 @@ import {
   updateTransactionAlias,
 } from "../services/api";
 import { useAccountsStore } from "../store/accountsStore";
+import { useImportSourcesStore } from "../store/importSourcesStore";
 import { useFamilyStore } from "../store/familyStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { useToastStore } from "../store/toastStore";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import * as Haptics from "../utils/haptics";
 import {
@@ -33,6 +35,8 @@ import {
   accountKindLabel,
   originShortLabel,
 } from "../utils/accounts";
+import { provenanceOf } from "../utils/provenance";
+import CategoryPickerSheet from "./CategoryPickerSheet";
 import { categoryPath } from "../utils/categoryTree";
 import { formatLongDate } from "../utils/cycleWindow";
 import { formatBRL } from "../utils/money";
@@ -117,6 +121,10 @@ export default function TransactionDetailSheet({
   // O extrato devolve só o `accountId`: quem sabe o nome do cartão é o mapa
   // carregado uma vez pelo accountsStore
   const accountsById = useAccountsStore((s) => s.byId);
+  // EC-195: o mapa dos arquivos importados, pelo mesmo motivo do mapa de
+  // contas -- a linha traz só o `uploadId`
+  const sourcesById = useImportSourcesStore((s) => s.byId);
+  const fetchSources = useImportSourcesStore((s) => s.fetchSources);
   const showToast = useToastStore((s) => s.showToast);
   // O interruptor da casa só existe para quem tem casa: sem família, a
   // marca não muda soma nenhuma e seria um controle sem efeito
@@ -124,6 +132,11 @@ export default function TransactionDetailSheet({
 
   const [draft, setDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  // EC-198: a categoria vira editável AQUI, e não só na Revisão. Quem
+  // desconfia de um número está olhando para ele — mandar a pessoa procurar a
+  // mesma linha noutra tela para corrigir é pedir que ela desista
+  const [pickerAberto, setPickerAberto] = useState(false);
+  const [salvandoCategoria, setSalvandoCategoria] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Trava do envio em ref, e não no estado: `isSaving` fica congelado no
   // fechamento do render, então dois toques no MESMO frame (ou o toque somado
@@ -147,6 +160,15 @@ export default function TransactionDetailSheet({
     }
   }, [visible, transaction]);
 
+  // O mapa de arquivos importados, só quando a folha abre: é aqui que a
+  // procedência é lida, e carregá-lo no boot custaria uma chamada para quem
+  // nunca abre o detalhe. O store tem cache de sessão, então reabrir não pede
+  // de novo — e uma falha aqui degrada para "veio de um arquivo importado",
+  // que ainda é resposta
+  useEffect(() => {
+    if (visible) void fetchSources();
+  }, [visible, fetchSources]);
+
   const category: Category | undefined = useMemo(() => {
     if (!transaction?.categoryId) return undefined;
     return categories.find((item) => item.id === transaction.categoryId);
@@ -159,6 +181,10 @@ export default function TransactionDetailSheet({
   const account = transaction.accountId
     ? accountsById.get(transaction.accountId)
     : undefined;
+  const upload = transaction.uploadId
+    ? sourcesById.get(transaction.uploadId)
+    : undefined;
+  const procedencia = provenanceOf(transaction, account, upload);
   const displayName = transactionDisplayName(transaction);
   const originalName = transactionOriginalName(transaction);
   const renamed = Boolean(transaction.displayAlias?.trim());
@@ -166,6 +192,42 @@ export default function TransactionDetailSheet({
   const sanitizedDraft = sanitizeTransactionAlias(draft);
   const dirty = aliasChanged(transaction.displayAlias ?? null, sanitizedDraft);
   const atAliasLimit = draft.length >= TRANSACTION_ALIAS_MAX_LENGTH;
+
+  /**
+   * Troca a categoria daqui mesmo (EC-198).
+   *
+   * <p>Usa a MESMA porta da Revisão (`PATCH /transactions/review`), com
+   * `learnPattern` ligado: corrigir uma linha ensina o motor, e ensinar de um
+   * lugar e não do outro faria a mesma correção valer diferente conforme a
+   * tela em que ela foi feita.
+   */
+  const trocarCategoria = async (novaId: string) => {
+    if (salvandoCategoria) return;
+    setSalvandoCategoria(true);
+    setError(null);
+    try {
+      await applyReview([
+        { transactionIds: [transaction.id], categoryId: novaId, learnPattern: true },
+      ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // A resposta da revisão é um resumo, não a linha: devolvemos a linha
+      // com a categoria nova para a tela não precisar recarregar tudo
+      onUpdated({ ...transaction, categoryId: novaId, reviewStatus: "CONFIRMED" });
+      showToast("Categoria atualizada.", "success");
+    } catch (err) {
+      // NA folha, e não em toast: o Toast é montado fora do Modal e pode não
+      // aparecer por cima dele. Falha silenciosa aqui seria a tela afirmando
+      // uma correção que não aconteceu
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(
+        getApiErrorStatus(err) === 404
+          ? "Este lançamento não existe mais."
+          : "Não foi possível trocar a categoria agora.",
+      );
+    } finally {
+      setSalvandoCategoria(false);
+    }
+  };
 
   const submit = async (value: string | null) => {
     if (savingRef.current) return;
@@ -230,11 +292,7 @@ export default function TransactionDetailSheet({
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingHorizontal: spacing[5],
-          paddingTop: spacing[3],
-          paddingBottom: spacing[6],
-        }}
+        contentContainerStyle={SHEET_PADDING}
       >
         <View
           style={{
@@ -322,6 +380,20 @@ export default function TransactionDetailSheet({
           }}
         >
           <DetailRow label="Categoria">
+            <TouchableOpacity
+              onPress={() => setPickerAberto(true)}
+              disabled={salvandoCategoria}
+              accessibilityRole="button"
+              accessibilityLabel={
+                category
+                  ? `Categoria ${categoryPath(category)}. Toque para trocar`
+                  : "Sem categoria. Toque para escolher"
+              }
+              accessibilityState={{ disabled: salvandoCategoria }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+              style={{ opacity: salvandoCategoria ? 0.5 : 1 }}
+            >
             {category ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 {/* AppTheme tipa hexas literais do dark; os temas são
@@ -349,6 +421,7 @@ export default function TransactionDetailSheet({
                 Sem categoria
               </Text>
             )}
+            </TouchableOpacity>
           </DetailRow>
 
           <View style={{ height: 1, backgroundColor: t.border.subtle }} />
@@ -424,6 +497,21 @@ export default function TransactionDetailSheet({
 
           <View style={{ height: 1, backgroundColor: t.border.subtle }} />
 
+          {/* EC-195: as duas perguntas de quem desconfia de um número --
+              por onde entrou e quando. A resposta nunca é vazia: a pior
+              delas ainda é "origem não registrada" */}
+          <DetailRow label="Entrou no app">
+            <Text
+              numberOfLines={2}
+              style={{ color: t.text.primary, fontSize: 13, textAlign: "right" }}
+            >
+              {procedencia.origem}
+              {procedencia.entrada ? `${"\n"}${procedencia.entrada}` : ""}
+            </Text>
+          </DetailRow>
+
+          <View style={{ height: 1, backgroundColor: t.border.subtle }} />
+
           <DetailRow label="Identificação no banco">
             <Text
               selectable
@@ -444,10 +532,7 @@ export default function TransactionDetailSheet({
           }}
         >
           A data é a de lançamento, em UTC — o extrato não traz data de
-          liquidação.
-          {transaction.accountId
-            ? ""
-            : " A origem fica em branco quando o lançamento veio de arquivo importado ou é anterior à sincronização por conta — o valor e a categoria continuam valendo."}
+          liquidação, e ela é outra coisa que a hora em que a linha entrou aqui.
         </Text>
 
         <View
@@ -480,9 +565,24 @@ export default function TransactionDetailSheet({
           data do banco. O que muda é em quais somas ele entra.
         </Text>
 
+        {transaction.refunded ? (
+          <Text
+            style={{
+              color: t.text.secondary,
+              fontSize: 12,
+              lineHeight: 17,
+              marginBottom: spacing[3],
+            }}
+          >
+            Esta linha faz par com um estorno de mesmo valor, então ela já está
+            fora das somas. As duas continuam no extrato porque o saldo fecha
+            com as duas.
+          </Text>
+        ) : null}
+
         <MarkRow
           label="É dinheiro meu trocando de bolso"
-          hint="Pagamento de fatura, Pix de uma conta minha para outra. Sai de todas as somas."
+          hint="Pagamento de fatura, Pix de uma conta minha para outra, aplicação e resgate de investimento. Sai de todas as somas."
           value={transaction.internalTransfer}
           busy={markPending === "internal"}
           disabled={markPending !== null && markPending !== "internal"}
@@ -649,6 +749,15 @@ export default function TransactionDetailSheet({
           </TouchableOpacity>
         )}
       </ScrollView>
+      <CategoryPickerSheet
+        visible={pickerAberto}
+        onClose={() => setPickerAberto(false)}
+        selectedId={transaction.categoryId ?? undefined}
+        onSelect={(escolhida) => {
+          setPickerAberto(false);
+          if (escolhida.id !== transaction.categoryId) void trocarCategoria(escolhida.id);
+        }}
+      />
     </CustomModal>
   );
 }
