@@ -58,6 +58,7 @@ import { describeSalaryTiming } from "../utils/wishes";
 import { cyclePerformance } from "../utils/pot";
 import PotIcon, { potStateFor } from "../components/PotIcon";
 import PotStatesSheet from "../components/PotStatesSheet";
+import { useOpeningStore } from "../store/openingStore";
 import { useReviewStore } from "../store/reviewStore";
 
 import BlockGrid from "../components/BlockGrid";
@@ -240,6 +241,14 @@ export default function Home() {
     [performance],
   );
   const [potSheetOpen, setPotSheetOpen] = useState(false);
+
+  // A cortina de abertura espera POR AQUI. O sinal é "já sei o que mostrar",
+  // e não "deu tudo certo": mês sem movimento também é resposta, e segurar a
+  // animação esperando um número que não existe deixaria a tela presa
+  const marcarPronto = useOpeningStore((s) => s.markReady);
+  useEffect(() => {
+    if (!monthlyLoading) marcarPronto();
+  }, [monthlyLoading, marcarPronto]);
 
   // EC-147: o anúncio acontece UMA vez, e só quando já há ciclo para mostrar —
   // explicar os estados do pote sobre uma tela vazia não ensina nada, e queimar

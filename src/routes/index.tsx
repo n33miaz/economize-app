@@ -26,6 +26,7 @@ import { lightTheme } from "../theme/colors";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
+import AppOpening from "../components/AppOpening";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
@@ -622,7 +623,16 @@ export default function Routes() {
         )}
         {/* O miolo é quem estica: o trilho tem largura fixa e não encolhe */}
         <View style={{ flex: 1 }}>
-          {token ? <AppStack /> : <AuthRoutes />}
+          {/* A abertura cobre a pilha AUTENTICADA, e só ela: a tela de
+              Login tem a própria (ali o pote é parte do formulário). Fica
+              dentro do miolo para o trilho lateral não ser encoberto */}
+          {token ? (
+            <AppOpening>
+              <AppStack />
+            </AppOpening>
+          ) : (
+            <AuthRoutes />
+          )}
         </View>
       </View>
     </NavigationContainer>

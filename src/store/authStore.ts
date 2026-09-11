@@ -186,6 +186,12 @@ export const useAuthStore = create(
         const { useAccountsStore } = require("./accountsStore");
         useAccountsStore.getState().reset();
 
+        // A cortina de abertura vale por SESSÃO: sem zerar aqui, quem sai e
+        // entra com outra conta não veria a abertura, e o app começaria no
+        // esqueleto cinza como antes do EC-148
+        const { useOpeningStore } = require("./openingStore");
+        useOpeningStore.getState().reset();
+
         // Idem: os nomes dos arquivos que a pessoa importou são rastro dela, e
         // o `hasLoadedOnce` faria a próxima conta ver a procedência da anterior
         const { useImportSourcesStore } = require("./importSourcesStore");
