@@ -338,6 +338,18 @@ export interface Category {
   archived: boolean;
 }
 
+/** Por onde um lançamento entrou (EC-195). */
+export type ImportSourceKind = "CONNECTION" | "FILE" | "UNKNOWN";
+
+/** Um arquivo já importado — o que dá nome ao `uploadId` de cada linha. */
+export interface ImportSource {
+  id: string;
+  fileName: string | null;
+  format: string;
+  importedCount: number;
+  importedAt: string;
+}
+
 export interface BankTransaction {
   id: string;
   transactionId: string;
@@ -384,6 +396,35 @@ export interface BankTransaction {
    * análise pessoal de quem recebeu, o dinheiro entrou mesmo.
    */
   familyTransfer: boolean;
+  /**
+   * Uma das duas pernas de um estorno: a compra que saiu e o crédito que
+   * voltou.
+   *
+   * <p>Diferente de `ignored`, onde a linha não deveria existir. Aqui as duas
+   * linhas são reais e o saldo fecha com elas — o que estaria errado é somá-las.
+   * Quem gastou R$ 4,00 e recebeu R$ 4,00 de volta não gastou nada.
+   */
+  refunded: boolean;
+  /** No lado do crédito, a compra que ele estornou. Nulo do outro lado. */
+  refundOfId: string | null;
+  /**
+   * Por onde esta linha entrou (EC-195).
+   *
+   * `UNKNOWN` não é falha: é o histórico anterior ao registro de origem, e é a
+   * maioria do extrato de quem sempre importou arquivo na mão. Dizer "não sei
+   * de onde veio" é a resposta honesta.
+   *
+   * Opcional no tipo porque servidor mais velho que o app não manda o campo —
+   * e a ausência dele não pode quebrar a tela.
+   */
+  source?: ImportSourceKind | null;
+  /**
+   * Quando a linha entrou no banco de dados. É outra coisa que `date`: a
+   * compra foi no dia 3, o arquivo entrou no dia 20. Quando o número da tela
+   * não bate com o do banco, a distância entre as duas é quase sempre a
+   * explicação.
+   */
+  importedAt?: string | null;
 }
 
 export interface StatementUploadResult {
@@ -540,7 +581,7 @@ export const getHistoricalData = async (
       { params: { days } },
     );
     return response.data;
-  } catch (error) {
+  } catch {
     return [];
   }
 };
@@ -554,7 +595,7 @@ export const convertCurrency = async (
       params: { code, amount },
     });
     return response.data;
-  } catch (error) {
+  } catch {
     return null;
   }
 };
@@ -722,6 +763,41 @@ export interface ConnectorAccount {
    * acabou foi a sincronização.
    */
   linked: boolean;
+  /**
+   * O saldo que a INSTITUIÇÃO informou, e quando (EC-196).
+   *
+   * Nulo é informação, não ausência: quer dizer que o número que a tela mostra
+   * nasce só da soma dos lançamentos importados, sem segunda fonte para
+   * conferir. Em cartão o campo é o valor DEVIDO, não um saldo.
+   */
+  reportedBalance: number | null;
+  reportedBalanceAt: string | null;
+}
+
+/**
+ * O que exatamente está errado entre o saldo do banco e o da tela — nunca
+ * "os números não batem".
+ */
+export type BalanceFindingKind =
+  | "SEM_SALDO_INFORMADO"
+  | "ZERO_COM_MOVIMENTO"
+  | "SALDO_VELHO"
+  | "MOVIMENTO_APOS_LEITURA";
+
+export interface BalanceFinding {
+  accountId: string;
+  accountName: string;
+  kind: BalanceFindingKind;
+  reportedBalance: number | null;
+  reportedAt: string | null;
+  /** Soma do que entrou depois da leitura; nulo quando não se aplica. */
+  movementAfter: number | null;
+  message: string;
+}
+
+export interface BalanceCheck {
+  accountsChecked: number;
+  findings: BalanceFinding[];
 }
 
 /**
@@ -779,9 +855,166 @@ export interface AccountInvoices {
   invoices: AccountInvoice[];
 }
 
+/** O teto que o usuário pôs numa categoria (EC-204). */
+export interface CategoryBudget {
+  categoryId: string;
+  categoryName: string | null;
+  /** MENSAL, mesmo quando o usuário lê o gasto por ciclo. */
+  monthlyLimit: number;
+}
+
+/**
+ * Como um teto está indo no período.
+ *
+ * `exceeded` e `abovePace` respondem perguntas DIFERENTES: a primeira diz que
+ * já estourou, a segunda que o ritmo leva a estourar. "Você está em 20% do
+ * limite" é verdade e é inútil — 20% no terceiro dia é ruim, no vigésimo
+ * oitavo é ótimo.
+ */
+export interface BudgetLine {
+  categoryId: string;
+  categoryName: string | null;
+  monthlyLimit: number;
+  /** O teto mensal esticado (ou encolhido) para o tamanho da janela. */
+  windowLimit: number;
+  spent: number;
+  /** Quanto já se poderia ter gasto até hoje. */
+  expectedSoFar: number;
+  /** Quanto passou; zero quando não passou. */
+  overBy: number;
+  exceeded: boolean;
+  abovePace: boolean;
+}
+
+export interface BudgetStatus {
+  exceededCount: number;
+  abovePaceCount: number;
+  lines: BudgetLine[];
+}
+
+// A listagem crua de `/analytics/budgets` não tem cliente aqui de propósito:
+// `getBudgetStatus` devolve os MESMOS tetos com o gasto do período junto, e
+// toda tela que mostra um teto quer os dois. Um segundo caminho para a mesma
+// pergunta é como duas telas passam a discordar.
+
+/** Upsert: reajustar o limite muda o MESMO teto, não cria um segundo. */
+export const setBudget = async (
+  categoryId: string,
+  monthlyLimit: number,
+): Promise<CategoryBudget> => {
+  const response = await api.put<CategoryBudget>(
+    `/analytics/budgets/${categoryId}`,
+    null,
+    { params: { monthlyLimit } },
+  );
+  return response.data;
+};
+
+export const clearBudget = async (categoryId: string): Promise<void> => {
+  await api.delete(`/analytics/budgets/${categoryId}`);
+};
+
+export const getBudgetStatus = async (
+  range: AnalysisRange,
+): Promise<BudgetStatus> => {
+  const response = await api.get<BudgetStatus>("/analytics/budgets/status", {
+    params: rangeParams(range),
+  });
+  return response.data;
+};
+
+/** Uma série de parcelamento em andamento (EC-213/EC-217). */
+export interface InstallmentSeries {
+  description: string;
+  /** Total de parcelas da compra. */
+  total: number;
+  /** Quantas o extrato mostra — pode ser menos quando o histórico começa no meio. */
+  seen: number;
+  /** Quantas ainda vão cair. */
+  remaining: number;
+  installmentAmount: number;
+  /** O que falta pagar, estimado pela parcela mais recente. */
+  remainingAmount: number;
+  /** `YYYY-MM`. */
+  firstMonth: string;
+  /** `YYYY-MM` da última parcela — a projeção. */
+  lastMonth: string;
+  finished: boolean;
+}
+
+export interface InstallmentOverview {
+  totalSeries: number;
+  openSeries: number;
+  /** O total a vencer somando todas as séries abertas. */
+  remainingTotal: number;
+  series: InstallmentSeries[];
+}
+
+/**
+ * Parcelamentos em andamento.
+ *
+ * A projeção é por MÊS, não por dia: parcela cai em ciclo de fatura, não em
+ * aniversário da compra. Na série real medida os intervalos foram de 25 e 36
+ * dias, mas o mês avançou exatamente um por parcela.
+ */
+export const getInstallments = async (): Promise<InstallmentOverview> => {
+  const response = await api.get<InstallmentOverview>("/analytics/installments");
+  return response.data;
+};
+
+/** Quanto saiu e quanto entrou num dia (EC-235) — alimenta o calendário. */
+export interface DailyTotal {
+  /** `YYYY-MM-DD`. */
+  date: string;
+  spent: number;
+  earned: number;
+  count: number;
+}
+
+/**
+ * Totais por dia do período.
+ *
+ * Agregado no servidor de propósito: para somar trinta dias o app teria de
+ * baixar o extrato inteiro, e 1.688 linhas custam 92 KB e segundos de espera.
+ * Trinta linhas destas custam menos de 2 KB. Dia sem movimento não volta —
+ * quem monta a grade é a tela, que sabe quantos dias o mês tem.
+ */
+export const getDailyTotals = async (
+  range: AnalysisRange,
+): Promise<DailyTotal[]> => {
+  const response = await api.get<DailyTotal[]>("/analytics/daily", {
+    params: rangeParams(range),
+  });
+  return response.data;
+};
+
 /** Vazio quando o usuário nunca sincronizou um conector. */
 export const getAccounts = async (): Promise<ConnectorAccount[]> => {
   const response = await api.get<ConnectorAccount[]>("/accounts");
+  return response.data;
+};
+
+/**
+ * Os arquivos que o usuário já importou (EC-195).
+ *
+ * Carregado uma vez e casado em memória pelo `uploadId` de cada linha, como o
+ * mapa de contas: repetir o nome do arquivo em cada uma de 1.682 linhas seria
+ * pagar mil vezes pelo mesmo texto.
+ */
+export const getImportSources = async (): Promise<ImportSource[]> => {
+  const response = await api.get<ImportSource[]>("/bank-statements/sources");
+  return response.data;
+};
+
+/**
+ * Confronta o saldo que o banco informou com o que o app mostra (EC-196).
+ *
+ * Só devolve o que dá para provar. NÃO compara a soma dos lançamentos com o
+ * saldo do banco: o provedor devolve ~12 meses e a conta é mais velha, então
+ * essa diferença tocaria sempre — e alarme que toca sempre é alarme nenhum.
+ */
+export const getBalanceCheck = async (): Promise<BalanceCheck> => {
+  const response = await api.get<BalanceCheck>("/accounts/balance-check");
   return response.data;
 };
 
@@ -1186,6 +1419,43 @@ export const updateRecurrence = async (
   data: UpdateRecurrenceRequest,
 ): Promise<RecurringSeries> => {
   const response = await api.patch<RecurringSeries>(`/recurrences/${id}`, data);
+  return response.data;
+};
+
+/** Uma assinatura reconhecida entre as séries (EC-203). */
+export interface Subscription {
+  seriesId: string;
+  name: string;
+  category: string | null;
+  monthlyAmount: number;
+  /** O número que faz alguém cancelar. */
+  yearlyAmount: number;
+  occurrences: number;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+  /** Não cobra há mais de 45 dias — acabou, ou volta de surpresa. */
+  silent: boolean;
+}
+
+export interface SubscriptionReport {
+  /** Quantas séries foram olhadas — o denominador que mostra o filtro. */
+  seriesExamined: number;
+  subscriptions: number;
+  yearlyTotal: number;
+  silentCount: number;
+  details: Subscription[];
+}
+
+/**
+ * O que o usuário paga todo mês, e quanto isso é por ano (EC-203).
+ *
+ * O valor está no FILTRO, não na detecção: medida contra o extrato real, a
+ * regra ingênua de "mesmo valor em três meses" achou 24 candidatas das quais
+ * 2 eram assinaturas. Quem recusa as outras 22 é o servidor — aqui só se
+ * desenha o que sobrou.
+ */
+export const getSubscriptions = async (): Promise<SubscriptionReport> => {
+  const response = await api.get<SubscriptionReport>("/analytics/subscriptions");
   return response.data;
 };
 
@@ -1948,14 +2218,85 @@ export const setTransactionIgnored = async (
  */
 export interface TidyOutcome {
   internalMarked: number;
+  /** Aplicação e resgate: trocaram de gaveta, não são gasto nem receita. */
+  investmentMarked: number;
   familyMarked: number;
   duplicatesMarked: number;
+  /** Pares compra + estorno que se anulam. */
+  refundsMarked: number;
   seriesCreated: number;
   seriesUpdated: number;
 }
 
 export const tidyStatement = async (): Promise<TidyOutcome> => {
   const response = await api.post<TidyOutcome>("/transactions/tidy");
+  return response.data;
+};
+
+/** Qual varredura — o mesmo nome que o servidor grava em `sweep_runs.kind`. */
+export type WatchmanKind =
+  | "INTERNAL_TRANSFER"
+  | "INVESTMENT_FLOW"
+  | "FAMILY_TRANSFER"
+  | "DUPLICATE"
+  | "REFUND"
+  | "RECURRENCE";
+
+/** Um vigia: quem é e o que faz (EC-202). */
+export interface Watchman {
+  kind: WatchmanKind;
+  name: string;
+  /** Uma linha dizendo o que ele faz. Nunca duas. */
+  role: string;
+  frequency: string;
+  /** Se as passadas dele podem ser desfeitas. */
+  undoable: boolean;
+}
+
+/** O recado de UMA passada. */
+export interface WatchmanNote {
+  runId: string;
+  kind: WatchmanKind;
+  watchman: string;
+  role: string;
+  /** Já vem pronto do servidor, com singular e plural resolvidos. */
+  message: string;
+  affected: number;
+  volume: number | null;
+  ranAt: string;
+  undone: boolean;
+  /**
+   * Já vem calculado para a tela não desenhar um botão que não funciona — a
+   * detecção de recorrência não se desfaz por aqui.
+   */
+  canUndo: boolean;
+}
+
+/**
+ * Quem trabalha no extrato — a lista é FIXA e vem do código.
+ *
+ * Ela existe para o usuário saber quem mexe nos números dele mesmo antes da
+ * primeira passada: um trabalhador que só aparece depois de mexer já apareceu
+ * tarde.
+ */
+export const getWatchmen = async (): Promise<Watchman[]> => {
+  const response = await api.get<Watchman[]>("/watchmen");
+  return response.data;
+};
+
+/** As 50 passadas mais recentes, da mais nova para a mais velha. */
+export const getWatchmanNotes = async (): Promise<WatchmanNote[]> => {
+  const response = await api.get<WatchmanNote[]>("/watchmen/notes");
+  return response.data;
+};
+
+/**
+ * Solta exatamente as linhas que AQUELA passada marcou — nunca a varredura
+ * inteira. Uma linha marcada à mão depois continua marcada, porque decisão de
+ * gente vence varredura em qualquer direção.
+ */
+export const undoSweepRun = async (runId: string): Promise<WatchmanNote> => {
+  const response = await api.post<WatchmanNote>(`/watchmen/notes/${runId}/undo`);
   return response.data;
 };
 

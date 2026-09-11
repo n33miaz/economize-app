@@ -34,6 +34,8 @@ const bankTx: BankTransaction = {
   internalTransfer: false,
   ignored: false,
   familyTransfer: false,
+  refunded: false,
+  refundOfId: null,
 };
 
 const walletTx: WalletTransaction = {

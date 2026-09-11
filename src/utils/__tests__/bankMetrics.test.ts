@@ -30,6 +30,8 @@ const tx = (
   internalTransfer: false,
   ignored: false,
   familyTransfer: false,
+  refunded: false,
+  refundOfId: null,
 });
 
 describe("calculateBankMetrics", () => {
