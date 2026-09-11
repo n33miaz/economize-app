@@ -75,6 +75,7 @@ import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
 import AdvancedOptions from "../screens/AdvancedOptions";
 import Watchmen from "../screens/Watchmen";
+import Support from "../screens/Support";
 import AiSettings from "../screens/AiSettings";
 import Wishes from "../screens/Wishes";
 import IncomeSettings from "../screens/IncomeSettings";
@@ -516,6 +517,12 @@ function AppStack() {
       <Stack.Screen
         name={APP_ROUTES.vigias}
         component={Watchmen}
+        options={ephemeralTransition}
+      />
+      {/* EC-209: o chamado que sobrevive a fechar o app */}
+      <Stack.Screen
+        name={APP_ROUTES.suporte}
+        component={Support}
         options={ephemeralTransition}
       />
       <Stack.Screen
