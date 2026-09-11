@@ -13,7 +13,12 @@ import {
   type LinkingOptions,
 } from "@react-navigation/native";
 import * as ExpoLinking from "expo-linking";
-import { Platform, View, TouchableOpacity } from "react-native";
+import {
+  Platform,
+  View,
+  TouchableOpacity,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReducedMotion } from "react-native-reanimated";
 
@@ -68,6 +73,7 @@ import BankIntegration from "../screens/BankIntegration";
 import AiAssistant from "../screens/AiAssistant";
 import Profile from "../screens/Profile";
 import AdvancedOptions from "../screens/AdvancedOptions";
+import Watchmen from "../screens/Watchmen";
 import AiSettings from "../screens/AiSettings";
 import Wishes from "../screens/Wishes";
 import IncomeSettings from "../screens/IncomeSettings";
@@ -101,6 +107,13 @@ const renderNoTabBar = () => null;
 function IndicatorsTabs() {
   const t = useTheme();
   const reducedMotion = useReducedMotion();
+  // A largura de entrada do pager. Sem ela o react-native-tab-view mede a
+  // cena DEPOIS do primeiro quadro, e ate a medida chegar a cena tem largura
+  // zero: a tela abre em branco com a regua de abas solta no meio, o indicador
+  // se coloca sobre um layout que ainda nao existe e cada troca re-mede tudo --
+  // o engasgo ao deslizar entre abas. Vendo em 09/09/2026 nas telas
+  // Investimentos, Extrato e Indices.
+  const { width: larguraDaJanela } = useWindowDimensions();
   // O mesmo teto do miolo das telas de pilha: sem ele, num monitor largo o
   // título e a régua de abas correm até a borda enquanto as listas abaixo
   // param em 1180 — dois eixos diferentes na mesma tela
@@ -112,6 +125,7 @@ function IndicatorsTabs() {
           que o usuário veio olhar, sem roubar espaço das listas */}
       <MarketNewsTicker />
       <TopTab.Navigator
+        initialLayout={{ width: larguraDaJanela }}
         screenOptions={{
           // Deslizar entre Moedas e Índices é parte da navegação: o gesto
           // fica explícito e a troca por toque no rótulo anima o deslize —
@@ -164,12 +178,15 @@ function IndicatorsTabs() {
 function FinanceTabs() {
   const t = useTheme();
   const reducedMotion = useReducedMotion();
+  // Mesma largura de entrada do bloco de Mercado -- ver a explicacao la
+  const { width: larguraDaJanela } = useWindowDimensions();
   // Mesmo teto do bloco de Mercado — ver comentário lá
   const capStyle = useContentCapStyle();
   return (
     <View className="flex-1 bg-background" style={capStyle}>
       <ScreenHeader title="Finanças" subtitle="Gestão de Patrimônio" />
       <TopTab.Navigator
+        initialLayout={{ width: larguraDaJanela }}
         screenOptions={{
           // Mesmo gate do bloco de Mercado: com "reduzir movimento" ativo a
           // troca de aba é seca em todo o app
@@ -492,6 +509,13 @@ function AppStack() {
         name={APP_ROUTES.revisao}
         component={StatementReview}
         options={modalLikeTransition}
+      />
+      {/* EC-202: quem trabalha no extrato e o que mexeu. Aberta pelas Opções
+          avançadas, ao lado do gatilho manual da mesma faxina */}
+      <Stack.Screen
+        name={APP_ROUTES.vigias}
+        component={Watchmen}
+        options={ephemeralTransition}
       />
       <Stack.Screen
         name={APP_ROUTES.alterarSenha}

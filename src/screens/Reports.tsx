@@ -485,7 +485,7 @@ export default function Reports() {
         }
       />
 
-      <AssistantFAB />
+      <AssistantFAB origin="relatorios" />
 
       <ReportDetailSheet
         report={detalhe}

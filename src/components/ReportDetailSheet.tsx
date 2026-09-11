@@ -8,7 +8,7 @@ import ChartLegend, { ChartLegendItem } from "./ChartLegend";
 import { resolveCategoryColor } from "./CategoryIcon";
 import { useTheme } from "../theme/ThemeProvider";
 import type { AppTheme } from "../theme/colors";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import { formatDayMonthShort } from "../utils/cycleWindow";
 import { categoryForSlice, parseReportCategories } from "../utils/reportBreakdown";
@@ -118,7 +118,7 @@ export default function ReportDetailSheet({
     <CustomModal visible={visible} onClose={onClose}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: spacing[5], paddingTop: spacing[2] }}
+        contentContainerStyle={SHEET_PADDING}
       >
         <Text style={{ color: t.text.tertiary, fontSize: 12 }}>
           {PERIOD_LABEL[report.period]}

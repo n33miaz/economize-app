@@ -17,6 +17,24 @@ export const spacing = {
   20: 80,
 } as const;
 
+/**
+ * Respiro interno de uma folha do `CustomModal`.
+ *
+ * O modal entrega só a superfície: quem desenha o conteúdo é que precisa
+ * afastá-lo das bordas. Enquanto isso foi combinado de cabeça, três telas
+ * copiaram este mesmo objeto como constante local — e a folha que não copiou
+ * (a oferta de biometria) abria com o texto e os botões colados nas duas
+ * laterais.
+ *
+ * O topo é menor que a base porque acima do conteúdo já existe o grabber da
+ * folha, e abaixo dela vem o rodapé do aparelho.
+ */
+export const SHEET_PADDING = {
+  paddingHorizontal: spacing[5],
+  paddingTop: spacing[3],
+  paddingBottom: spacing[6],
+} as const;
+
 // Raios um nível mais generosos que o padrão de mercado — parte da
 // identidade (geometria arredondada, moderna)
 export const radius = {
@@ -88,6 +106,7 @@ export const motion = {
 
 export const ds = {
   spacing,
+  sheetPadding: SHEET_PADDING,
   radius,
   shadow,
   typography,

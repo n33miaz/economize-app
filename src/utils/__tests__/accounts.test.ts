@@ -47,6 +47,8 @@ function card(overrides: Partial<ConnectorAccount> = {}): ConnectorAccount {
     statementClosingDay: 10,
     statementDueDay: 17,
     linked: true,
+    reportedBalance: null,
+    reportedBalanceAt: null,
     ...overrides,
   };
 }
@@ -60,6 +62,8 @@ function bank(overrides: Partial<ConnectorAccount> = {}): ConnectorAccount {
     statementClosingDay: null,
     statementDueDay: null,
     linked: true,
+    reportedBalance: null,
+    reportedBalanceAt: null,
     ...overrides,
   };
 }
@@ -84,6 +88,8 @@ function tx(overrides: Partial<BankTransaction> = {}): BankTransaction {
     internalTransfer: false,
     ignored: false,
     familyTransfer: false,
+  refunded: false,
+  refundOfId: null,
     ...overrides,
   };
 }

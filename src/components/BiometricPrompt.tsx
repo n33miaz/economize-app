@@ -5,7 +5,7 @@ import FingerprintPattern from "lucide-react-native/dist/esm/icons/fingerprint-p
 
 import CustomModal from "./CustomModal";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 
 interface Props {
   visible: boolean;
@@ -56,7 +56,16 @@ export default function BiometricPrompt({
 
   return (
     <CustomModal visible={visible} onClose={() => onDecline(dontAskAgain)}>
-      <View style={{ alignItems: "center", paddingBottom: spacing[2] }}>
+      {/* O respiro padrão das folhas, com o topo um degrau maior: aqui o
+          primeiro elemento é o círculo do ícone, e 12px o deixavam encostado
+          no grabber. Antes desta linha não havia afastamento lateral nenhum,
+          e o texto e os botões nasciam colados nas duas bordas. */}
+      <View
+        style={[
+          SHEET_PADDING,
+          { alignItems: "center", paddingTop: spacing[5] },
+        ]}
+      >
         <View
           style={{
             width: 72,
@@ -67,7 +76,7 @@ export default function BiometricPrompt({
             justifyContent: "center",
             borderWidth: 2,
             borderColor: t.accent.neon,
-            marginBottom: spacing[4],
+            marginBottom: spacing[5],
           }}
         >
           <FingerprintPattern size={34} color={t.accent.neon} />
@@ -79,7 +88,7 @@ export default function BiometricPrompt({
             fontSize: 18,
             fontWeight: "700",
             textAlign: "center",
-            marginBottom: spacing[2],
+            marginBottom: spacing[3],
           }}
         >
           Entrar mais rápido da próxima vez?
@@ -88,9 +97,9 @@ export default function BiometricPrompt({
           style={{
             color: t.text.secondary,
             fontSize: 14,
-            lineHeight: 20,
+            lineHeight: 22,
             textAlign: "center",
-            marginBottom: spacing[5],
+            marginBottom: spacing[6],
           }}
         >
           Use a digital ou o rosto para abrir o Economize! sem digitar a senha —
@@ -109,7 +118,8 @@ export default function BiometricPrompt({
             alignItems: "center",
             alignSelf: "flex-start",
             gap: spacing[3],
-            marginBottom: spacing[5],
+            paddingVertical: spacing[1],
+            marginBottom: spacing[6],
           }}
         >
           <View
@@ -164,7 +174,7 @@ export default function BiometricPrompt({
           onPress={() => onDecline(dontAskAgain)}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{ marginTop: spacing[4] }}
+          style={{ marginTop: spacing[5], paddingVertical: spacing[2] }}
         >
           <Text
             style={{ color: t.text.secondary, fontWeight: "600", fontSize: 14 }}

@@ -11,10 +11,19 @@ import { radius, shadow, spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
 import BrandGradient from "./BrandGradient";
 import { boxNone } from "../utils/pointerEvents";
+import { assistantLabel, type AssistantOrigin } from "../utils/assistantEntry";
 
 interface AssistantFABProps {
   label?: string;
   bottomOffset?: number;
+  /**
+   * De qual tela a porta está sendo aberta (EC-201).
+   *
+   * Muda o RÓTULO do botão e as perguntas sugeridas do outro lado. NÃO muda
+   * o que o servidor lê: os números continuam saindo do banco, sempre.
+   * Omitir é legítimo e cai no genérico.
+   */
+  origin?: AssistantOrigin;
 }
 
 /**
@@ -25,17 +34,23 @@ interface AssistantFABProps {
 export const ASSISTANT_FAB_HEIGHT = 52;
 
 export default function AssistantFAB({
-  label = "Fale com o Nino",
+  label,
   bottomOffset,
+  origin,
 }: AssistantFABProps) {
   const t = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { fabEntering } = useMotionPresets();
 
+  // Rótulo explícito vence a origem; sem os dois, o genérico. "Fale com o
+  // Nino" em toda parte é o mesmo botão de sempre — dizer sobre O QUÊ se vai
+  // falar é o que transforma um botão numa porta
+  const rotulo = label ?? assistantLabel(origin);
+
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("IA Assist" as never);
+    (navigation as any).navigate("IA Assist", origin ? { origin } : undefined);
   };
 
   return (
@@ -53,7 +68,7 @@ export default function AssistantFAB({
       ]}
     >
       <TouchableOpacity
-        accessibilityLabel={label}
+        accessibilityLabel={rotulo}
         activeOpacity={0.85}
         onPress={handlePress}
         style={[
@@ -101,7 +116,7 @@ export default function AssistantFAB({
                 fontSize: 14,
               }}
             >
-              {label}
+              {rotulo}
             </Text>
           </View>
         </BrandGradient>

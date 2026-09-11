@@ -28,7 +28,8 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
-import { Indicator } from "../services/api";
+import { Indicator, getDailyTotals, getInstallments } from "../services/api";
+import type { DailyTotal, InstallmentOverview } from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -47,6 +48,10 @@ import {
 import { useRecurrenceStore } from "../store/recurrenceStore";
 import { useWishStore } from "../store/wishStore";
 import MealVoucherPrompt from "../components/MealVoucherPrompt";
+import MetricGrid from "../components/MetricGrid";
+import MetricTile from "../components/MetricTile";
+import SpendingCalendar from "../components/SpendingCalendar";
+import { currentWeek, weekComparison } from "../utils/weekCut";
 import { mealVoucherAsk } from "../utils/mealVoucher";
 import { todayIso } from "../utils/cycleWindow";
 import { describeSalaryTiming } from "../utils/wishes";
@@ -156,6 +161,40 @@ export default function Home() {
   const { transactions: walletTxs, fetchTransactions: fetchWallet } =
     useWalletStore();
   const { favorites } = useFavoritesStore();
+  // EC-235: os totais por dia do mês corrente, agregados no servidor. Trinta
+  // números custam menos de 2 KB; baixar o extrato inteiro para somá-los
+  // custaria 92 KB e segundos de espera
+  const [diasDoMes, setDiasDoMes] = useState<DailyTotal[]>([]);
+  const [parcelamentos, setParcelamentos] = useState<InstallmentOverview | null>(null);
+  const mesCorrente = useMemo(() => {
+    const hoje = new Date();
+    return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+  }, []);
+  /**
+   * O recorte que a chamada pede: do mês corrente MENOS 14 dias até hoje.
+   *
+   * Os 14 dias a mais existem para a comparação semanal: a semana anterior
+   * pode começar no mês passado, e uma segunda chamada só para ela seria uma
+   * segunda fonte para a mesma pergunta — exatamente como um app passa a
+   * discordar de si mesmo. O calendário ignora os dias de fora sozinho.
+   */
+  const recorteDiario = useMemo(() => {
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate(),
+      ).padStart(2, "0")}`;
+    const hoje = new Date();
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    inicio.setDate(inicio.getDate() - 14);
+    return {
+      kind: "window" as const,
+      start: iso(inicio),
+      end: iso(hoje),
+    };
+  }, []);
+  // A semana sai dos MESMOS dias do calendário, nunca de outra consulta
+  const semana = useMemo(() => currentWeek(diasDoMes), [diasDoMes]);
+  const ritmoDaSemana = useMemo(() => weekComparison(semana), [semana]);
   // Só a CONTAGEM: a Home escreve "N esperando você" e não desenha
   // nenhuma das linhas. Buscar a fila agrupada custava 92 KB e 2,1 s a
   // cada abertura para chegar a um número
@@ -231,12 +270,24 @@ export default function Home() {
       fetchRecurrences();
       fetchCommitted();
       fetchIncome();
+      // Calendário do mês (EC-235): best-effort, como a conferência de saldo.
+      // Uma falha aqui apaga a grade e mantém o resto da tela — ela é leitura
+      // adicional, não a resposta principal
+      getDailyTotals(recorteDiario)
+        .then(setDiasDoMes)
+        .catch(() => setDiasDoMes([]));
+      // Parcelamentos (EC-213): best-effort como o resto — são leitura
+      // adicional, não a resposta principal da tela
+      getInstallments()
+        .then(setParcelamentos)
+        .catch(() => setParcelamentos(null));
     }, [
       fetchPendingCount,
       fetchHomeMonthly,
       fetchRecurrences,
       fetchCommitted,
       fetchIncome,
+      recorteDiario,
     ]),
   );
 
@@ -942,8 +993,10 @@ export default function Home() {
                       A próxima é {commitment.nextName}
                     </Text>
                   ) : null}
-                  {/* A leitura que faltava: não "em 30 dias", mas "do dinheiro
-                      que ainda vai entrar". É a pergunta do fim do mês */}
+                  {/* A leitura do salário saiu daqui e virou tile na grade
+                      (EC-221): este card tinha quatro números concorrendo, e
+                      card com quatro números não tem hierarquia — o olho pula
+                      entre eles e não decide qual é a resposta */}
                   {committed?.salaryKnown && committed.salaryDate ? (
                     <Text
                       style={{
@@ -956,14 +1009,6 @@ export default function Home() {
                         committed.daysUntilSalary,
                         committed.salaryDate,
                       )}
-                      {": "}
-                      {showBalance
-                        ? formatBRL(committed.committedAfterSalary)
-                        : HIDDEN}{" "}
-                      já têm dono
-                      {committed.free != null
-                        ? ` · sobram ${showBalance ? formatBRL(committed.free) : HIDDEN}`
-                        : ""}
                     </Text>
                   ) : null}
                   {riskMonth ? (
@@ -998,6 +1043,159 @@ export default function Home() {
                     </View>
                   ) : null}
                 </TouchableOpacity>
+              </Animated.View>
+            ),
+
+            /* O mês em grade (EC-235). Pedido do dono depois do tour do
+               concorrente: gasto tem ritmo semanal, e nenhuma lista
+               cronológica mostra ritmo — numa grade, a sexta-feira cara
+               aparece sozinha. O botão ao lado é a porta para o extrato
+               inteiro, que era o outro pedido */
+            hasStatement && diasDoMes.length > 0 && (
+              <Animated.View
+                key="calendario"
+                entering={listItemEntering(3)}
+                className="mx-5 mb-5 bg-surface border border-border rounded-3xl p-5"
+              >
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text
+                    style={{
+                      flex: 1,
+                      marginRight: spacing[2],
+                      color: t.text.primary,
+                      fontSize: 16,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Seu mês, dia a dia
+                  </Text>
+                  <TouchableOpacity
+                    onPress={goToImport}
+                    accessibilityLabel="Ver o extrato inteiro"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.7}
+                    style={{ flexDirection: "row", alignItems: "center" }}
+                  >
+                    <Text
+                      style={{ color: t.accent.neon, fontSize: 13, fontWeight: "700" }}
+                    >
+                      Detalhes
+                    </Text>
+                    <ChevronRight size={16} color={t.accent.neon} />
+                  </TouchableOpacity>
+                </View>
+                {/* A semana ANTES da grade: é a pergunta mais imediata
+                    ("como estou agora?"), e ela sai dos mesmos dias */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    marginBottom: spacing[3],
+                  }}
+                >
+                  <Text
+                    style={{ color: t.text.secondary, fontSize: 12, marginRight: spacing[2] }}
+                  >
+                    Esta semana
+                  </Text>
+                  <Text
+                    style={{ color: t.text.primary, fontSize: 18, fontWeight: "700" }}
+                    accessibilityLabel={`Esta semana: ${formatBRL(semana.spent)} de saída`}
+                  >
+                    {formatBRLCompact(semana.spent)}
+                  </Text>
+                </View>
+                {ritmoDaSemana ? (
+                  <Text
+                    style={{
+                      color: t.text.tertiary,
+                      fontSize: 11,
+                      marginTop: -spacing[2],
+                      marginBottom: spacing[3],
+                    }}
+                  >
+                    {ritmoDaSemana}
+                  </Text>
+                ) : null}
+
+                <SpendingCalendar month={mesCorrente} days={diasDoMes} />
+
+                {/* EC-222: os quatro números de primeira tela, lado a lado.
+                    Em coluna eles ocupariam a tela inteira e forcariam
+                    rolagem antes da primeira resposta; lado a lado, comparar
+                    dois deles é um movimento de olho, não de dedo.
+
+                    Cada tile tem UM rótulo e UM número (EC-221), e o número
+                    chega contando — é o que faz o olho perceber a direção
+                    antes de ler o valor */}
+                <View style={{ marginTop: spacing[4] }}>
+                  <MetricGrid>
+                    <MetricTile
+                      label="Esta semana"
+                      value={showBalance ? semana.spent : 0}
+                      hint={ritmoDaSemana}
+                      onPress={goToImport}
+                    />
+                    <MetricTile
+                      label={`A vencer em ${COMMITMENT_WINDOW_DAYS} dias`}
+                      value={showBalance ? commitment.total : 0}
+                      hint={commitment.nextName ? `próxima: ${commitment.nextName}` : null}
+                      onPress={goToRecurrences}
+                    />
+                    {committed?.free != null ? (
+                      <MetricTile
+                        label="Sobra depois do salário"
+                        value={showBalance ? committed.free : 0}
+                        tone={committed.free < 0 ? "negative" : "positive"}
+                        onPress={goToRecurrences}
+                      />
+                    ) : null}
+                    {parcelamentos && parcelamentos.openSeries > 0 ? (
+                      <MetricTile
+                        label="Parcelas a vencer"
+                        value={showBalance ? parcelamentos.remainingTotal : 0}
+                        hint={
+                          parcelamentos.openSeries === 1
+                            ? "1 parcelamento"
+                            : `${parcelamentos.openSeries} parcelamentos`
+                        }
+                      />
+                    ) : null}
+                  </MetricGrid>
+                </View>
+
+                {/* EC-213: o que ainda vai cobrar, como número de primeira
+                    tela. O Pierre mostrava "1 de 3, última em Agosto/2026" em
+                    setembro — aqui a projeção é por mês e tem teste */}
+                {parcelamentos && parcelamentos.openSeries > 0 ? (
+                  <View
+                    style={{
+                      marginTop: spacing[4],
+                      paddingTop: spacing[3],
+                      borderTopWidth: 1,
+                      borderTopColor: t.border.subtle,
+                    }}
+                  >
+                    <Text
+                      style={{ color: t.text.secondary, fontSize: 12 }}
+                      accessibilityLabel={`${parcelamentos.openSeries} ${
+                        parcelamentos.openSeries === 1
+                          ? "parcelamento em andamento"
+                          : "parcelamentos em andamento"
+                      }, ${formatBRL(parcelamentos.remainingTotal)} a vencer`}
+                    >
+                      {parcelamentos.openSeries === 1
+                        ? "1 parcelamento em andamento"
+                        : `${parcelamentos.openSeries} parcelamentos em andamento`}
+                      {" · "}
+                      <Text style={{ color: t.text.primary, fontWeight: "700" }}>
+                        {formatBRLCompact(parcelamentos.remainingTotal)}
+                      </Text>
+                      {" a vencer"}
+                    </Text>
+                  </View>
+                ) : null}
               </Animated.View>
             ),
 
@@ -1394,7 +1592,7 @@ export default function Home() {
         performance={performance}
       />
 
-      <AssistantFAB />
+      <AssistantFAB origin="home" />
     </PageContainer>
   );
 }

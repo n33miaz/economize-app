@@ -186,6 +186,11 @@ export const useAuthStore = create(
         const { useAccountsStore } = require("./accountsStore");
         useAccountsStore.getState().reset();
 
+        // Idem: os nomes dos arquivos que a pessoa importou são rastro dela, e
+        // o `hasLoadedOnce` faria a próxima conta ver a procedência da anterior
+        const { useImportSourcesStore } = require("./importSourcesStore");
+        useImportSourcesStore.getState().reset();
+
         // Mesma razão e mesmo import tardio: as opções de IA guardam provedor,
         // modelo e os 4 últimos dígitos da chave do dono anterior, e o
         // `hasLoadedOnce` impediria a tela de perguntar de novo

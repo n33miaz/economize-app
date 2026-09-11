@@ -9,11 +9,13 @@ import {
 } from "react-native";
 import Bell from "lucide-react-native/dist/esm/icons/bell";
 import CircleAlert from "lucide-react-native/dist/esm/icons/circle-alert";
+import Eye from "lucide-react-native/dist/esm/icons/eye";
 import FileUp from "lucide-react-native/dist/esm/icons/file-up";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import { useNavigation } from "@react-navigation/native";
 import Animated from "react-native-reanimated";
 
+import { APP_ROUTES } from "../routes/routeNames";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
@@ -72,16 +74,27 @@ export default function AdvancedOptions() {
     setTidying(true);
     try {
       const r = await tidyStatement();
-      const mexeu =
-        r.internalMarked + r.familyMarked + r.duplicatesMarked +
-        r.seriesCreated + r.seriesUpdated;
-      // O número por número, e não "pronto": a faxina mexe em quatro coisas
+      // Uma entrada por vigia, e o zero some da frase: listar "0 estorno(s)"
+      // gasta a linha com o que não aconteceu. Somar só o que se mostra
+      // também evita o pior caso — a faxina achar aplicação ou estorno e o
+      // toast responder "nada a marcar", que é mentira sobre número que mudou
+      const achados = [
+        [r.internalMarked, "própria(s)"],
+        [r.investmentMarked, "de investimento"],
+        [r.familyMarked, "da casa"],
+        [r.duplicatesMarked, "duplicata(s)"],
+        [r.refundsMarked, "estorno(s)"],
+        [r.seriesCreated + r.seriesUpdated, "recorrência(s)"],
+      ] as const;
+      const partes = achados
+        .filter(([quantos]) => quantos > 0)
+        .map(([quantos, rotulo]) => `${quantos} ${rotulo}`);
+      // O número por número, e não "pronto": a faxina mexe em seis coisas
       // diferentes, e o dono precisa saber em qual delas ela mexeu
       showToast(
-        mexeu === 0
+        partes.length === 0
           ? "Extrato já estava limpo: nada a marcar."
-          : `${r.internalMarked} própria(s), ${r.familyMarked} da casa, ` +
-            `${r.duplicatesMarked} duplicata(s), ${r.seriesCreated + r.seriesUpdated} recorrência(s).`,
+          : `${partes.join(", ")}.`,
         "success",
       );
       // A previsão e a Análise leem estes números: sem recarregar, a tela
@@ -205,6 +218,14 @@ export default function AdvancedOptions() {
                 <ActivityIndicator size="small" color={t.accent.neon} />
               ) : undefined
             }
+          />
+          {/* Ao lado do gatilho manual da MESMA faxina: quem acabou de
+              reprocessar é exatamente quem quer ver o que mudou */}
+          <ActionRow
+            Icon={Eye}
+            label="Vigias do extrato"
+            description="Quem trabalha sozinho nos seus números, o que mexeu e como desfazer"
+            onPress={() => navigation.navigate(APP_ROUTES.vigias as never)}
           />
           <ActionRow
             Icon={Trash2}

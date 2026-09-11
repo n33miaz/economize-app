@@ -43,6 +43,8 @@ const CONTA: ConnectorAccount = {
   statementClosingDay: null,
   statementDueDay: null,
   linked: true,
+  reportedBalance: null,
+  reportedBalanceAt: null,
 };
 
 const CARTAO: ConnectorAccount = {

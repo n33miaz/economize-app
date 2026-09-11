@@ -8,7 +8,7 @@ import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { spacing } from "../theme/ds";
+import { SHEET_PADDING, spacing } from "../theme/ds";
 import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
@@ -32,14 +32,6 @@ import CustomModal from "../components/CustomModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
-
-// O CustomModal entrega só a folha; o respiro lateral é de quem usa, como em
-// Categorias e Carteira. Sem ele o conteúdo cola nas duas bordas.
-const SHEET_PADDING = {
-  paddingHorizontal: spacing[5],
-  paddingTop: spacing[3],
-  paddingBottom: spacing[6],
-} as const;
 
 const KINDS: IncomeSourceKind[] = [
   "SALARY",

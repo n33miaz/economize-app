@@ -66,7 +66,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         isGenerating: false,
       });
       return response.data;
-    } catch (e: any) {
+    } catch {
       set({ error: "Falha ao gerar relatório", isGenerating: false });
       return null;
     }
@@ -80,7 +80,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       // o que dizer continuava anunciando fracasso depois de dar certo
       set({ items: get().items.filter((r) => r.id !== id), error: null });
       return true;
-    } catch (e: any) {
+    } catch {
       set({ error: "Falha ao remover relatório" });
       return false;
     }

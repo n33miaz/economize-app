@@ -12,7 +12,15 @@ import { useFamilyStore } from "../../store/familyStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 
-jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+jest.mock("../../services/api", () => ({
+  __esModule: true,
+  default: {},
+  // O painel de tetos (EC-204) é leitura de apoio: a Análise tem de montar
+  // igual com ele recusando, e é isso que o mock rejeitado prova
+  getBudgetStatus: jest.fn().mockRejectedValue(new Error("sem rede")),
+  setBudget: jest.fn(),
+  clearBudget: jest.fn(),
+}));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
