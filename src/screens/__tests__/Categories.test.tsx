@@ -115,4 +115,24 @@ describe("Categorias", () => {
     // vazia seria um beco
     await waitFor(() => expect(getByText("Categorias")).toBeTruthy());
   });
+
+  it("EC-199: toda raiz oferece criar subcategoria, inclusive as do sistema", async () => {
+    const { getAllByLabelText } = montar();
+
+    // As 14 raizes do sistema nao tinham gesto nenhum na linha: criar
+    // "Mercado > Feira" exigia abrir "Nova categoria" e cacar o pai numa
+    // lista de 14 -- o caminho existia e ninguem achava
+    await waitFor(() =>
+      expect(getAllByLabelText(/Nova subcategoria em /).length).toBeGreaterThan(0),
+    );
+  });
+
+  it("subcategoria NAO oferece neta: a hierarquia e de dois niveis", async () => {
+    const { queryByLabelText } = montar();
+
+    // Oferecer um botao que a API recusaria e pior do que nao oferecer
+    await waitFor(() =>
+      expect(queryByLabelText("Nova subcategoria em Mercado")).toBeNull(),
+    );
+  });
 });

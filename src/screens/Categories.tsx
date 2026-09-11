@@ -20,13 +20,14 @@ import { useCategoriesStore } from "../store/categoriesStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import type { AppTheme } from "../theme/colors";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import CategoryForm from "../components/CategoryForm";
 import CategoryIcon from "../components/CategoryIcon";
 import { buildCategoryTree, groupRootsByGroupName } from "../utils/categoryTree";
 import CustomModal from "../components/CustomModal";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PageContainer from "../components/PageContainer";
 import ScreenHeader from "../components/ScreenHeader";
 import Skeleton from "../components/Skeleton";
@@ -63,6 +64,11 @@ interface CategoryRowProps {
   onEdit: () => void;
   onDelete: () => void;
   onRestore: () => void;
+  /**
+   * Criar uma subcategoria DEBAIXO desta (EC-199). Nulo nas linhas que não
+   * podem ter filha: subcategoria não tem neta, e arquivada não recebe nada.
+   */
+  onAddChild: (() => void) | null;
 }
 
 function CategoryRow({
@@ -76,6 +82,7 @@ function CategoryRow({
   onEdit,
   onDelete,
   onRestore,
+  onAddChild,
 }: CategoryRowProps) {
   const t = useTheme();
   const { listItemEntering } = useMotionPresets();
@@ -208,36 +215,61 @@ function CategoryRow({
             </Text>
           </TouchableOpacity>
         </Animated.View>
-      ) : category.system ? null : (
+      ) : (
         <View style={{ flexDirection: "row" }}>
-          <TouchableOpacity
-            onPress={onEdit}
-            accessibilityLabel={`Editar categoria ${category.name}`}
-            accessibilityRole="button"
-            activeOpacity={0.7}
-            style={{
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Pencil size={18} color={t.text.secondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onDelete}
-            accessibilityLabel={`Excluir categoria ${category.name}`}
-            accessibilityRole="button"
-            activeOpacity={0.7}
-            style={{
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Trash2 size={18} color={t.semantic.danger} />
-          </TouchableOpacity>
+          {/* EC-199: subcategoria embaixo de QUALQUER raiz, inclusive as do
+              sistema. As 14 raízes do sistema não tinham gesto nenhum na
+              linha, então "Mercado > Feira" só era possível abrindo "Nova
+              categoria" e caçando o pai numa lista de 14 — o caminho existia
+              e ninguém achava */}
+          {onAddChild !== null && (
+            <TouchableOpacity
+              onPress={onAddChild}
+              accessibilityLabel={`Nova subcategoria em ${category.name}`}
+              accessibilityRole="button"
+              activeOpacity={0.7}
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Plus size={18} color={t.text.secondary} />
+            </TouchableOpacity>
+          )}
+          {!category.system && (
+            <TouchableOpacity
+              onPress={onEdit}
+              accessibilityLabel={`Editar categoria ${category.name}`}
+              accessibilityRole="button"
+              activeOpacity={0.7}
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Pencil size={18} color={t.text.secondary} />
+            </TouchableOpacity>
+          )}
+          {!category.system && (
+            <TouchableOpacity
+              onPress={onDelete}
+              accessibilityLabel={`Excluir categoria ${category.name}`}
+              accessibilityRole="button"
+              activeOpacity={0.7}
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Trash2 size={18} color={t.semantic.danger} />
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </Animated.View>
@@ -251,8 +283,23 @@ export default function Categories() {
   const { items, isLoading, fetch, remove, update } = useCategoriesStore();
   const { showToast } = useToastStore();
 
-  // "new" abre o formulário vazio; uma Category abre em modo edição
-  const [formTarget, setFormTarget] = useState<Category | "new" | null>(null);
+  // "new" abre o formulário vazio; uma Category abre em modo edição; e
+  // `{ novaFilhaDe }` abre vazio JÁ COM o pai escolhido (EC-199) — é a
+  // diferença entre um caminho que existe e um caminho que se acha
+  type AlvoDoFormulario = Category | "new" | { novaFilhaDe: string };
+  // Puxar para atualizar: o gesto que a plataforma inteira ensinou
+  // nao pode faltar numa tela de dados
+  const { control: refreshControl } = usePullToRefresh(() => fetch());
+
+  const [formTarget, setFormTarget] = useState<AlvoDoFormulario | null>(null);
+  const filhaDe =
+    formTarget !== null && typeof formTarget === "object" && "novaFilhaDe" in formTarget
+      ? formTarget.novaFilhaDe
+      : null;
+  const editando =
+    formTarget !== null && typeof formTarget === "object" && !("novaFilhaDe" in formTarget)
+      ? formTarget
+      : null;
   // acordeão: com 14 raízes e ~57 subcategorias, abrir tudo viraria um paredão
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -385,6 +432,13 @@ export default function Categories() {
         childCount={item.childCount}
         expanded={item.expanded}
         onToggle={() => toggleExpanded(item.category.id)}
+        onAddChild={
+          // Subcategoria não tem neta: a hierarquia da V9 é de dois níveis, e
+          // oferecer um botão que a API recusaria é pior do que não oferecer
+          item.category.parentId === null
+            ? () => setFormTarget({ novaFilhaDe: item.category.id })
+            : null
+        }
         onEdit={() => setFormTarget(item.category)}
         onDelete={() => handleDelete(item.category)}
         onRestore={() => handleRestore(item.category)}
@@ -425,6 +479,7 @@ export default function Categories() {
       />
 
       <FlatList
+            refreshControl={refreshControl}
         data={isLoading && items.length === 0 ? [] : rows}
         keyExtractor={(row) => row.key}
         renderItem={renderRow}
@@ -448,13 +503,7 @@ export default function Categories() {
       />
 
       <CustomModal visible={formTarget !== null} onClose={() => setFormTarget(null)}>
-        <View
-          style={{
-            paddingHorizontal: spacing[5],
-            paddingTop: spacing[3],
-            paddingBottom: spacing[6],
-          }}
-        >
+        <View style={SHEET_PADDING}>
           <Text
             style={{
               color: t.text.primary,
@@ -463,13 +512,20 @@ export default function Categories() {
               marginBottom: spacing[4],
             }}
           >
-            {formTarget === "new" ? "Nova categoria" : "Editar categoria"}
+            {editando
+              ? "Editar categoria"
+              : filhaDe
+                ? `Nova subcategoria em ${
+                    items.find((c) => c.id === filhaDe)?.name ?? "categoria"
+                  }`
+                : "Nova categoria"}
           </Text>
           {formTarget !== null && (
             <CategoryForm
               // key força o formulário a renascer com os valores do alvo atual
-              key={formTarget === "new" ? "new" : formTarget.id}
-              initial={formTarget === "new" ? null : formTarget}
+              key={editando ? editando.id : (filhaDe ?? "new")}
+              initial={editando}
+              initialParentId={filhaDe}
               onSaved={() => setFormTarget(null)}
               onCancel={() => setFormTarget(null)}
             />
