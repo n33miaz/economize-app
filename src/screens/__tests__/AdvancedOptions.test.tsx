@@ -82,8 +82,10 @@ describe("Opções avançadas", () => {
   it("reprocessar o extrato conta o que cada varredura mexeu", async () => {
     faxina.mockResolvedValue({
       internalMarked: 197,
+      investmentMarked: 350,
       familyMarked: 68,
       duplicatesMarked: 20,
+      refundsMarked: 8,
       seriesCreated: 3,
       seriesUpdated: 12,
     });
@@ -94,11 +96,15 @@ describe("Opções avançadas", () => {
     fireEvent.press(await waitFor(() => getByText("Reprocessar o extrato")));
 
     await waitFor(() => expect(faxina).toHaveBeenCalled());
-    // N\u00famero por n\u00famero: a faxina mexe em quatro coisas diferentes, e "pronto"
+    // N\u00famero por n\u00famero: a faxina mexe em SEIS coisas diferentes, e "pronto"
     // n\u00e3o diz em qual delas ela mexeu
     await waitFor(() =>
       expect(useToastStore.getState().message).toContain("20 duplicata(s)"),
     );
+    // Os dois vigias novos (EC-214 e EC-194) entram na conta: a frase ficou
+    // para tr\u00e1s quando eles nasceram na API
+    expect(useToastStore.getState().message).toContain("350 de investimento");
+    expect(useToastStore.getState().message).toContain("8 estorno(s)");
     // sem recarregar, a An\u00e1lise mostraria o n\u00famero de antes
     await waitFor(() => expect(buscar).toHaveBeenCalled());
   });
@@ -106,8 +112,10 @@ describe("Opções avançadas", () => {
   it("extrato j\u00e1 limpo n\u00e3o vira lista de zeros", async () => {
     faxina.mockResolvedValue({
       internalMarked: 0,
+      investmentMarked: 0,
       familyMarked: 0,
       duplicatesMarked: 0,
+      refundsMarked: 0,
       seriesCreated: 0,
       seriesUpdated: 0,
     });
@@ -121,6 +129,29 @@ describe("Opções avançadas", () => {
 
     await waitFor(() =>
       expect(useToastStore.getState().message).toContain("j\u00e1 estava limpo"),
+    );
+  });
+
+  it("vigia que n\u00e3o achou nada n\u00e3o ocupa a frase de quem achou", async () => {
+    faxina.mockResolvedValue({
+      internalMarked: 0,
+      investmentMarked: 0,
+      familyMarked: 0,
+      duplicatesMarked: 2,
+      refundsMarked: 0,
+      seriesCreated: 0,
+      seriesUpdated: 0,
+    });
+    useBankStore.setState({
+      transactions: [],
+      fetchTransactions: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    const { getByText } = montar();
+    fireEvent.press(await waitFor(() => getByText("Reprocessar o extrato")));
+
+    await waitFor(() =>
+      expect(useToastStore.getState().message).toBe("2 duplicata(s)."),
     );
   });
 
