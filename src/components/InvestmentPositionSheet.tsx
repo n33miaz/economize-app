@@ -18,7 +18,7 @@ import { getApiErrorDetail, getApiErrorStatus } from "../services/api";
 import { useInvestmentStore } from "../store/investmentStore";
 import { useToastStore } from "../store/toastStore";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
 import {
   DEFAULT_FOREIGN_MARKET,
@@ -186,11 +186,7 @@ export default function InvestmentPositionSheet({
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingHorizontal: spacing[5],
-          paddingTop: spacing[3],
-          paddingBottom: spacing[6],
-        }}
+        contentContainerStyle={SHEET_PADDING}
       >
         <View
           style={{

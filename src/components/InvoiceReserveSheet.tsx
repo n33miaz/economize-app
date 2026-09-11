@@ -15,7 +15,7 @@ import {
   saveInvoiceReserve,
 } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
 import { accountDisplayName } from "../utils/accounts";
 import { formatBRL, parseAmount } from "../utils/money";
@@ -136,7 +136,7 @@ export default function InvoiceReserveSheet({
       {invoice ? (
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[6] }}
+          contentContainerStyle={SHEET_PADDING}
         >
           <View
             style={{

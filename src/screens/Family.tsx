@@ -20,7 +20,7 @@ import UserPlus from "lucide-react-native/dist/esm/icons/user-plus";
 
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { useFamilyStore } from "../store/familyStore";
 import { useCategoriesStore } from "../store/categoriesStore";
 import { useAccountsStore } from "../store/accountsStore";
@@ -59,14 +59,6 @@ import ActionRow from "../components/ActionRow";
 import BankLogo from "../components/BankLogo";
 import MemberAvatar from "../components/MemberAvatar";
 import CategoryIcon from "../components/CategoryIcon";
-
-// O CustomModal entrega só a folha; o respiro lateral é de quem usa, como em
-// Desejos e Renda. Sem ele o conteúdo cola nas duas bordas.
-const SHEET_PADDING = {
-  paddingHorizontal: spacing[5],
-  paddingTop: spacing[3],
-  paddingBottom: spacing[6],
-} as const;
 
 const SCOPE_OPTIONS: { label: string; value: FamilyShareScope }[] = [
   { label: shareScopeLabel("NONE"), value: "NONE" },

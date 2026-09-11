@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { spacing } from "../theme/ds";
+import { SHEET_PADDING } from "../theme/ds";
 import { formatBRL } from "../utils/money";
 import { describePotReason, type CyclePerformance } from "../utils/pot";
 
@@ -52,11 +52,7 @@ export default function PotStatesSheet({
     <CustomModal visible={visible} onClose={onClose}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: spacing[5],
-          paddingTop: spacing[3],
-          paddingBottom: spacing[6],
-        }}
+        contentContainerStyle={SHEET_PADDING}
       >
         <Text className="text-xl font-bold text-textPrimary">
           Seu pote conta o mês
