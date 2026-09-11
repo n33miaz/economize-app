@@ -5,6 +5,7 @@ import Animated from "react-native-reanimated";
 
 import Card from "./Card";
 import AnimatedMoney from "./AnimatedMoney";
+import FlipCard, { useFlip } from "./FlipCard";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacing } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
@@ -21,6 +22,15 @@ interface Props {
   tone?: "neutral" | "positive" | "negative" | "warning";
   compact?: boolean;
   style?: ViewStyle;
+  /**
+   * O verso do card: de onde este número veio (EC-225).
+   *
+   * <p>Quando presente, o toque GIRA em vez de navegar — a pergunta "de onde
+   * veio?" é sobre este número, e sair da tela para respondê-la tiraria da
+   * frente justamente o que está em questão. A navegação continua existindo,
+   * no verso, onde ela vira "ver os lançamentos".
+   */
+  back?: React.ReactNode;
 }
 
 /**
@@ -47,9 +57,11 @@ export default function MetricTile({
   tone = "neutral",
   compact = true,
   style,
+  back,
 }: Props) {
   const t = useTheme();
   const press = usePressScale();
+  const { flipped, toggle } = useFlip();
 
   const cor =
     tone === "positive"
@@ -93,7 +105,10 @@ export default function MetricTile({
     </Card>
   );
 
-  if (!onPress) {
+  // Com verso, o toque gira; a navegação (quando existe) mora lá atrás
+  const aoTocar = back ? toggle : onPress;
+
+  if (!aoTocar) {
     return (
       <View accessible accessibilityLabel={`${label}: ${valorFalado(value)}`}>
         {conteudo}
@@ -101,19 +116,43 @@ export default function MetricTile({
     );
   }
 
-  return (
+  const frente = (
     <Animated.View style={press.pressStyle}>
       <TouchableOpacity
-        onPress={onPress}
+        onPress={aoTocar}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         activeOpacity={0.9}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${valorFalado(value)}${hint ? `. ${hint}` : ""}`}
+        accessibilityLabel={
+          `${label}: ${valorFalado(value)}${hint ? `. ${hint}` : ""}` +
+          (back ? ". Toque para ver de onde veio" : "")
+        }
       >
         {conteudo}
       </TouchableOpacity>
     </Animated.View>
+  );
+
+  if (!back) return frente;
+
+  return (
+    <FlipCard
+      flipped={flipped}
+      front={frente}
+      back={
+        <TouchableOpacity
+          onPress={toggle}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel={`Fechar a origem de ${label}`}
+          style={{ flex: 1 }}
+        >
+          {back}
+        </TouchableOpacity>
+      }
+      style={style}
+    />
   );
 }
 
