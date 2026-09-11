@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
-import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Target from "lucide-react-native/dist/esm/icons/target";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import TrendingDown from "lucide-react-native/dist/esm/icons/trending-down";
@@ -32,6 +31,7 @@ import CustomModal from "../components/CustomModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
+import PotEmptyState from "../components/PotEmptyState";
 import WishCard from "../components/WishCard";
 import WishContributionSheet from "../components/WishContributionSheet";
 
@@ -249,21 +249,15 @@ export default function Wishes({ navigation }: any) {
               <Skeleton height={120} borderRadius={16} className="mb-3" />
             </>
           ) : wishes.length === 0 ? (
-            <View className="items-center py-10">
-              <View
-                className="w-16 h-16 rounded-full items-center justify-center mb-3"
-                style={{ backgroundColor: t.accent.neonMuted }}
-              >
-                <Sparkles size={28} color={t.accent.neon} />
-              </View>
-              <Text className="text-textPrimary font-bold text-base">
-                Nenhum desejo ainda
-              </Text>
-              <Text className="text-textSecondary text-xs text-center mt-1 px-6">
-                Cadastre algo que você quer comprar e descubra quantas horas de
-                trabalho aquilo custa.
-              </Text>
-            </View>
+            // EC-231: o pote vazio no lugar do disco âmbar. Sem botão próprio
+            // porque o "Cadastrar desejo" já vem logo abaixo — dois iguais na
+            // mesma tela seria pedir a mesma coisa duas vezes
+            <PotEmptyState
+              mood="comecar"
+              size={80}
+              title="Nenhum desejo ainda"
+              body="Cadastre algo que você quer comprar e descubra quantas horas de trabalho aquilo custa."
+            />
           ) : (
             wishes.map((wish) => (
               <WishCard

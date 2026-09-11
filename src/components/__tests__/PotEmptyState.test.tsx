@@ -85,6 +85,39 @@ describe("Vazio com o pote", () => {
     expect(agir).toHaveBeenCalled();
   });
 
+  it("o segundo caminho só existe ao lado do primeiro", () => {
+    const conectar = jest.fn();
+    const cadastrar = jest.fn();
+    const { getByLabelText, queryByLabelText, rerender } = render(
+      <PotEmptyState
+        mood="comecar"
+        title="t"
+        body="b"
+        actionLabel="Conectar banco"
+        onAction={conectar}
+        secondaryActionLabel="Cadastrar à mão"
+        onSecondaryAction={cadastrar}
+      />,
+    );
+
+    fireEvent.press(getByLabelText("Cadastrar à mão"));
+    expect(cadastrar).toHaveBeenCalled();
+    expect(conectar).not.toHaveBeenCalled();
+
+    // Sozinho, o segundo caminho não é desenhado: sem o primeiro ele seria o
+    // primeiro, e quem quer um botão só passa `actionLabel`
+    rerender(
+      <PotEmptyState
+        mood="comecar"
+        title="t"
+        body="b"
+        secondaryActionLabel="Cadastrar à mão"
+        onSecondaryAction={cadastrar}
+      />,
+    );
+    expect(queryByLabelText("Cadastrar à mão")).toBeNull();
+  });
+
   it("quem ouve recebe título e corpo numa frase só", () => {
     const { getByLabelText } = render(
       <PotEmptyState mood="comecar" title="Comece aqui" body="Importe um extrato." />,

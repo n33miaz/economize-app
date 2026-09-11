@@ -8,7 +8,6 @@ import {
   LayoutAnimation,
   useWindowDimensions,
 } from "react-native";
-import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
 import WalletIcon from "lucide-react-native/dist/esm/icons/wallet";
@@ -27,6 +26,7 @@ import { useIndicatorStore } from "../store/indicatorStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import ErrorState from "../components/ErrorState";
+import PotEmptyState from "../components/PotEmptyState";
 import FreshnessStamp from "../components/FreshnessStamp";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PageContainer from "../components/PageContainer";
@@ -366,11 +366,15 @@ export default function Wallet() {
                   </View>
                 </View>
               ) : (
-                <View className="items-center justify-center p-10 bg-surface rounded-2xl mb-6 border border-dashed border-border">
-                  <ChartPie size={48} color={t.text.tertiary} />
-                  <Text className="text-textSecondary mt-3 text-center">
-                    Adicione ativos para visualizar sua alocação.
-                  </Text>
+                // EC-231: o pote vazio no lugar do glifo genérico; o card
+                // tracejado continua dizendo "aqui vai entrar algo"
+                <View className="bg-surface rounded-2xl mb-6 border border-dashed border-border">
+                  <PotEmptyState
+                    mood="comecar"
+                    size={72}
+                    title="Sem ativos ainda"
+                    body="Adicione ativos para visualizar sua alocação."
+                  />
                 </View>
               )}
 

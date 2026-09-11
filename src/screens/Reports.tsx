@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import FileText from "lucide-react-native/dist/esm/icons/file-text";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Trash2 from "lucide-react-native/dist/esm/icons/trash-2";
+import PotEmptyState from "../components/PotEmptyState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
@@ -474,20 +474,16 @@ export default function Reports() {
               ))}
             </View>
           ) : (
-            <View style={{ alignItems: "center", marginTop: spacing[10] }}>
-              <FileText size={48} color={t.text.tertiary} />
-              <Text
-                style={{
-                  color: t.text.secondary,
-                  marginTop: spacing[3],
-                  textAlign: "center",
-                  paddingHorizontal: spacing[6],
-                }}
-              >
-                Nenhum relatório {PERIOD_LABELS[tab].toLowerCase()} ainda. Toque
-                em "Gerar" para criar o primeiro.
-              </Text>
-            </View>
+            // EC-231: o pote vazio conta o estado; a frase fica livre para
+            // dizer o que fazer, e o botão repete o "Gerar" do cabeçalho para
+            // quem chegou até aqui sem vê-lo
+            <PotEmptyState
+              mood="comecar"
+              title={`Nenhum relatório ${PERIOD_LABELS[tab].toLowerCase()} ainda`}
+              body="Um relatório congela um período: receitas, despesas, saldo e a categoria que mais pesou. Gere o primeiro para começar a comparar."
+              actionLabel="Gerar relatório"
+              onAction={handleGenerate}
+            />
           )
         }
       />

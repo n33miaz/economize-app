@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import CalendarClock from "lucide-react-native/dist/esm/icons/calendar-clock";
 import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import CircleCheck from "lucide-react-native/dist/esm/icons/circle-check";
 import Info from "lucide-react-native/dist/esm/icons/info";
@@ -34,6 +33,7 @@ import {
 } from "../store/recurrenceStore";
 import ChartLegend from "../components/ChartLegend";
 import ErrorState from "../components/ErrorState";
+import PotEmptyState from "../components/PotEmptyState";
 import AssistantFAB from "../components/AssistantFAB";
 import { getInstallments } from "../services/api";
 import CommitmentTimeline from "../components/CommitmentTimeline";
@@ -842,56 +842,21 @@ export default function BalanceForecast() {
 }
 
 function EmptyForecast({ onBack }: { onBack: () => void }) {
-  const t = useTheme();
   const { cardEntering } = useMotionPresets();
   return (
     <Animated.View
       entering={cardEntering}
       style={{ alignItems: "center", paddingTop: spacing[10] }}
     >
-      <CalendarClock size={44} color={t.text.tertiary} />
-      <Text
-        style={{
-          color: t.text.primary,
-          fontSize: 18,
-          fontWeight: "700",
-          textAlign: "center",
-          marginTop: spacing[3],
-        }}
-      >
-        Ainda não há o que projetar
-      </Text>
-      <Text
-        style={{
-          color: t.text.secondary,
-          fontSize: 13,
-          lineHeight: 19,
-          textAlign: "center",
-          marginTop: spacing[1],
-        }}
-      >
-        A projeção nasce das suas recorrências. Rode a varredura do extrato ou
-        agende um gasto fixo para o app ter o que somar.
-      </Text>
-      <TouchableOpacity
-        onPress={onBack}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel="Voltar para as recorrências"
-        style={{
-          minHeight: 48,
-          alignSelf: "stretch",
-          marginTop: spacing[6],
-          borderRadius: radius.full,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: t.accent.neon,
-        }}
-      >
-        <Text style={{ color: t.text.inverse, fontSize: 14, fontWeight: "700" }}>
-          Voltar para recorrências
-        </Text>
-      </TouchableOpacity>
+      {/* EC-231: o pote vazio no lugar do relógio genérico — a projeção não
+          tem de onde nascer, e o pote diz isso antes da frase */}
+      <PotEmptyState
+        mood="comecar"
+        title="Ainda não há o que projetar"
+        body="A projeção nasce das suas recorrências. Rode a varredura do extrato ou agende um gasto fixo para o app ter o que somar."
+        actionLabel="Voltar para recorrências"
+        onAction={onBack}
+      />
     </Animated.View>
   );
 }
