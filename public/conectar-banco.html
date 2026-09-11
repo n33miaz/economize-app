@@ -76,7 +76,29 @@
   // Fragmento, não query — ver o comentário do topo
   var p = new URLSearchParams(location.hash.replace(/^#/, ""));
   var token = p.get("token");
-  var destino = p.get("redirect");
+
+  // O DESTINO DE VOLTA SÓ PODE SER O PRÓPRIO APP. `redirect` chega pela URL,
+  // e URL qualquer pessoa forja: sem esta checagem, um link para esta página
+  // com `redirect=https://outro-lugar` levaria o id da conexão bancária de
+  // quem acabou de autorizar o banco para o endereço que o atacante colou.
+  // Dois destinos legítimos, e só eles — os dois que `Linking.createURL("/")`
+  // do app produz: o esquema `economize:` (deep link no aparelho) e a MESMA
+  // origem desta página (a web). Qualquer outro vira nulo, e a página cai no
+  // "pode fechar esta janela", que é o caminho seguro.
+  function destinoPermitido(bruto) {
+    if (!bruto) return null;
+    var alvo;
+    try {
+      alvo = new URL(bruto, location.href);
+    } catch (e) {
+      return null;
+    }
+    if (alvo.protocol === "economize:") return bruto;
+    if ((alvo.protocol === "https:" || alvo.protocol === "http:") &&
+        alvo.origin === location.origin) return bruto;
+    return null;
+  }
+  var destino = destinoPermitido(p.get("redirect"));
   var widgetUrl = p.get("widget");
   var kind = p.get("kind");
 
