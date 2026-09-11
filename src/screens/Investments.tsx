@@ -40,7 +40,7 @@ import {
 import { useToastStore } from "../store/toastStore";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import * as Haptics from "../utils/haptics";
@@ -72,6 +72,7 @@ import CustomModal from "../components/CustomModal";
 import ErrorState from "../components/ErrorState";
 import InvestmentInterestSheet from "../components/InvestmentInterestSheet";
 import InvestmentPositionSheet from "../components/InvestmentPositionSheet";
+import AssistantFAB from "../components/AssistantFAB";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
@@ -758,6 +759,9 @@ export default function Investments() {
         position={positionSheet.position}
         onClose={() => setPositionSheet((prev) => ({ ...prev, open: false }))}
       />
+    {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
+        qual tela foi aberto, e sugere as perguntas dela */}
+    <AssistantFAB origin="investimentos" />
     </PageContainer>
   );
 }
@@ -1247,7 +1251,7 @@ function IndicatorExplainSheet({
   return (
     <CustomModal visible={card !== null} onClose={onClose}>
       {card ? (
-        <View style={{ paddingHorizontal: spacing[5], paddingTop: spacing[3], paddingBottom: spacing[6] }}>
+        <View style={SHEET_PADDING}>
           <View
             style={{
               flexDirection: "row",

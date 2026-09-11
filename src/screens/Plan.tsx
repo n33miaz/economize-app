@@ -4,6 +4,7 @@ import Check from "lucide-react-native/dist/esm/icons/check";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Animated from "react-native-reanimated";
 
+import AssistantFAB from "../components/AssistantFAB";
 import PageContainer from "../components/PageContainer";
 import PotIcon from "../components/PotIcon";
 import ScreenHeader from "../components/ScreenHeader";
@@ -329,6 +330,9 @@ export default function Plan() {
           </Animated.View>
         )}
       </ScrollView>
+    {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
+        qual tela foi aberto, e sugere as perguntas dela */}
+    <AssistantFAB origin="planos" />
     </PageContainer>
   );
 }
