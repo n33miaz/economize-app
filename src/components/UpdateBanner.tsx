@@ -45,6 +45,11 @@ export default function UpdateBanner() {
   return (
     <View
       accessibilityLiveRegion="polite"
+      // O recuo da barra de status é obrigatório (sem ele o texto fica sob o
+      // relógio), mas ele SOMA com a altura da faixa e empurra a tela inteira
+      // para baixo -- e a tela abaixo ainda paga o próprio recuo. O dono
+      // reclamou justamente disso. A faixa ficou o mais rasa possível: o recuo
+      // é o que o sistema exige, e o resto é só a linha.
       style={{
         paddingTop: insets.top,
         backgroundColor: t.background.elevated,
@@ -57,7 +62,9 @@ export default function UpdateBanner() {
           flexDirection: "row",
           alignItems: "center",
           paddingHorizontal: spacing[4],
-          minHeight: 40,
+          // 32 e não 40: são oito pontos que saem do topo de toda tela
+          minHeight: 32,
+          paddingVertical: spacing[1],
           gap: spacing[2],
         }}
       >
