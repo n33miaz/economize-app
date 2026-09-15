@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StatusBar } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import ChevronLeft from "lucide-react-native/dist/esm/icons/chevron-left";
 import Info from "lucide-react-native/dist/esm/icons/info";
 import User from "lucide-react-native/dist/esm/icons/user";
@@ -62,11 +62,12 @@ export default function ScreenHeader({
         borderBottomRightRadius: radius["2xl"],
       }}
     >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={t.background.base}
-        translucent
-      />
+      {/* NÃO declarar StatusBar aqui. Este cabeçalho aparece em quase toda
+          tela, e a barra de status é GLOBAL: a declaração daqui sobrescrevia a
+          do App.tsx, que é a que segue o tema. Com `light-content` fixo os
+          ícones do sistema ficavam brancos -- certo no escuro por acidente, e
+          ilegível no modo claro, que é fundo claro com ícone branco.
+          Quem manda na barra é o App.tsx, e é um lugar só. */}
 
       <View className="flex-row items-center justify-between">
         {showBack && (
