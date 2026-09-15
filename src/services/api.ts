@@ -2477,6 +2477,18 @@ export const getAppVersion = async (): Promise<VersionInfo> => {
   const response = await axios.get<VersionInfo>(`${getBaseUrl()}/app/version`, {
     timeout: VERSION_CHECK_TIMEOUT_MS,
     headers: versionHeaders(),
+    // O endpoint responde `Cache-Control: public, max-age=300` de propósito --
+    // é o que impede um app antigo consultando em laço de virar carga na
+    // instância gratuita. Mas isso fazia a ABERTURA do app ler um documento de
+    // até cinco minutos atrás: o dono publicou a versão nova, abriu o app e
+    // nada apareceu; só depois de fechar e abrir várias vezes o aviso surgiu,
+    // quando o cache venceu.
+    //
+    // O parâmetro muda a URL a cada consulta, então esta chamada nunca vem do
+    // cache. Ela acontece na abertura e no retorno do bloqueio -- um punhado
+    // de vezes por dia, não em laço --, e o cabeçalho do servidor continua
+    // valendo para todo o resto.
+    params: { _: Date.now() },
   });
   return response.data;
 };
