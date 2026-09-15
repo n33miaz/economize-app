@@ -20,6 +20,7 @@ import ServerWakeOverlay from "./src/components/ServerWakeOverlay";
 import BiometricGate from "./src/components/BiometricGate";
 import PasswordChangeGate from "./src/components/PasswordChangeGate";
 import UpdateRequiredGate from "./src/components/UpdateRequiredGate";
+import NewVersionSheet from "./src/components/NewVersionSheet";
 import UpdateBanner from "./src/components/UpdateBanner";
 import { usePreferencesStore } from "./src/store/preferencesStore";
 import { useTheme, useThemeSync } from "./src/theme/ThemeProvider";
@@ -111,6 +112,11 @@ export default function App() {
                   conteúdo em vez de cobrir. Só desenha quando há o que avisar */}
               <UpdateBanner />
               <Routes />
+              {/* A folha anuncia a versão nova uma vez; a faixa acima insiste
+                  depois disso. Dentro do gate de senha de propósito: quem
+                  ainda precisa trocar a senha provisória tem uma tarefa mais
+                  urgente que atualizar */}
+              <NewVersionSheet />
             </PasswordChangeGate>
           </BiometricGate>
         </UpdateRequiredGate>

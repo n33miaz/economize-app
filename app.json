@@ -3,7 +3,7 @@
     "name": "Economize!",
     "slug": "economize",
     "scheme": "economize",
-    "version": "2.3.1",
+    "version": "2.3.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F0E0B"
       },
-      "versionCode": 7
+      "versionCode": 8
     },
     "web": {
       "bundler": "metro",
