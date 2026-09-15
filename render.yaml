@@ -32,6 +32,17 @@ services:
       - key: NODE_VERSION
         value: "20"
     routes:
+      # ORDEM IMPORTA, e esta rota existe por causa de um defeito real: a
+      # reescrita geral abaixo é avaliada ANTES do arquivo estático, então
+      # `/baixar` devolvia a SPA — ou seja, a TELA DE LOGIN — enquanto a página
+      # de download só respondia em `/baixar.html`. E `/baixar` é justamente o
+      # endereço que a API entrega a quem é barrado pela atualização
+      # obrigatória: a pessoa era bloqueada, tocava em "Atualizar" e caía num
+      # formulário de login, sem arquivo e sem explicação.
+      # Toda página de `public/` que não seja o index precisa da própria linha.
+      - type: rewrite
+        source: /baixar
+        destination: /baixar.html
       # O app é uma SPA: qualquer rota que não seja arquivo cai no index.html,
       # senão dar F5 em /analise devolveria 404
       - type: rewrite
@@ -57,6 +68,10 @@ services:
       - key: NODE_VERSION
         value: "20"
     routes:
+      # Mesma ordem do site de produção — ver o comentário lá em cima
+      - type: rewrite
+        source: /baixar
+        destination: /baixar.html
       - type: rewrite
         source: /*
         destination: /index.html
