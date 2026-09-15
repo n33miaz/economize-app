@@ -68,13 +68,20 @@ export default function Toast() {
   return (
     <View
       className="absolute inset-0 items-center justify-start"
-      // A camada cobre a tela inteira só para posicionar o toast: sem o
-      // `box-none` daqui ela fica por cima de tudo e engole todo clique
-      style={[boxNone, { zIndex: 9999, elevation: 99 }]}
+      // A camada cobre a tela inteira só para posicionar o toast, e ela fica
+      // montada SEMPRE — o cartão apenas desliza para fora quando não há
+      // mensagem. Por isso o `elevation` NÃO pode morar aqui: no Android a
+      // elevação entra no teste de toque, e uma camada de tela inteira
+      // elevada intercepta o toque mesmo com `box-none`. Era isso que fazia o
+      // pote da Home não abrir a folha de estados e o "Entendi" dela não
+      // fechar — a web não denuncia, porque lá quem ordena é só o `zIndex`.
+      // A elevação foi para o cartão: ele é pequeno e, escondido, está fora
+      // da tela. Reproduzido e corrigido no emulador em 15/09/2026.
+      style={[boxNone, { zIndex: 9999 }]}
     >
       <Animated.View
         className="absolute top-0 self-center max-w-[90%]"
-        style={animatedStyle}
+        style={[animatedStyle, { elevation: 99 }]}
       >
         <View className="bg-elevated border border-border flex-row items-center px-4 py-3 rounded-full">
           <ToastIcon size={20} color={config.color} />
