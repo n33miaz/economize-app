@@ -55,6 +55,12 @@ interface PreferencesState {
    */
   potAnnouncementSeen: boolean;
   /**
+   * Qual versão publicada já foi anunciada em folha para esta pessoa.
+   * Guarda a VERSÃO, e não um booleano: com booleano o aviso apareceria uma
+   * vez na vida e nunca mais, e cada release novo tem algo a dizer.
+   */
+  versionNoticeSeenFor: string | null;
+  /**
    * A queda de VR/VA cujo pedido de extrato o usuário já dispensou (EC-137),
    * em ISO. Guarda a OCORRÊNCIA, e não um booleano: dispensar o pedido de
    * agosto não pode calar o de setembro.
@@ -105,6 +111,7 @@ interface PreferencesState {
   setViewDepth: (depth: ViewDepth) => void;
   setCycleAnchorDay: (day: number) => void;
   setPotAnnouncementSeen: (seen: boolean) => void;
+  setVersionNoticeSeenFor: (version: string) => void;
   dismissMealVoucherPrompt: (landedOn: string) => void;
   /** Uma abertura do app a mais. Chamado UMA vez por sessão, depois de hidratar. */
   bumpSessionCount: () => void;
@@ -130,6 +137,7 @@ const initialState = {
   viewDepth: "simple" as ViewDepth,
   cycleAnchorDay: DEFAULT_CYCLE_ANCHOR_DAY,
   potAnnouncementSeen: false,
+  versionNoticeSeenFor: null,
   mealVoucherPromptDismissedFor: null as string | null,
   sessionCount: 0,
   plusOfferLastShownAt: null as number | null,
@@ -168,6 +176,7 @@ export const usePreferencesStore = create(
       // Clampa na entrada: valor fora de 1..31 viraria janela sem sentido
       setCycleAnchorDay: (day) => set({ cycleAnchorDay: clampAnchorDay(day) }),
       setPotAnnouncementSeen: (potAnnouncementSeen) => set({ potAnnouncementSeen }),
+      setVersionNoticeSeenFor: (versionNoticeSeenFor) => set({ versionNoticeSeenFor }),
       dismissMealVoucherPrompt: (landedOn) =>
         set({ mealVoucherPromptDismissedFor: landedOn }),
       bumpSessionCount: () =>
