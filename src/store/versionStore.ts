@@ -82,9 +82,26 @@ export const useVersionStore = create<VersionState>((set, get) => ({
 
   check: async () => {
     try {
-      const info = await getAppVersion();
-      const decided = decideVersionStatus(APP_VERSION, info);
-      const { refusedByServer, status } = get();
+      const lido = await getAppVersion();
+      const decided = decideVersionStatus(APP_VERSION, lido);
+      const { refusedByServer, status, info: anterior } = get();
+      // O 426 é a verdade mais fresca que existe sobre a mínima, e o
+      // /app/version responde com `max-age=300`: depois de um bloqueio, esta
+      // consulta pode trazer um documento de até cinco minutos atrás. Trocar o
+      // `info` por ele fazia a tela de bloqueio EXPLICAR com o número velho --
+      // "você tem a 2.3.0, a mínima é 2.2.0" enquanto barrava pela 9.9.9. A
+      // pessoa está trancada e a justificativa se contradiz.
+      //
+      // Então a mínima nunca ANDA PARA TRÁS enquanto o servidor está
+      // recusando: fica a maior das duas. O resto do documento (download, APK,
+      // recado) vem da consulta, que é onde ele existe.
+      const minimaAtras =
+        refusedByServer &&
+        anterior != null &&
+        isBelow(lido.minVersion, anterior.minVersion);
+      const info = minimaAtras
+        ? { ...lido, minVersion: anterior!.minVersion }
+        : lido;
       set({
         status: refusedByServer ? status : decided,
         info,
