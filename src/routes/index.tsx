@@ -138,13 +138,16 @@ function IndicatorsTabs() {
           tabBarActiveTintColor: t.accent.neon,
           tabBarInactiveTintColor: t.text.tertiary,
           tabBarIndicatorStyle: { backgroundColor: t.accent.neon, height: 3 },
-          // Abas centradas com largura natural (visual do protótipo): o grupo
-          // encolhe via width auto e centraliza por alignSelf. Centralizar só
-          // o conteúdo interno desalinharia o indicador, que posiciona as
-          // abas a partir do x=0 da própria barra.
+          // NÃO voltar a pôr `width: "auto"` + `alignSelf: "center"` aqui.
+          // Era o ajuste que deixava as abas com largura natural no protótipo,
+          // e no ANDROID ele fazia a barra esticar para a altura inteira do
+          // navegador: os rótulos ficavam centrados verticalmente no meio da
+          // tela, o indicador ia para a borda de baixo da barra e o paginador
+          // ficava com altura zero -- a tela abria em branco. Na web o mesmo
+          // estilo se comporta, e foi por isso que o defeito sobreviveu a
+          // várias rodadas: quem conferia no navegador via tudo certo.
+          // Reproduzido e corrigido no emulador em 15/09/2026.
           tabBarStyle: {
-            alignSelf: "center",
-            width: "auto",
             backgroundColor: "transparent",
             elevation: 0,
             shadowOpacity: 0,
@@ -153,11 +156,15 @@ function IndicatorsTabs() {
           },
           // width auto + padding 0 por item: o indicador de 3px herda a
           // largura medida do rótulo, em vez de esticar por meia tela
-          tabBarItemStyle: { width: "auto", paddingHorizontal: 0 },
+          tabBarItemStyle: { paddingHorizontal: 0 },
           tabBarGap: spacing[6],
           tabBarLabelStyle: {
             fontFamily: "Roboto_700Bold",
-            fontSize: 12,
+            // 11 e não 12: com quatro abas num telefone de 412 pontos cada
+            // item fica com ~103, e "Investimentos" a 12 px quebrava em duas
+            // linhas. Rótulo que quebra empurra o indicador e desalinha a
+            // régua inteira por causa de uma palavra
+            fontSize: 11,
             textTransform: "capitalize",
           },
         }}
@@ -198,12 +205,9 @@ function FinanceTabs() {
           tabBarActiveTintColor: t.accent.neon,
           tabBarInactiveTintColor: t.text.tertiary,
           tabBarIndicatorStyle: { backgroundColor: t.accent.neon, height: 3 },
-          // Mesmo tratamento do bloco de Mercado: grupo de abas centrado com
-          // largura natural; centralizar só o conteúdo interno desalinharia o
-          // indicador, que posiciona as abas a partir do x=0 da própria barra
+          // Mesma regra do bloco de Mercado -- ver o aviso lá em cima sobre
+          // `width: "auto"` na barra de abas
           tabBarStyle: {
-            alignSelf: "center",
-            width: "auto",
             backgroundColor: "transparent",
             elevation: 0,
             shadowOpacity: 0,
@@ -212,11 +216,15 @@ function FinanceTabs() {
           },
           // width auto + padding 0 por item: o indicador de 3px herda a
           // largura medida do rótulo, em vez de esticar por meia tela
-          tabBarItemStyle: { width: "auto", paddingHorizontal: 0 },
+          tabBarItemStyle: { paddingHorizontal: 0 },
           tabBarGap: spacing[6],
           tabBarLabelStyle: {
             fontFamily: "Roboto_700Bold",
-            fontSize: 12,
+            // 11 e não 12: com quatro abas num telefone de 412 pontos cada
+            // item fica com ~103, e "Investimentos" a 12 px quebrava em duas
+            // linhas. Rótulo que quebra empurra o indicador e desalinha a
+            // régua inteira por causa de uma palavra
+            fontSize: 11,
             textTransform: "capitalize",
           },
         }}
