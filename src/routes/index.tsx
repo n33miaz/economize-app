@@ -27,6 +27,8 @@ import { useTheme, type Theme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import AppOpening from "../components/AppOpening";
+import OverlayHost from "../components/OverlayHost";
+import { BOTTOM_BAR_HEIGHT, TabBarHeightContext } from "./tabBarHeight";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
@@ -92,7 +94,6 @@ import Plan from "../screens/Plan";
 import Investments from "../screens/Investments";
 
 // Altura da barra inferior sem contar o inset da barra de gestos
-const BOTTOM_BAR_HEIGHT = 84;
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -264,6 +265,13 @@ function MainTabs() {
     Platform.OS === "ios" || Platform.OS === "web" ? insets.bottom : 0;
 
   return (
+    // A altura da barra viaja por contexto para quem desenha por cima dela —
+    // hoje o botão do assistente e as listas que reservam rodapé. No desktop
+    // quem navega é o trilho lateral e não há barra: o valor é `undefined`,
+    // que é a resposta honesta. Ver `routes/tabBarHeight.ts`.
+    <TabBarHeightContext.Provider
+      value={isWide ? undefined : BOTTOM_BAR_HEIGHT + bottomInset}
+    >
     <BottomTab.Navigator
       initialRouteName={MAIN_TAB_ROUTES.principal}
       // Voltar (Android) leva à Home; o default "firstRoute" cairia em Finanças
@@ -354,17 +362,36 @@ function MainTabs() {
         }}
       />
     </BottomTab.Navigator>
+    </TabBarHeightContext.Provider>
   );
 }
 
 // --- ROTAS DE AUTENTICAÇÃO ---
 function AuthRoutes() {
   return (
+    // O fade fica só no Login, que é a raiz: ele não desliza de lugar nenhum.
+    // Cadastro, "esqueci minha senha" e a redefinição são passos PARA A FRENTE
+    // e deslizam como o resto do app — trocar de tela por fade, num fluxo que
+    // tem ida e volta, lê como corte seco e apaga a noção de onde se está.
+    // Pedido do dono em 15/09/2026: "transição mais suavizada entre as
+    // telas/abas do login e para todo o sistema".
     <Stack.Navigator screenOptions={{ headerShown: false, ...fadeTransition }}>
       <Stack.Screen name={AUTH_ROUTES.login} component={Login} />
-      <Stack.Screen name={AUTH_ROUTES.register} component={Register} />
-      <Stack.Screen name={AUTH_ROUTES.forgotPassword} component={ForgotPassword} />
-      <Stack.Screen name={AUTH_ROUTES.resetPassword} component={ResetPassword} />
+      <Stack.Screen
+        name={AUTH_ROUTES.register}
+        component={Register}
+        options={slideRightTransition}
+      />
+      <Stack.Screen
+        name={AUTH_ROUTES.forgotPassword}
+        component={ForgotPassword}
+        options={slideRightTransition}
+      />
+      <Stack.Screen
+        name={AUTH_ROUTES.resetPassword}
+        component={ResetPassword}
+        options={slideRightTransition}
+      />
     </Stack.Navigator>
   );
 }
@@ -649,6 +676,11 @@ export default function Routes() {
             <AuthRoutes />
           )}
         </View>
+        {/* As folhas do app moram AQUI: dentro do contexto de navegação e
+            depois do navegador, que é o que as põe acima da barra de abas.
+            O porquê (o Modal do Android sem toque na nova arquitetura) está
+            em store/overlayStore.ts */}
+        <OverlayHost />
       </View>
     </NavigationContainer>
   );

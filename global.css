@@ -59,3 +59,47 @@
     --color-border: 53 51 44;
   }
 }
+
+/*
+  Correções que só existem no navegador. Nada aqui tem equivalente no celular:
+  são comportamentos que o próprio browser adiciona por cima dos nossos
+  campos, e que só dá para desligar em CSS.
+
+  1) O ANEL DE FOCO PADRÃO. O dono relatou em 15/09/2026: "alguma coisa hoje
+     está tampando as bordas dos campos quando ele está selecionado - aí só dá
+     pra ver as pontinhas amarelas". Era isto. O `<input>` preenche a caixa de
+     conteúdo do campo e, ao receber foco, o navegador desenha em volta dele um
+     contorno RETO. O nosso campo tem canto arredondado: o contorno reto cobre
+     os trechos retos da borda amarela e deixa escapar só os arcos dos cantos —
+     as "pontinhas". Desligar não perde acessibilidade: o foco continua
+     anunciado pela borda inteira mudando para o amarelo da marca, que é mais
+     visível que o anel do sistema.
+
+  2) O SEGUNDO OLHO. Edge e navegadores derivados desenham o próprio botão de
+     revelar senha (`::-ms-reveal`) dentro do campo, ao lado do nosso — dois
+     olhos fazendo a mesma coisa, e o do sistema sem o nosso rótulo de
+     acessibilidade. O mesmo vale para o botão de preenchimento de credencial
+     do WebKit. Fica o nosso, que é o que funciona igual no app e na web.
+*/
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+[contenteditable]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none !important;
+}
+
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-strong-password-auto-fill-button,
+input::-webkit-caps-lock-indicator {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

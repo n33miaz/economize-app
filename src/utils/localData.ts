@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAccountsStore } from "../store/accountsStore";
 import { useAiSettingsStore } from "../store/aiSettingsStore";
+import { useAnalyticsStore } from "../store/analyticsStore";
 import { useAuthStore } from "../store/authStore";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { useFavoritesStore } from "../store/favoritesStore";
@@ -49,6 +50,9 @@ export async function clearLocalData(): Promise<void> {
   // que não passam por aqui; a chamada explícita fica porque esta lista é o
   // inventário auditável do que morre com o aparelho.
   useAccountsStore.getState().reset();
+  // a consolidação do mês da Home e a sua data, que agora também vivem no
+  // disco para a cortina do servidor mostrar o último saldo conhecido
+  useAnalyticsStore.getState().reset();
   // opções de IA: provedor, modelo e os 4 últimos dígitos da chave do usuário
   useAiSettingsStore.getState().reset();
   // a casa (EC-150): nome e números de OUTRAS pessoas, mais o código de

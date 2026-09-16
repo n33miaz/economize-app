@@ -772,6 +772,19 @@ export interface ConnectorAccount {
    */
   reportedBalance: number | null;
   reportedBalanceAt: string | null;
+  /**
+   * Limite total do cartão, informado pelo usuário (V36).
+   *
+   * Nulo é o normal: o limite não existe em arquivo nenhum — a fatura declara
+   * o valor DEVIDO, não o limite. Nulo aqui é o que faz a tela PERGUNTAR em
+   * vez de somar um crédito que ela não conhece.
+   */
+  creditLimit: number | null;
+  /**
+   * A conta dona do limite, quando ele é compartilhado (cartão virtual,
+   * adicional). Quem aponta para outra NÃO entra na soma de crédito.
+   */
+  creditLimitSharedWith: string | null;
 }
 
 /**
@@ -989,6 +1002,49 @@ export const getDailyTotals = async (
 };
 
 /** Vazio quando o usuário nunca sincronizou um conector. */
+/**
+ * Duas origens que parecem a MESMA conta do mundo real.
+ *
+ * <p>Medido na conta do dono em 16/09/2026, depois de ele dizer que "os números
+ * parecem estar meio embaralhados": a conta do Inter existia duas vezes — uma
+ * solta, criada pelos arquivos importados, com 1.632 dos 1.967 lançamentos e
+ * nenhum saldo; e uma ligada, do conector, com 75 lançamentos e o saldo. Toda
+ * tela que agrupa por origem mostrava o mesmo banco repetido.
+ */
+export interface AccountMergeSuggestion {
+  /** Os últimos dígitos em comum — é o que a tela usa para explicar a suspeita. */
+  digits: string;
+  /** A origem que DESAPARECE na fusão (sempre a desvinculada). */
+  sourceId: string;
+  sourceName: string;
+  sourceInstitution: string | null;
+  sourceTransactions: number;
+  /** A origem que FICA: é ela que segue sincronizando e trazendo saldo. */
+  targetId: string;
+  targetName: string;
+  targetInstitution: string | null;
+  targetTransactions: number;
+}
+
+export const getMergeSuggestions = async (): Promise<AccountMergeSuggestion[]> => {
+  const response = await api.get<AccountMergeSuggestion[]>(
+    "/accounts/merge-suggestions",
+  );
+  return response.data;
+};
+
+/** Junta as duas: tudo de `sourceId` vai para `intoAccountId`, que fica. */
+export const mergeAccounts = async (
+  sourceId: string,
+  intoAccountId: string,
+): Promise<number> => {
+  const response = await api.post<{ movedTransactions: number }>(
+    `/accounts/${sourceId}/merge`,
+    { intoAccountId },
+  );
+  return response.data.movedTransactions;
+};
+
 export const getAccounts = async (): Promise<ConnectorAccount[]> => {
   const response = await api.get<ConnectorAccount[]>("/accounts");
   return response.data;
@@ -2450,6 +2506,13 @@ export interface VersionInfo {
   message?: string | null;
   apiVersion?: string;
   schemaVersion?: string;
+  /**
+   * O que há de novo na publicada, uma frase por item, já aparado pelo
+   * servidor. Opcional porque um servidor anterior a este campo não o manda,
+   * e a folha de anúncio não pode quebrar por causa disso — sem notas ela só
+   * não mostra o título.
+   */
+  notes?: string[];
 }
 
 /** O ProblemDetail que acompanha o 426. Tudo opcional: é corpo de erro. */

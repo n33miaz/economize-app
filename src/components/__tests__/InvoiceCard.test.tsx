@@ -202,6 +202,15 @@ describe("InvoiceCard", () => {
     );
   });
 
+  /**
+   * A frase única "Sem categoria · revisar" virou DUAS coisas em lugares
+   * diferentes quando as linhas de lançamento passaram a sair todas do mesmo
+   * `TransactionRow` (15/09/2026, pedido de padronizar onde cada elemento
+   * fica): a falta de categoria é informação de apoio, e "Revisar" é o que
+   * pede AÇÃO — então ele virou selo, em tom de aviso, no mesmo lugar em que
+   * aparece no Extrato e na Revisão. O que o teste guarda continua sendo o
+   * mesmo: a compra sem categoria não fica muda nem some.
+   */
   it("compra sem categoria continua legível e marcada para revisão", () => {
     const { tela } = renderCard({
       expanded: true,
@@ -211,7 +220,8 @@ describe("InvoiceCard", () => {
         ],
       }),
     });
-    expect(tela.getByText("Sem categoria · revisar")).toBeTruthy();
+    expect(tela.getByText(/Sem categoria/)).toBeTruthy();
+    expect(tela.getByText("Revisar")).toBeTruthy();
   });
 
   it("fatura que veio sem os lançamentos diz isso, em vez de parecer vazia", () => {

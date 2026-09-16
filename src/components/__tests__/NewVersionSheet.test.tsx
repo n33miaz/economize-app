@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
-import NewVersionSheet from "../NewVersionSheet";
+import NewVersionSheet, { NOTES_TITLE } from "../NewVersionSheet";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useVersionStore } from "../../store/versionStore";
 
@@ -27,7 +27,7 @@ const montar = () =>
     </SafeAreaProvider>,
   );
 
-const infoCom = (latestVersion: string) => ({
+const infoCom = (latestVersion: string, notes?: string[]) => ({
   minVersion: "2.2.0",
   latestVersion,
   downloadUrl: "https://economize-web.onrender.com/baixar",
@@ -36,10 +36,15 @@ const infoCom = (latestVersion: string) => ({
   message: null,
   apiVersion: "1.0.0",
   schemaVersion: "V35",
+  notes,
 });
 
-const comEstado = (status: "ok" | "update-available", latestVersion: string) => {
-  useVersionStore.setState({ status, info: infoCom(latestVersion) });
+const comEstado = (
+  status: "ok" | "update-available",
+  latestVersion: string,
+  notes?: string[],
+) => {
+  useVersionStore.setState({ status, info: infoCom(latestVersion, notes) });
 };
 
 describe("NewVersionSheet", () => {
@@ -105,5 +110,47 @@ describe("NewVersionSheet", () => {
     montar();
 
     expect(screen.getByText("Depois")).toBeTruthy();
+  });
+
+  /**
+   * O que há de novo, quando o servidor manda: uma linha por item, na ordem
+   * em que o operador escreveu. É o pedido do dono — "informar o que há de
+   * novo" — e o lugar reservado desde o nascimento da folha.
+   */
+  it("lista o que há de novo quando a versão vem com notas", () => {
+    comEstado("update-available", "2.4.0", [
+      "Mercado com mais moedas",
+      "Home com parcelamentos",
+    ]);
+
+    montar();
+
+    expect(screen.getByText(NOTES_TITLE)).toBeTruthy();
+    expect(screen.getByText("Mercado com mais moedas")).toBeTruthy();
+    expect(screen.getByText("Home com parcelamentos")).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  /**
+   * Sem notas, nem o título: anunciar "novidades" sem dizer quais é promessa
+   * vazia. Vale tanto para a lista vazia (servidor atual sem notas) quanto
+   * para o campo ausente (servidor anterior ao campo) — a folha não pode
+   * quebrar nem prometer nada nos dois casos.
+   */
+  it("não mostra o título de novidades quando não há notas", () => {
+    comEstado("update-available", "2.4.0", []);
+    montar();
+    expect(screen.getByText("Versão 2.4.0 disponível")).toBeTruthy();
+    expect(screen.queryByText(NOTES_TITLE)).toBeNull();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  });
+
+  it("tolera servidor antigo que ainda não manda o campo de notas", () => {
+    comEstado("update-available", "2.4.0", undefined);
+
+    montar();
+
+    expect(screen.getByText("Versão 2.4.0 disponível")).toBeTruthy();
+    expect(screen.queryByText(NOTES_TITLE)).toBeNull();
   });
 });

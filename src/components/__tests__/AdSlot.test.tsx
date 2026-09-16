@@ -44,12 +44,20 @@ describe("AdSlot", () => {
     expect(getByRole("button")).toBeTruthy();
   });
 
+  /**
+   * O que este teste guarda é a ALTURA FIXA, não os números. Eles subiram em
+   * 15/09/2026: a legenda "Publicidade" era desenhada em `position: absolute`
+   * por cima da linha de conteúdo e, nos 64 px do telefone, caía em cima do
+   * título e do ícone. O dono chamou de "muito mal espaçado" — e não era
+   * aperto, era sobreposição. A legenda ganhou linha própria e a altura pagou
+   * por ela.
+   */
   it("tem altura fixa por variante — o conteúdo debaixo não pula", () => {
     const banner = render(<AdSlot />);
-    expect(StyleSheet.flatten(banner.getByRole("button").props.style).height).toBe(64);
+    expect(StyleSheet.flatten(banner.getByRole("button").props.style).height).toBe(88);
 
     const card = render(<AdSlot variant="card" />);
-    expect(StyleSheet.flatten(card.getByRole("button").props.style).height).toBe(120);
+    expect(StyleSheet.flatten(card.getByRole("button").props.style).height).toBe(144);
   });
 
   it("cada montagem mostra o próximo cartão; o que está na tela não troca", () => {

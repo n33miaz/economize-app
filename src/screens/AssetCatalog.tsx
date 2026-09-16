@@ -136,50 +136,58 @@ export default function AssetCatalog() {
         />
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: spacing[5],
-          paddingVertical: spacing[3],
-          gap: spacing[2],
-        }}
-      >
-        {SEGMENTOS.map((segmento) => {
-          const ativo = filters.segment === segmento.id;
-          return (
-            <TouchableOpacity
-              key={segmento.id || "tudo"}
-              onPress={() => setFilters({ segment: segmento.id })}
-              accessibilityRole="button"
-              accessibilityState={{ selected: ativo }}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              accessibilityLabel={`Filtrar por ${segmento.label}`}
-              style={{
-                paddingHorizontal: spacing[4],
-                height: 34,
-                justifyContent: "center",
-                borderRadius: radius.full,
-                borderWidth: 1,
-                borderColor: ativo ? t.accent.neon : t.border.subtle,
-                backgroundColor: ativo
-                  ? t.accent.neonMuted
-                  : t.background.elevated,
-              }}
-            >
-              <Text
+      {/* A fileira vive dentro de uma View de altura própria. Solta numa
+          coluna, uma ScrollView horizontal disputa a sobra vertical com a
+          lista — e era parte do aperto que o dono apontou aqui ("o espaçamento
+          dos elementos está muito ruim"). A outra parte era a lista começar
+          colada nos chips, sem nenhum respiro: o primeiro card aparecia
+          cortado ao meio logo abaixo deles. */}
+      <View style={{ paddingVertical: spacing[3] }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: spacing[5],
+            gap: spacing[2],
+            alignItems: "center",
+          }}
+        >
+          {SEGMENTOS.map((segmento) => {
+            const ativo = filters.segment === segmento.id;
+            return (
+              <TouchableOpacity
+                key={segmento.id || "tudo"}
+                onPress={() => setFilters({ segment: segmento.id })}
+                accessibilityRole="button"
+                accessibilityState={{ selected: ativo }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                accessibilityLabel={`Filtrar por ${segmento.label}`}
                 style={{
-                  color: ativo ? t.accent.neon : t.text.secondary,
-                  fontSize: 12,
-                  fontWeight: "700",
+                  paddingHorizontal: spacing[4],
+                  height: 38,
+                  justifyContent: "center",
+                  borderRadius: radius.full,
+                  borderWidth: 1,
+                  borderColor: ativo ? t.accent.neon : t.border.subtle,
+                  backgroundColor: ativo
+                    ? t.accent.neonMuted
+                    : t.background.elevated,
                 }}
               >
-                {segmento.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+                <Text
+                  style={{
+                    color: ativo ? t.accent.neon : t.text.secondary,
+                    fontSize: 12,
+                    fontWeight: "700",
+                  }}
+                >
+                  {segmento.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {isLoading && items.length === 0 ? (
         <View style={{ paddingHorizontal: spacing[5] }}>
@@ -197,7 +205,11 @@ export default function AssetCatalog() {
           keyExtractor={(item, index) => item?.id ?? `vazio-${index}`}
           numColumns={columns}
           key={`catalogo-${columns}`}
-          contentContainerStyle={{ paddingHorizontal: spacing[5] }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing[5],
+            paddingTop: spacing[1],
+            paddingBottom: spacing[8],
+          }}
           renderItem={({ item }) => (
             <View style={columns > 1 ? { flex: 1 } : undefined}>
               {item && (

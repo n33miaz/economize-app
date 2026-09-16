@@ -127,6 +127,9 @@ export const useVersionStore = create<VersionState>((set, get) => ({
       storeUrl: previous?.storeUrl ?? null,
       apkUrl: previous?.apkUrl ?? null,
       message: problem?.detail ?? previous?.message ?? null,
+      // O 426 não traz notas; as que já se tinha continuam valendo até a
+      // consulta completa chegar com as da publicada
+      notes: previous?.notes,
     };
     set({
       // Na web não há o que baixar: o bundle novo vem no reload. Vira aviso.

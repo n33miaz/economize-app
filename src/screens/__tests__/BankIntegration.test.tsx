@@ -21,6 +21,11 @@ jest.mock("../../services/api", () => ({
   __esModule: true,
   default: {},
   getBalanceCheck: jest.fn().mockResolvedValue({ accountsChecked: 0, findings: [] }),
+  // Origens duplicadas: a tela pergunta na montagem e trata a falha em
+  // silêncio — o dublê devolve "nenhuma" para o caso comum
+  getMergeSuggestions: jest.fn().mockResolvedValue([]),
+  mergeAccounts: jest.fn().mockResolvedValue(0),
+  describeRequestFailure: jest.fn(() => ({ kind: "UNKNOWN", message: "falhou" })),
 }));
 
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));

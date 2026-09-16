@@ -1,4 +1,6 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   DebtOverview,
   MonthlyAnalytics,
@@ -54,11 +56,53 @@ interface AnalyticsState {
   // pelo histórico. Consolidação e carregamento separados para que o recorte
   // escolhido numa tela não apareça na outra
   homeData: MonthlyAnalytics | null;
+  /**
+   * Quando `homeData` foi lido, em ISO. Vai para o disco JUNTO dele: um
+   * número guardado só pode voltar para a tela com a data ao lado, e é daqui
+   * que a cortina do servidor e o carimbo da Home tiram o "de quando".
+   */
+  homeDataAt: string | null;
   isHomeLoading: boolean;
+  /**
+   * Se a consolidação da Home já respondeu NESTA sessão. Não persiste, de
+   * propósito: depois de reidratar, `homeData` está cheio mas isto fica falso
+   * — é o que separa "o número de agora" do "o número da última visita" para
+   * quem precisa saber a diferença sem comparar datas.
+   */
+  hasHomeLoadedOnce: boolean;
 
   fetchMonths: () => Promise<void>;
   fetchMonthly: (month?: string) => Promise<void>;
   fetchHomeMonthly: () => Promise<void>;
+  /** Zera tudo, inclusive o instantâneo em disco. Chamado no fim da sessão. */
+  reset: () => void;
+}
+
+/** Chave do instantâneo da Home no armazenamento local. */
+export const ANALYTICS_SNAPSHOT_KEY = "@analytics_snapshot";
+
+/** O que vai para o disco: só a consolidação da Home e a sua data. */
+type AnalyticsSnapshot = Pick<AnalyticsState, "homeData" | "homeDataAt">;
+
+/**
+ * O armazenamento pode devolver qualquer coisa (versão antiga, edição manual,
+ * JSON pela metade). Uma consolidação que não tem cara de consolidação não
+ * volta para a tela: a Home lê `net`, `totalExpense` e `previous` sem
+ * perguntar, e um objeto torto derrubaria a tela inteira no primeiro render.
+ */
+function looksLikeMonthly(value: unknown): value is MonthlyAnalytics {
+  if (typeof value !== "object" || value === null) return false;
+  const data = value as Record<string, unknown>;
+  return (
+    typeof data.start === "string" &&
+    typeof data.end === "string" &&
+    typeof data.totalIncome === "number" &&
+    typeof data.totalExpense === "number" &&
+    typeof data.net === "number" &&
+    typeof data.previous === "object" &&
+    data.previous !== null &&
+    Array.isArray(data.categories)
+  );
 }
 
 // Ids de requisição: as telas buscam na montagem e a cada foco, e nada
@@ -67,7 +111,7 @@ interface AnalyticsState {
 let monthlyRequestId = 0;
 let homeRequestId = 0;
 
-export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
+const createAnalyticsState: StateCreator<AnalyticsState> = (set, get) => ({
   data: null,
   months: [],
   selectedMonth: null,
@@ -75,7 +119,33 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
   error: null,
   debt: null,
   homeData: null,
+  homeDataAt: null,
   isHomeLoading: false,
+  hasHomeLoadedOnce: false,
+
+  /**
+   * Fim de sessão. Os ids de requisição avançam para que uma busca em voo,
+   * pedida com o token que acabou de morrer, não regrave a Home da conta
+   * anterior depois do reset — e o `set` é o que apaga o instantâneo do disco,
+   * para o próximo login neste aparelho não ver o mês de outra pessoa na
+   * cortina do servidor.
+   */
+  reset: () => {
+    monthlyRequestId++;
+    homeRequestId++;
+    set({
+      data: null,
+      months: [],
+      selectedMonth: null,
+      isLoading: false,
+      error: null,
+      debt: null,
+      homeData: null,
+      homeDataAt: null,
+      isHomeLoading: false,
+      hasHomeLoadedOnce: false,
+    });
+  },
 
   fetchMonths: async () => {
     try {
@@ -173,14 +243,51 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
         if (requestId !== homeRequestId) return;
         if (hasMovement(previous)) data = previous;
       }
-      set({ homeData: data, isHomeLoading: false });
+      // A data é a de AGORA, e não a do servidor: o que ela responde é "quando
+      // este aparelho leu", que é o que a legenda de dado velho precisa dizer
+      set({
+        homeData: data,
+        homeDataAt: new Date().toISOString(),
+        isHomeLoading: false,
+        hasHomeLoadedOnce: true,
+      });
     } catch {
       // a Home segue com a última consolidação boa em vez de zerar a tela
       if (requestId !== homeRequestId) return;
       set({ isHomeLoading: false });
     }
   },
-}));
+});
+
+export const useAnalyticsStore = create<AnalyticsState>()(
+  persist(createAnalyticsState, {
+    name: ANALYTICS_SNAPSHOT_KEY,
+    storage: createJSONStorage(() => AsyncStorage),
+    // Só o mês da Home persiste. A Análise navega pelo histórico e o recorte
+    // escolhido lá é da sessão; `isHomeLoading` e os erros também. E
+    // `hasHomeLoadedOnce` fica de fora DE PROPÓSITO (ver a interface): é ele
+    // que faz a Home buscar de novo depois de reidratar
+    partialize: (state): AnalyticsSnapshot => ({
+      homeData: state.homeData,
+      homeDataAt: state.homeDataAt,
+    }),
+    merge: (persisted, current) => {
+      const snapshot = persisted as Partial<AnalyticsSnapshot> | undefined;
+      const homeData = looksLikeMonthly(snapshot?.homeData)
+        ? snapshot.homeData
+        : null;
+      return {
+        ...current,
+        homeData,
+        // Data sem número não diz nada; número sem data não pode ser mostrado
+        homeDataAt:
+          homeData && typeof snapshot?.homeDataAt === "string"
+            ? snapshot.homeDataAt
+            : null,
+      };
+    },
+  }),
+);
 
 /**
  * Recarrega tudo que depende da âncora. Um lugar só, porque a âncora se troca
