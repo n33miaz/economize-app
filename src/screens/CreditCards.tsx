@@ -1,15 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  FlatList,
-  LayoutAnimation,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { FlatList, LayoutAnimation, Text, View } from "react-native";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
 import Info from "lucide-react-native/dist/esm/icons/info";
-import Landmark from "lucide-react-native/dist/esm/icons/landmark";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 
 import type {
@@ -42,16 +36,17 @@ import { useLoadingDeadline } from "../hooks/useLoadingDeadline";
 import FilterChipRow from "../components/FilterChipRow";
 import InvoiceCard from "../components/InvoiceCard";
 import InvoiceReserveSheet from "../components/InvoiceReserveSheet";
-import AssistantFAB from "../components/AssistantFAB";
+import AssistantFAB, { ASSISTANT_FAB_HEIGHT } from "../components/AssistantFAB";
 import FirstTimeCard from "../components/FirstTimeCard";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
+import PotEmptyState, { type PotMood } from "../components/PotEmptyState";
 import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
 import TransactionDetailSheet from "../components/TransactionDetailSheet";
-import { APP_ROUTES, FINANCE_TAB_ROUTES, MAIN_TAB_ROUTES } from "../routes/routeNames";
+import { navigateToStatement } from "../routes/navigateToStatement";
 
 // Janelas oferecidas, dentro da faixa 1–24 que a API aceita. Contam faturas
 // FECHADAS: a que está em aberto vem sempre, e de graça.
@@ -65,88 +60,42 @@ function plural(n: number, one: string, many: string) {
   return n === 1 ? one : many;
 }
 
-/** Bloco vazio com a mesma moldura dos cards — nunca uma tela em branco. */
+/**
+ * Bloco vazio com a mesma moldura tracejada dos cards — nunca uma tela em
+ * branco. EC-231: o pote no lugar do glifo num disco; o nível do pote é quem
+ * diz se é começo (nada sincronizado) ou período sem movimento.
+ */
 function EmptyBlock({
-  Icon,
+  mood,
   title,
   message,
   action,
 }: {
-  Icon: typeof CreditCard;
+  mood: PotMood;
   title: string;
   message: string;
-  action?: { label: string; onPress: () => void };
+  action: { label: string; onPress: () => void };
 }) {
   const t = useTheme();
   return (
     <View
       style={{
-        alignItems: "center",
         backgroundColor: t.background.surface,
         borderRadius: radius["3xl"],
         borderWidth: 1,
         borderStyle: "dashed",
         borderColor: t.border.default,
-        padding: spacing[8],
       }}
     >
-      <View
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: radius.full,
-          backgroundColor: t.background.elevated,
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: spacing[4],
-        }}
-      >
-        <Icon size={34} color={t.accent.neon} />
-      </View>
-      <Text
-        style={{
-          color: t.text.primary,
-          fontSize: 18,
-          fontWeight: "700",
-          textAlign: "center",
-          marginBottom: spacing[2],
-        }}
-      >
-        {title}
-      </Text>
-      <Text
-        style={{
-          color: t.text.secondary,
-          fontSize: 13,
-          lineHeight: 19,
-          textAlign: "center",
-        }}
-      >
-        {message}
-      </Text>
-      {action ? (
-        <TouchableOpacity
-          onPress={action.onPress}
-          accessibilityLabel={action.label}
-          accessibilityRole="button"
-          activeOpacity={0.85}
-          style={{
-            marginTop: spacing[5],
-            height: 48,
-            paddingHorizontal: spacing[6],
-            borderRadius: radius.full,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: t.accent.neon,
-          }}
-        >
-          <Text
-            style={{ color: t.text.inverse, fontSize: 14, fontWeight: "700" }}
-          >
-            {action.label}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
+      {/* Menor que o pote de tela cheia: aqui ele mora dentro de um card */}
+      <PotEmptyState
+        mood={mood}
+        size={72}
+        title={title}
+        body={message}
+        actionLabel={action.label}
+        onAction={action.onPress}
+      />
     </View>
   );
 }
@@ -166,6 +115,7 @@ export default function CreditCards() {
   const navigation = useNavigation();
   const route = useRoute();
   const { columns } = useBreakpoint();
+  const insets = useSafeAreaInsets();
   const { cardEntering, reducedMotion } = useMotionPresets();
 
   // O projeto não tem ParamList tipado — cast local e pontual, como nas
@@ -262,12 +212,14 @@ export default function CreditCards() {
     setExpandedKey((prev) => (prev === key ? null : key));
   };
 
-  const goToStatement = () => {
-    (navigation as any).navigate(APP_ROUTES.main, {
-      screen: MAIN_TAB_ROUTES.financas,
-      params: { screen: FINANCE_TAB_ROUTES.extrato },
-    });
-  };
+  // Pelo helper único, e já filtrado pelo cartão em foco quando há um: quem
+  // sai daqui sem fatura quer ver o extrato DESTE cartão, não a lista inteira
+  // para filtrar de novo
+  const goToStatement = (account?: ConnectorAccount) =>
+    navigateToStatement(
+      navigation,
+      account ? { accountId: account.id } : undefined,
+    );
 
   // O subtítulo fala da COLEÇÃO, não do cartão escolhido: o nome e o ciclo dele
   // já estão no bloco de identidade logo abaixo, e repetir os dois aqui faria o
@@ -328,7 +280,7 @@ export default function CreditCards() {
         <View style={{ padding: spacing[5] }}>
           <Animated.View entering={cardEntering}>
             <EmptyBlock
-              Icon={neverSynced ? CreditCard : Landmark}
+              mood="comecar"
               title={
                 neverSynced
                   ? "Nenhuma conta sincronizada"
@@ -339,7 +291,10 @@ export default function CreditCards() {
                   ? "As faturas nascem da sincronização com o banco. Extrato importado de arquivo não diz de qual cartão ele veio, então esses lançamentos ficam sem origem — e sem fatura."
                   : `Você tem ${accounts.length} ${plural(accounts.length, "conta sincronizada", "contas sincronizadas")}, mas nenhuma é cartão de crédito. Só cartão fecha em ciclos.`
               }
-              action={{ label: "Ir para o Extrato", onPress: goToStatement }}
+              action={{
+                label: "Ir para o Extrato",
+                onPress: () => goToStatement(),
+              }}
             />
           </Animated.View>
         </View>
@@ -589,12 +544,16 @@ export default function CreditCards() {
     return (
       <View style={{ paddingHorizontal: spacing[5] }}>
         <EmptyBlock
-          Icon={CreditCard}
+          // Há cartão, só não houve movimento no recorte: pote pela metade
+          mood="sem-movimento"
           title="Nenhuma fatura no período"
           // Pela janela que o servidor respondeu, e não pela que o seletor
           // mostra: durante uma troca em voo as duas divergem
           message={`Este cartão não teve lançamento nos últimos ${loadedMonths} meses. Amplie o período ou sincronize o banco de novo no Extrato.`}
-          action={{ label: "Ir para o Extrato", onPress: goToStatement }}
+          action={{
+            label: "Ir para o Extrato",
+            onPress: () => goToStatement(selected),
+          }}
         />
       </View>
     );
@@ -611,14 +570,23 @@ export default function CreditCards() {
         // comparação da FlatList e re-renderiza toda célula visível de graça
         extraData={cellDeps}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: spacing[10], flexGrow: 1 }}
+        contentContainerStyle={{
+          // O rodapé reserva o que flutua sobre a lista — o FAB do
+          // assistente — mais a barra de gestos, senão o último card e o
+          // anúncio ficam sob o botão (fórmula dos Relatórios)
+          paddingBottom:
+            insets.bottom + spacing[5] + ASSISTANT_FAB_HEIGHT + spacing[4],
+          flexGrow: 1,
+        }}
         ListHeaderComponent={listHeader}
         // Só monta o vazio quando ele vai aparecer: com a lista cheia, o
         // `renderEmpty()` de antes construía esqueletos a cada render
         ListFooterComponent={
           // Fim da lista: o slot nunca fica entre o usuário e os
           // números dele. Devolve null no Plus, sem reservar espaço
-          <AdSlot style={{ marginTop: spacing[4] }} />
+          // Com o mesmo respiro lateral dos cards: colado nas duas bordas, o
+          // banner com raio e borda lia como defeito
+          <AdSlot style={{ marginTop: spacing[4], marginHorizontal: spacing[5] }} />
         }
         ListEmptyComponent={timeline.length === 0 ? renderEmpty() : null}
         renderItem={({ item }) => {

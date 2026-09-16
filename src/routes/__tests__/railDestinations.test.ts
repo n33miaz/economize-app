@@ -63,7 +63,10 @@ describe("mapa de destinos do trilho", () => {
     // O navegador de baixo não conhece "Investimentos": sem a aba-mãe o
     // atalho do trilho seria um NAVIGATE que ninguém trata
     const netas = RAIL_DESTINATIONS.filter((d) => d.parentTab);
+    // Extrato e Investimentos: as duas abas de Finanças com porta própria no
+    // trilho, na ordem em que o grupo "Aprofundar" as lista
     expect(netas.map((d) => d.route)).toEqual([
+      FINANCE_TAB_ROUTES.extrato,
       FINANCE_TAB_ROUTES.investimentos,
     ]);
     netas.forEach((d) => {
@@ -110,10 +113,15 @@ describe("railKeyForRoute — qual item acende", () => {
     });
   });
 
-  it("acende Finanças nas abas internas dela", () => {
+  it("acende Finanças nas abas internas dela sem item próprio", () => {
     expect(railKeyForRoute(FINANCE_TAB_ROUTES.carteira)).toBe("financas");
-    expect(railKeyForRoute(FINANCE_TAB_ROUTES.extrato)).toBe("financas");
     expect(railKeyForRoute(FINANCE_TAB_ROUTES.recorrencias)).toBe("financas");
+  });
+
+  it("Extrato acende o próprio item, e não Finanças", () => {
+    // O item existe no trilho: deixá-lo apagado com "Finanças" aceso diria ao
+    // usuário que ele está em outro lugar
+    expect(railKeyForRoute(FINANCE_TAB_ROUTES.extrato)).toBe("extrato");
   });
 
   it("acende Mercado nas abas internas dele", () => {

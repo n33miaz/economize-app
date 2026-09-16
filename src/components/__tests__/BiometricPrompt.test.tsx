@@ -102,7 +102,7 @@ describe("BiometricPrompt", () => {
    */
   it("o voltar do Android conta como recusa, levando o check junto", () => {
     const onDecline = jest.fn();
-    const inscricoes: Array<() => boolean> = [];
+    const inscricoes: (() => boolean)[] = [];
     const espiao = jest
       .spyOn(BackHandler, "addEventListener")
       .mockImplementation((_evento, handler) => {

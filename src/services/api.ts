@@ -2463,6 +2463,13 @@ export interface VersionInfo {
   message?: string | null;
   apiVersion?: string;
   schemaVersion?: string;
+  /**
+   * O que há de novo na publicada, uma frase por item, já aparado pelo
+   * servidor. Opcional porque um servidor anterior a este campo não o manda,
+   * e a folha de anúncio não pode quebrar por causa disso — sem notas ela só
+   * não mostra o título.
+   */
+  notes?: string[];
 }
 
 /** O ProblemDetail que acompanha o 426. Tudo opcional: é corpo de erro. */

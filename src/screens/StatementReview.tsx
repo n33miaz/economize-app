@@ -7,11 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import BadgeCheck from "lucide-react-native/dist/esm/icons/badge-check";
 import Check from "lucide-react-native/dist/esm/icons/check";
 import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import CircleHelp from "lucide-react-native/dist/esm/icons/circle-question-mark";
-import Tag from "lucide-react-native/dist/esm/icons/tag";
 import X from "lucide-react-native/dist/esm/icons/x";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,26 +31,22 @@ import type { AppTheme } from "../theme/colors";
 import { radius, spacing } from "../theme/ds";
 import { useTheme } from "../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
-import { accountDisplayName, originLabel } from "../utils/accounts";
 import { categoryPath } from "../utils/categoryTree";
-// Data pelo formatador da casa: em UTC, para a fila não discordar da folha de
-// detalhes sobre o dia da mesma transação
-import { formatDayMonth } from "../utils/cycleWindow";
 import { formatBRL } from "../utils/money";
 import {
   isRenamed,
   reviewGroupKey,
-  transactionDisplayName,
   transactionOriginalName,
 } from "../utils/transactions";
 import CategoryIcon from "../components/CategoryIcon";
 import CategoryPickerSheet from "../components/CategoryPickerSheet";
-import OriginBadge from "../components/OriginBadge";
 import ErrorState from "../components/ErrorState";
 import PageContainer from "../components/PageContainer";
+import PotEmptyState from "../components/PotEmptyState";
 import ScreenHeader from "../components/ScreenHeader";
 import Skeleton from "../components/Skeleton";
 import TransactionDetailSheet from "../components/TransactionDetailSheet";
+import TransactionRow from "../components/TransactionRow";
 
 function plural(n: number, one: string, many: string) {
   return n === 1 ? one : many;
@@ -301,88 +295,22 @@ function ReviewGroupCard({
             paddingVertical: spacing[2],
           }}
         >
-          {group.transactions.map((tx) => {
-            const negative = tx.type === "DEBIT" || tx.amount < 0;
-            const renamed = isRenamed(tx);
-            const name = transactionDisplayName(tx);
-            const account = tx.accountId
-              ? accountsById.get(tx.accountId)
-              : undefined;
-            // Pelo helper, como no Extrato: `account.name` cru fazia o leitor
-            // de tela ouvir "origem ," onde o selo ao lado lê "Cartão de
-            // crédito"
-            const spokenOrigin = !showOrigin
-              ? ""
-              : account
-                ? `, origem ${accountDisplayName(account)}`
-                : `, ${originLabel(tx.accountId, account).toLowerCase()}`;
-            return (
-              <TouchableOpacity
-                key={tx.id}
-                onPress={() => onOpenTransaction(tx)}
-                accessibilityLabel={`${
-                  renamed
-                    ? `${name}, no banco: ${transactionOriginalName(tx)}`
-                    : name
-                }, ${formatDayMonth(tx.date)}, ${
-                  negative ? "saída" : "entrada"
-                } de ${formatBRL(Math.abs(tx.amount))}${spokenOrigin}. Abrir detalhes e apelido`}
-                accessibilityRole="button"
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  // 44 é o mínimo da regra §5.8 do design system. A linha é
-                  // larga, mas altura é o eixo em que o polegar erra numa
-                  // lista densa como esta
-                  minHeight: 44,
-                  paddingVertical: spacing[2],
-                }}
-              >
-                <Text
-                  style={{ color: t.text.tertiary, fontSize: 11, width: 42 }}
-                >
-                  {formatDayMonth(tx.date)}
-                </Text>
-                <View style={{ flex: 1, marginHorizontal: spacing[2] }}>
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    {renamed && (
-                      <Tag
-                        size={11}
-                        color={t.text.tertiary}
-                        style={{ marginRight: 4 }}
-                      />
-                    )}
-                    <Text
-                      numberOfLines={1}
-                      style={{ flex: 1, color: t.text.secondary, fontSize: 12 }}
-                    >
-                      {name}
-                    </Text>
-                  </View>
-                  {showOrigin && (
-                    <View style={{ marginTop: spacing[1] }}>
-                      <OriginBadge
-                        accountId={tx.accountId}
-                        account={account}
-                        maxLabelWidth={140}
-                      />
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={{
-                    color: negative ? t.chart.down : t.chart.up,
-                    fontSize: 12,
-                    fontWeight: "700",
-                  }}
-                >
-                  {negative ? "- " : "+ "}
-                  {formatBRL(Math.abs(tx.amount))}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {group.transactions.map((tx, index) => (
+            // A MESMA linha do Extrato e da Fatura. Sem categoria por linha:
+            // ela mora no chip do grupo, e repeti-la aqui diria a mesma coisa
+            // em cada uma das N linhas. A origem fica, porque é ela que muda
+            // a decisão (pagamento de fatura não é compra)
+            <TransactionRow
+              key={tx.id}
+              transaction={tx}
+              density="list"
+              showCategory={false}
+              showOrigin={showOrigin}
+              account={tx.accountId ? accountsById.get(tx.accountId) : undefined}
+              onPress={onOpenTransaction}
+              divider={index < group.transactions.length - 1}
+            />
+          ))}
         </View>
       )}
     </Animated.View>
@@ -397,7 +325,6 @@ export default function StatementReview() {
   const { reducedMotion } = useMotionPresets();
   const approvePress = usePressScale();
   const savePress = usePressScale();
-  const backPress = usePressScale();
 
   // O projeto não tem ParamList tipado — cast local e pontual
   const uploadId = (route.params as any)?.uploadId as string | undefined;
@@ -634,74 +561,24 @@ export default function StatementReview() {
       return <ErrorState message={error} onRetry={reloadQueue} />;
     }
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          paddingHorizontal: spacing[6],
-        }}
-      >
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: radius.full,
-            backgroundColor: t.semantic.successMuted,
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: spacing[4],
-          }}
-        >
-          <BadgeCheck size={40} color={t.semantic.success} />
-        </View>
-        <Text
-          style={{
-            color: t.text.primary,
-            fontSize: 18,
-            fontWeight: "700",
-            marginBottom: spacing[2],
-          }}
-        >
-          Tudo categorizado
-        </Text>
-        <Text
-          style={{
-            color: t.text.secondary,
-            fontSize: 13,
-            textAlign: "center",
-            marginBottom: spacing[6],
-          }}
-        >
-          Nenhuma transação aguardando revisão por aqui.
-        </Text>
-        <Animated.View style={backPress.pressStyle}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            onPressIn={backPress.onPressIn}
-            onPressOut={backPress.onPressOut}
-            accessibilityLabel="Voltar"
-            accessibilityRole="button"
-            activeOpacity={0.85}
-            style={{
-              height: 52,
-              borderRadius: radius.full,
-              paddingHorizontal: spacing[8],
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: t.accent.neon,
-            }}
-          >
-            <Text
-              style={{ color: t.text.inverse, fontWeight: "700", fontSize: 15 }}
-            >
-              Voltar
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+      // EC-231: o pote coroado no lugar do glifo num disco. Fila zerada é
+      // meta batida, e o pote cheio diz isso antes da frase — que fica livre
+      // para o que fazer a seguir
+      <View style={{ flex: 1, justifyContent: "center" }}>
+        <PotEmptyState
+          mood="conquistado"
+          title="Tudo categorizado"
+          body="Nenhuma transação aguardando revisão por aqui."
+          actionLabel="Voltar"
+          onAction={() => navigation.goBack()}
+        />
       </View>
     );
   };
+
+  // O rodapé de ações só existe com fila na tela — e é ele quem decide
+  // quanto a lista precisa reservar embaixo
+  const footerVisible = !isLoading && groups.length > 0;
 
   return (
     <PageContainer>
@@ -740,7 +617,13 @@ export default function StatementReview() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           padding: spacing[5],
-          paddingBottom: spacing[6],
+          // O rodapé é irmão da lista no mesmo fluxo (não flutua sobre ela):
+          // quando existe, é ele quem paga o inset do aparelho e a lista
+          // termina em cima dele. Sem rodapé (vazio, carregando), a lista é
+          // quem encosta na barra de gestos e precisa pagar o inset
+          paddingBottom: footerVisible
+            ? spacing[4]
+            : insets.bottom + spacing[6],
           flexGrow: 1,
         }}
         renderItem={({ item, index }) => {
@@ -766,7 +649,7 @@ export default function StatementReview() {
         ListEmptyComponent={renderEmpty()}
       />
 
-      {!isLoading && groups.length > 0 && (
+      {footerVisible && (
         <View
           style={{
             borderTopWidth: 1,

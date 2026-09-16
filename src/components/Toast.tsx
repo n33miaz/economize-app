@@ -16,21 +16,28 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useToastStore } from "../store/toastStore";
 import { boxNone } from "../utils/pointerEvents";
 import { useTheme } from "../theme/ThemeProvider";
-import { motion } from "../theme/ds";
+import { motion, spacing } from "../theme/ds";
+
+// Distância do cartão à borda segura do topo. Fora da tela ele espera em
+// -150, que é mais que a altura do cartão em qualquer largura
+const TOAST_TOP_GAP = spacing[3];
+const TOAST_HIDDEN_Y = -150;
 
 export default function Toast() {
   const t = useTheme();
   const { visible, message, type } = useToastStore();
   const insets = useSafeAreaInsets();
 
-  const translateY = useSharedValue(-150);
+  const translateY = useSharedValue(TOAST_HIDDEN_Y);
   // EC-054: com "reduzir movimento" ligado, o toast APARECE e SOME, sem
   // deslizar. A mensagem continua sendo entregue — o que sai é o percurso,
   // que é justamente o que incomoda quem pediu menos movimento
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    const destino = visible ? insets.top + 10 : -150;
+    // O inset é o relógio/notch do aparelho; o respiro vem da escala de
+    // espaçamento, como o resto da tela — não de um literal
+    const destino = visible ? insets.top + TOAST_TOP_GAP : TOAST_HIDDEN_Y;
     if (reducedMotion) {
       translateY.value = destino;
       return;
@@ -67,6 +74,7 @@ export default function Toast() {
 
   return (
     <View
+      testID="toast-layer"
       className="absolute inset-0 items-center justify-start"
       // A camada cobre a tela inteira só para posicionar o toast, e ela fica
       // montada SEMPRE — o cartão apenas desliza para fora quando não há

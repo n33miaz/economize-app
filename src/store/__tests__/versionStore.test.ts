@@ -187,6 +187,53 @@ describe("versionStore.markUpgradeRequired — o 426", () => {
   });
 });
 
+/**
+ * As notas da versão passam pela loja sem tratamento: a folha de anúncio lê
+ * `info.notes` e é ela quem decide o que fazer com a lista. O que a loja
+ * garante é não PERDER a lista no caminho — nem na consulta, nem no 426.
+ */
+describe("versionStore — notas da versão", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    limpar();
+  });
+
+  it("repassa as notas que a consulta trouxe, na ordem", async () => {
+    mockGet.mockResolvedValue(
+      info({
+        latestVersion: "2.3.0",
+        notes: ["Mercado com mais moedas", "Home com parcelamentos"],
+      }),
+    );
+
+    await useVersionStore.getState().check();
+
+    expect(useVersionStore.getState().info?.notes).toEqual([
+      "Mercado com mais moedas",
+      "Home com parcelamentos",
+    ]);
+  });
+
+  it("servidor anterior ao campo deixa as notas indefinidas — e nada quebra", async () => {
+    mockGet.mockResolvedValue(info({ latestVersion: "2.3.0" }));
+
+    await useVersionStore.getState().check();
+
+    expect(useVersionStore.getState().status).toBe("update-available");
+    expect(useVersionStore.getState().info?.notes).toBeUndefined();
+  });
+
+  it("o 426 não apaga as notas que já se tinha", async () => {
+    mockGet.mockResolvedValue(info({ latestVersion: "2.3.0", notes: ["Extrato mais leve"] }));
+    await useVersionStore.getState().check();
+    mockGet.mockRejectedValue(new Error("offline"));
+
+    useVersionStore.getState().markUpgradeRequired({ minVersion: "2.3.0" });
+
+    expect(useVersionStore.getState().info?.notes).toEqual(["Extrato mais leve"]);
+  });
+});
+
 describe("faixa da web", () => {
   beforeEach(limpar);
 

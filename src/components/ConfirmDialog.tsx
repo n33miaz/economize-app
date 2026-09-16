@@ -11,6 +11,18 @@ import { useConfirmStore } from "../store/confirmStore";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, shadow, spacing } from "../theme/ds";
 
+/**
+ * Largura do cartão: teto de 420 e, antes dele, a tela menos o respiro dos
+ * dois lados. Nos 390 px do telefone o teto nunca é alcançado — o cartão fica
+ * com 350, e são os 20 de cada lado (o `padding` da camada) que garantem
+ * isso, porque `width: "100%"` é medido DENTRO desse padding. Um `maxWidth`
+ * maior que a tela seria inofensivo aqui, mas alguém já leu o 420 como
+ * "o diálogo vaza no iPhone"; a constante nomeada existe para a leitura ser
+ * outra.
+ */
+export const DIALOG_MAX_WIDTH = 420;
+export const DIALOG_GUTTER = spacing[5];
+
 // Diálogo único do app, montado no App.tsx ao lado do Toast. Substitui o
 // `Alert.alert`, que no react-native-web é um no-op silencioso. Estilo vem de
 // `useTheme()` (e não de classes NativeWind) para nascer certo no tema claro.
@@ -97,12 +109,13 @@ export default function ConfirmDialog() {
       }}
     >
       <View
+        testID="confirm-dialog-layer"
         style={{
           flex: 1,
           backgroundColor: t.background.overlay,
           alignItems: "center",
           justifyContent: "center",
-          padding: spacing[5],
+          padding: DIALOG_GUTTER,
         }}
       >
         {/* Toque fora cancela, mesmo contrato do sheet */}
@@ -113,11 +126,12 @@ export default function ConfirmDialog() {
           accessibilityLabel={request.cancelLabel ?? "Cancelar"}
         />
         <View
+          testID="confirm-dialog-card"
           accessibilityViewIsModal
           style={[
             {
               width: "100%",
-              maxWidth: 420,
+              maxWidth: DIALOG_MAX_WIDTH,
               backgroundColor: t.background.elevated,
               borderRadius: radius["2xl"],
               borderWidth: 1,

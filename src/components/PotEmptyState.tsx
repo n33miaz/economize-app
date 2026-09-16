@@ -38,6 +38,17 @@ const ESTADOS: Record<PotMood, { level: number; tone: PotTone }> = {
   atencao: { level: 0.25, tone: "danger" },
 };
 
+// Diâmetro do pote nas duas medidas. O compacto cabe num card sem virar o
+// elemento maior da tela — dentro de um bloco, o vazio é UMA informação
+// entre outras, não a tela inteira
+const POT_SIZE = 96;
+const POT_SIZE_COMPACT = 64;
+
+// Altura dos botões: 44 é o alvo de toque padrão; 40 no compacto acompanha o
+// resto da redução sem cair abaixo do que o dedo alcança
+const BUTTON_HEIGHT = 44;
+const BUTTON_HEIGHT_COMPACT = 40;
+
 interface Props {
   mood: PotMood;
   title: string;
@@ -53,7 +64,15 @@ interface Props {
    */
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
+  /** Diâmetro do pote; sem ele, o da variante (96, ou 64 no compacto). */
   size?: number;
+  /**
+   * Para o vazio DENTRO de um card (bloco de fatura, de fonte de renda, de
+   * banco): pote menor, respiro `spacing[5]` e título um degrau abaixo. A
+   * versão cheia, no meio de um bloco, empurrava o resto da tela para baixo
+   * da dobra por causa de uma ausência.
+   */
+  compact?: boolean;
 }
 
 export default function PotEmptyState({
@@ -64,33 +83,45 @@ export default function PotEmptyState({
   onAction,
   secondaryActionLabel,
   onSecondaryAction,
-  size = 96,
+  size,
+  compact = false,
 }: Props) {
   const t = useTheme();
   const estado = ESTADOS[mood];
+  const diametro = size ?? (compact ? POT_SIZE_COMPACT : POT_SIZE);
+  const alturaBotao = compact ? BUTTON_HEIGHT_COMPACT : BUTTON_HEIGHT;
 
   return (
     <View
       accessible
       accessibilityLabel={`${title}. ${body}`}
-      style={{
-        alignItems: "center",
-        paddingHorizontal: spacing[6],
-        paddingVertical: spacing[8],
-      }}
+      style={
+        compact
+          ? { alignItems: "center", padding: spacing[5] }
+          : {
+              alignItems: "center",
+              paddingHorizontal: spacing[6],
+              paddingVertical: spacing[8],
+            }
+      }
     >
       {/* `animate`: o pote enche ao aparecer (EC-223). Num estado vazio o
           enchimento é curto por definição — e é ele que faz a tela parecer
           viva em vez de quebrada */}
-      <PotIcon size={size} level={estado.level} tone={estado.tone} animate />
+      <PotIcon
+        size={diametro}
+        level={estado.level}
+        tone={estado.tone}
+        animate
+      />
 
       <Text
         style={{
           color: t.text.primary,
-          fontSize: 18,
+          fontSize: compact ? 15 : 18,
           fontWeight: "700",
           textAlign: "center",
-          marginTop: spacing[4],
+          marginTop: compact ? spacing[3] : spacing[4],
         }}
       >
         {title}
@@ -101,7 +132,7 @@ export default function PotEmptyState({
           fontSize: 13,
           lineHeight: 19,
           textAlign: "center",
-          marginTop: spacing[2],
+          marginTop: compact ? spacing[1] : spacing[2],
         }}
       >
         {body}
@@ -113,9 +144,9 @@ export default function PotEmptyState({
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
           style={{
-            marginTop: spacing[5],
+            marginTop: compact ? spacing[4] : spacing[5],
             paddingHorizontal: spacing[5],
-            height: 44,
+            height: alturaBotao,
             borderRadius: radius.xl,
             alignItems: "center",
             justifyContent: "center",
@@ -136,7 +167,7 @@ export default function PotEmptyState({
           style={{
             marginTop: spacing[3],
             paddingHorizontal: spacing[5],
-            height: 44,
+            height: alturaBotao,
             borderRadius: radius.xl,
             alignItems: "center",
             justifyContent: "center",

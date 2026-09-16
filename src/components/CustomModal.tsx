@@ -21,6 +21,7 @@ import { motion, radius, spacing } from "../theme/ds";
 import { sheetSpring } from "../theme/motionPresets";
 import { boxNone } from "../utils/pointerEvents";
 import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useWebKeyboardInset } from "../hooks/useWebKeyboardInset";
 import { useOverlayStore } from "../store/overlayStore";
 
 // Teto do diálogo na tela larga: cabe o conteúdo de qualquer folha do app sem
@@ -61,6 +62,13 @@ export default function CustomModal({
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { isWide } = useBreakpoint();
+  // Teclado do NAVEGADOR: o `KeyboardAvoidingView` abaixo é no-op na web, e a
+  // folha de nova transação ficava com o campo em foco atrás das teclas no
+  // iPhone. O inset só é diferente de zero enquanto o teclado está aberto —
+  // ou seja, enquanto há um campo em foco — e vai para o `paddingBottom` da
+  // folha, que é exatamente o que o KAV faria no iOS. No nativo o hook
+  // devolve zero e nada muda.
+  const keyboardInset = useWebKeyboardInset();
   const [showModal, setShowModal] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(500);
@@ -182,13 +190,14 @@ export default function CustomModal({
             ]}
           >
             <Animated.View
+              testID="custom-modal-sheet"
               style={[
                 {
                   backgroundColor: t.background.surface,
                   borderTopLeftRadius: radius["3xl"],
                   borderTopRightRadius: radius["3xl"],
                   maxHeight: "90%",
-                  paddingBottom: insets.bottom,
+                  paddingBottom: insets.bottom + keyboardInset,
                   borderTopWidth: 1,
                   borderTopColor: t.border.subtle,
                 },
@@ -230,6 +239,7 @@ export default function CustomModal({
       isWide,
       onClose,
       insets.bottom,
+      keyboardInset,
       t,
       backdropAnimatedStyle,
       modalAnimatedStyle,

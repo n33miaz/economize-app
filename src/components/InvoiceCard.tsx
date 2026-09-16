@@ -4,7 +4,6 @@ import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import PiggyBank from "lucide-react-native/dist/esm/icons/piggy-bank";
 
 import type { AccountInvoice, BankTransaction, Category } from "../services/api";
-import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
@@ -18,15 +17,10 @@ import {
   invoiceStatusLabel,
   invoiceTitle,
 } from "../utils/accounts";
-import { formatDayMonth, formatDayMonthShort } from "../utils/cycleWindow";
+import { formatDayMonth } from "../utils/cycleWindow";
 import { formatBRL } from "../utils/money";
-import {
-  isRenamed,
-  transactionDisplayName,
-  transactionOriginalName,
-} from "../utils/transactions";
 import { describeCoverage, readReserve } from "../utils/invoiceReserve";
-import CategoryIcon from "./CategoryIcon";
+import TransactionRow from "./TransactionRow";
 
 interface InvoiceCardProps {
   invoice: AccountInvoice;
@@ -349,90 +343,23 @@ export default function InvoiceCard({
               Esta fatura não trouxe os lançamentos.
             </Text>
           ) : (
-            invoice.transactions.map((tx) => {
-              const category = tx.categoryId
-                ? categories.get(tx.categoryId)
-                : undefined;
-              const credit = tx.type === "CREDIT";
-              const renamed = isRenamed(tx);
-              const name = transactionDisplayName(tx);
-              const pending =
-                tx.reviewStatus && tx.reviewStatus !== "CONFIRMED";
-
-              return (
-                <TouchableOpacity
-                  key={tx.id}
-                  onPress={() => onOpenTransaction(tx)}
-                  accessibilityLabel={`${
-                    renamed
-                      ? `${name}, no banco: ${transactionOriginalName(tx)}`
-                      : name
-                  }, ${formatDayMonthShort(tx.date)}, ${
-                    credit ? "crédito" : "compra"
-                  } de ${formatBRL(Math.abs(tx.amount))}, ${
-                    category ? category.name : "sem categoria"
-                  }${pending ? ", aguardando revisão" : ""}. Abrir detalhes`}
-                  accessibilityRole="button"
-                  activeOpacity={0.7}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    minHeight: 44,
-                    paddingVertical: spacing[2],
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: t.text.tertiary,
-                      fontSize: 11,
-                      width: 46,
-                      fontVariant: ["tabular-nums"],
-                    }}
-                  >
-                    {formatDayMonthShort(tx.date)}
-                  </Text>
-                  {/* AppTheme tipa hexas literais do dark; os temas são
-                      estruturalmente idênticos, então o cast é seguro */}
-                  <CategoryIcon
-                    category={category}
-                    theme={t as AppTheme}
-                    size={24}
-                  />
-                  <View style={{ flex: 1, marginHorizontal: spacing[2] }}>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: t.text.primary, fontSize: 12 }}
-                    >
-                      {name}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: pending ? t.semantic.warning : t.text.tertiary,
-                        fontSize: 10,
-                        marginTop: 1,
-                      }}
-                    >
-                      {category ? category.name : "Sem categoria"}
-                      {pending ? " · revisar" : ""}
-                    </Text>
-                  </View>
-                  <Text
-                    style={{
-                      // Crédito no cartão (estorno ou pagamento) abate; compra
-                      // soma. O sinal é o que separa os dois na leitura rápida
-                      color: credit ? t.chart.up : t.text.primary,
-                      fontSize: 12,
-                      fontWeight: "700",
-                      fontVariant: ["tabular-nums"],
-                    }}
-                  >
-                    {credit ? "+ " : "- "}
-                    {formatBRL(Math.abs(tx.amount))}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
+            invoice.transactions.map((tx, index) => (
+              // A MESMA linha do Extrato e da Revisão, na densidade de lista.
+              // A voz é a do cartão: aqui débito é compra e crédito é estorno
+              // ou pagamento — chamar compra de "saída" descreveria a conta
+              // corrente. Sem origem: todas as linhas são deste cartão
+              <TransactionRow
+                key={tx.id}
+                transaction={tx}
+                density="list"
+                voice="card"
+                category={
+                  tx.categoryId ? categories.get(tx.categoryId) : undefined
+                }
+                onPress={onOpenTransaction}
+                divider={index < invoice.transactions.length - 1}
+              />
+            ))
           )}
         </View>
       )}

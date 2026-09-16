@@ -28,6 +28,7 @@ import { radius, spacing } from "../theme/ds";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import AppOpening from "../components/AppOpening";
 import OverlayHost from "../components/OverlayHost";
+import { BOTTOM_BAR_HEIGHT, TabBarHeightContext } from "./tabBarHeight";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
@@ -93,7 +94,6 @@ import Plan from "../screens/Plan";
 import Investments from "../screens/Investments";
 
 // Altura da barra inferior sem contar o inset da barra de gestos
-const BOTTOM_BAR_HEIGHT = 84;
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -265,6 +265,13 @@ function MainTabs() {
     Platform.OS === "ios" || Platform.OS === "web" ? insets.bottom : 0;
 
   return (
+    // A altura da barra viaja por contexto para quem desenha por cima dela —
+    // hoje o botão do assistente e as listas que reservam rodapé. No desktop
+    // quem navega é o trilho lateral e não há barra: o valor é `undefined`,
+    // que é a resposta honesta. Ver `routes/tabBarHeight.ts`.
+    <TabBarHeightContext.Provider
+      value={isWide ? undefined : BOTTOM_BAR_HEIGHT + bottomInset}
+    >
     <BottomTab.Navigator
       initialRouteName={MAIN_TAB_ROUTES.principal}
       // Voltar (Android) leva à Home; o default "firstRoute" cairia em Finanças
@@ -355,6 +362,7 @@ function MainTabs() {
         }}
       />
     </BottomTab.Navigator>
+    </TabBarHeightContext.Provider>
   );
 }
 
