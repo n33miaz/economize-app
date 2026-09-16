@@ -25,9 +25,28 @@ interface Props {
   children: React.ReactNode;
 }
 
-// Carência para o re-lock ao voltar do background: menos que isso é um
-// alt-tab rápido e pedir biometria de novo só irritaria
-const RELOCK_GRACE_MS = 30000;
+/**
+ * Quanto tempo fora do app conta como "voltei já", por política.
+ *
+ * <p>Era 30 segundos fixos aqui. O dono pediu em 16/09/2026 uma configuração
+ * para "não bloquear toda vez que sair do app (só ao fechá-lo ou depois de um
+ * tempo)" — e estava certo: trocar para o WhatsApp para conferir um Pix e
+ * voltar pedia o dedo de novo, o que é cerimônia sem segurança. Quem estava
+ * com o telefone na mão continua sendo a mesma pessoa.
+ *
+ * <p>A política agora mora na preferência (`relockPolicy`). `onClose` devolve
+ * infinito: nenhuma volta do segundo plano tranca, e a tranca continua
+ * valendo no app FECHADO — que é o caso em que ela protege de verdade, porque
+ * é o estado em que o aparelho fica sobre a mesa.
+ */
+function graceMs(
+  policy: "always" | "after" | "onClose",
+  minutes: number,
+): number {
+  if (policy === "always") return 0;
+  if (policy === "onClose") return Number.POSITIVE_INFINITY;
+  return Math.max(1, minutes) * 60_000;
+}
 
 /**
  * A tranca do app.
@@ -45,6 +64,8 @@ export default function BiometricGate({ children }: Props) {
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const biometricLogin = usePreferencesStore((s) => s.biometricLogin);
+  const relockPolicy = usePreferencesStore((s) => s.relockPolicy);
+  const relockAfterMinutes = usePreferencesStore((s) => s.relockAfterMinutes);
   const prefsHydrated = usePreferencesStore((s) => s.hasHydrated);
   const authHydrated = useAuthStore((s) => s.hasHydrated);
   const setBiometric = usePreferencesStore((s) => s.setBiometric);
@@ -63,7 +84,28 @@ export default function BiometricGate({ children }: Props) {
   const [verificando, setVerificando] = useState(false);
   const backgroundedAt = useRef<number | null>(null);
 
+  /**
+   * Trava de reentrada do pedido de biometria.
+   *
+   * <p><b>A corrida, encontrada na varredura de 16/09/2026.</b> `runAuth` era
+   * chamado de DOIS lugares: o efeito que decide se a tranca vale, e o botão
+   * "OK". O `verificando` acendia a luz de ocupado mas ninguém a olhava antes
+   * de entrar — e o efeito depende de `authorized`, que só muda no FIM da
+   * verificação. Qualquer re-render com a tranca ainda fechada (a hidratação
+   * concluindo, o tema mudando, o toque no botão enquanto o prompt abria)
+   * disparava uma segunda chamada, e o sistema empilhava dois pedidos de
+   * digital — dois diálogos, um atrás do outro, que é parte do que o dono viu
+   * como "modais aparecendo todos ao mesmo tempo".
+   *
+   * <p>Um `ref` e não estado: a decisão de entrar tem de ver o valor do MESMO
+   * instante. Estado só muda no render seguinte, que é exatamente a fresta que
+   * a segunda chamada usava.
+   */
+  const verificandoAgora = useRef(false);
+
   const runAuth = useCallback(async () => {
+    if (verificandoAgora.current) return;
+    verificandoAgora.current = true;
     setVerificando(true);
     try {
       // A web entra por aqui igual ao celular desde que o adaptador ganhou o
@@ -93,6 +135,7 @@ export default function BiometricGate({ children }: Props) {
         setFalhou(true);
       }
     } finally {
+      verificandoAgora.current = false;
       setVerificando(false);
     }
   }, [setBiometric]);
@@ -120,14 +163,21 @@ export default function BiometricGate({ children }: Props) {
       const elapsed = Date.now() - backgroundedAt.current;
       backgroundedAt.current = null;
       const currentToken = useAuthStore.getState().token;
-      const wantsLock = usePreferencesStore.getState().biometricLogin;
-      if (currentToken && wantsLock && elapsed >= RELOCK_GRACE_MS) {
+      const prefs = usePreferencesStore.getState();
+      const wantsLock = prefs.biometricLogin;
+      // Lido do store e não da closure: o listener é montado uma vez, e ler a
+      // preferência aqui é o que faz a mudança valer sem remontar o app
+      const carencia = graceMs(prefs.relockPolicy, prefs.relockAfterMinutes);
+      if (currentToken && wantsLock && elapsed >= carencia) {
         setFalhou(false);
         setAuthorized(false);
       }
     });
     return () => subscription.remove();
-  }, []);
+    // A política é lida via `getState` dentro do listener; estas duas entram
+    // na lista para o efeito ser recriado quando o usuário muda a escolha —
+    // sem isso, um listener montado antes da mudança seguiria com a antiga
+  }, [relockPolicy, relockAfterMinutes]);
 
   const locked = hasHydrated && gateRequired && !authorized;
 

@@ -19,6 +19,8 @@ import { APP_VERSION } from "../../utils/appVersion";
 import { AUTH_MAX_WIDTH } from "../../utils/layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { biometricSupport, enrollBiometrics } from "../../utils/biometrics";
+import { useAnnouncement } from "../../hooks/useAnnouncement";
+import { ANNOUNCEMENT_PRIORITY } from "../../store/announcementStore";
 
 // Formulário de login não ganha nada em ficar largo; 420 é a medida do cartão
 
@@ -69,6 +71,12 @@ export default function Login({ navigation }: any) {
       clearTimeout(resgate);
     };
   }, []);
+
+  const ofertaDeBiometriaNaVez = useAnnouncement(
+    "biometric-offer",
+    ANNOUNCEMENT_PRIORITY.biometric,
+    sessaoPendente !== null,
+  );
 
   /**
    * Entrar de fato, ou reter a sessão para o modal de biometria.
@@ -341,8 +349,11 @@ export default function Login({ navigation }: any) {
         </Animated.View>
       )}
 
+      {/* A oferta entra na FILA da abertura: sem isso ela dividia a tela com o
+          anúncio de versão nova, que é montado acima das rotas e aparece até
+          sobre o Login. Ver store/announcementStore */}
       <BiometricPrompt
-        visible={sessaoPendente !== null}
+        visible={ofertaDeBiometriaNaVez}
         onEnable={handleBiometricEnable}
         onDecline={handleBiometricDecline}
       />

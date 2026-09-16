@@ -116,13 +116,17 @@ const initialState = {
   hasLoadedPlans: false,
 };
 
-export const usePlanStore = create<PlanState>((set) => ({
+export const usePlanStore = create<PlanState>((set, get) => ({
   ...initialState,
   sessionStartedAt: Date.now(),
 
   hydrateFromUser: (me) => set(resolvePlan(me)),
 
   fetchPlans: async () => {
+    // Uma busca em voo basta: dois focos no mesmo instante (montagem + volta
+    // de uma folha) pediam a mesma lista duas vezes, e na instância gratuita
+    // isso é o dobro de trabalho para o mesmo resultado
+    if (get().isLoading) return;
     set({ isLoading: true });
     try {
       const response = await getPlans();

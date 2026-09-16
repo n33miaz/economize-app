@@ -22,7 +22,7 @@ interface UserState {
   updateName: (name: string) => Promise<boolean>;
 }
 
-export const useUserStore = create<UserState>((set) => ({
+export const useUserStore = create<UserState>((set, get) => ({
   me: null,
   stats: null,
   isLoading: false,
@@ -31,6 +31,10 @@ export const useUserStore = create<UserState>((set) => ({
   error: null,
 
   fetchMe: async () => {
+    // Uma busca em voo basta: dois focos no mesmo instante (montagem + volta
+    // de uma folha) pediam a mesma lista duas vezes, e na instância gratuita
+    // isso é o dobro de trabalho para o mesmo resultado
+    if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
       const me = await getUserMe();

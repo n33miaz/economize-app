@@ -29,12 +29,42 @@ export type NewsCategory = "all" | "economia" | "mercados" | "cripto" | "geral";
  */
 export type ViewDepth = "simple" | "advanced";
 
+/**
+ * Quando a tranca por biometria volta a pedir o dedo.
+ *
+ * <p><b>O pedido, do dono em 16/09/2026:</b> <i>"adicione uma configuração
+ * para não bloquear toda vez que sair do app (só ao fechá-lo ou depois de um
+ * tempo)"</i>. A carência era de 30 segundos e fixa no código: trocar para o
+ * WhatsApp para conferir um Pix e voltar já pedia biometria de novo, o que é
+ * cerimônia sem segurança — quem estava com o telefone na mão continua sendo a
+ * mesma pessoa.
+ *
+ * <ul>
+ *   <li>`always` — tranca em qualquer ida ao segundo plano. É o mais rigoroso,
+ *       e faz sentido para quem empresta o aparelho.</li>
+ *   <li>`after` — tranca depois de {@link RELOCK_MINUTES} minutos fora. O
+ *       padrão, porque cobre o caso real (o telefone ficou na mesa) sem cobrar
+ *       pelo alt-tab.</li>
+ *   <li>`onClose` — só quando o app é FECHADO de verdade. A tranca continua
+ *       existindo (o app fechado pede o dedo), mas voltar do segundo plano
+ *       nunca pede.</li>
+ * </ul>
+ */
+export type RelockPolicy = "always" | "after" | "onClose";
+
+/** Os minutos oferecidos na opção `after`. */
+export const RELOCK_MINUTES = [1, 5, 15, 30, 60] as const;
+
 interface PreferencesState {
   theme: ThemeMode;
   biometricLogin: boolean;
   // Se o usuário já respondeu (uma vez) ao modal pós-login que oferece a
   // biometria — a pergunta não se repete; os toggles seguem valendo
   biometricChoiceMade: boolean;
+  /** Quando a tranca volta a pedir o dedo — ver {@link RelockPolicy}. */
+  relockPolicy: RelockPolicy;
+  /** Minutos da política `after`. Ignorado nas outras. */
+  relockAfterMinutes: number;
   defaultCurrency: Currency;
   hideBalance: boolean;
   language: Language;
@@ -99,6 +129,8 @@ interface PreferencesState {
   setTheme: (theme: ThemeMode) => void;
   toggleBiometric: () => void;
   setBiometric: (enabled: boolean) => void;
+  setRelockPolicy: (policy: RelockPolicy) => void;
+  setRelockAfterMinutes: (minutes: number) => void;
   setBiometricChoiceMade: (made: boolean) => void;
   dismissHint: (id: string) => void;
   setDefaultCurrency: (currency: Currency) => void;
@@ -127,6 +159,11 @@ const initialState = {
   theme: "dark" as ThemeMode,
   biometricLogin: false,
   biometricChoiceMade: false,
+  // `after` com 5 minutos é o padrão: cobre "o telefone ficou na mesa" sem
+  // cobrar pelo alt-tab de quinze segundos, que era o comportamento anterior
+  // (30 s fixos no código) e que o dono pediu para mudar
+  relockPolicy: "after" as RelockPolicy,
+  relockAfterMinutes: 5,
   defaultCurrency: "BRL" as Currency,
   hideBalance: false,
   language: "pt-BR" as Language,
@@ -162,6 +199,18 @@ export const usePreferencesStore = create(
       toggleBiometric: () =>
         set((state) => ({ biometricLogin: !state.biometricLogin })),
       setBiometric: (enabled) => set({ biometricLogin: enabled }),
+      setRelockPolicy: (relockPolicy) => set({ relockPolicy }),
+      // Grampeia na lista oferecida: um valor fora dela viria de estado
+      // persistido antigo ou de chamada errada, e "0 minuto" viraria a
+      // política `always` disfarçada
+      setRelockAfterMinutes: (minutes) =>
+        set({
+          relockAfterMinutes: RELOCK_MINUTES.includes(
+            minutes as (typeof RELOCK_MINUTES)[number],
+          )
+            ? minutes
+            : 5,
+        }),
       setBiometricChoiceMade: (made) => set({ biometricChoiceMade: made }),
       setDefaultCurrency: (defaultCurrency) => set({ defaultCurrency }),
       toggleHideBalance: () =>
