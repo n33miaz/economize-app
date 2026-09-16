@@ -202,6 +202,23 @@ ull (não omite) para tudo que não é índice — e o
    * mostrava R$ 0,00 com a variação certa ao lado.
    */
   points?: number | null;
+  /**
+   * Mínima e máxima do dia, quando a fonte informa (EC: Mercado enriquecido,
+   * 16/09/2026). Nulos em índice fora do pregão e em papel não cotado — e
+   * nulo aqui é ausência, não zero: um extremo do dia igual a zero faria a
+   * faixa do card afirmar que o papel chegou a valer nada.
+   */
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  /**
+   * Fechamentos dos últimos pregões, em ordem cronológica. Já vinham na mesma
+   * resposta da cotação e eram descartados — a Brapi devolve a janela curta
+   * sem cobrar chamada a mais, o que importa num token com cota diária.
+   *
+   * Menos de dois pontos não é linha: o servidor manda nulo em vez de um ponto
+   * só, para o card não desenhar um traço reto que pareceria estabilidade.
+   */
+  sparkline?: number[] | null;
 }
 
 /**
