@@ -32,7 +32,13 @@ import {
   useRoute,
 } from "@react-navigation/native";
 
-import { getBalanceCheck } from "../services/api";
+import {
+  describeRequestFailure,
+  getBalanceCheck,
+  getMergeSuggestions,
+  mergeAccounts,
+  type AccountMergeSuggestion,
+} from "../services/api";
 import type {
   BalanceFinding,
   BankTransaction,
@@ -56,6 +62,7 @@ import { askConfirm } from "../store/confirmStore";
 import PageContainer from "../components/PageContainer";
 import ActionRow from "../components/ActionRow";
 import BalanceCheckNotice from "../components/BalanceCheckNotice";
+import DuplicateAccountsCard from "../components/DuplicateAccountsCard";
 import AssistantFAB from "../components/AssistantFAB";
 import BankLogo from "../components/BankLogo";
 import ErrorState from "../components/ErrorState";
@@ -367,6 +374,36 @@ export default function BankIntegration() {
   // entender de onde os números vêm — e foi exatamente entre estas duas telas
   // que o concorrente se contradisse
   const [avisosDeSaldo, setAvisosDeSaldo] = useState<BalanceFinding[]>([]);
+  const [duplicadas, setDuplicadas] = useState<AccountMergeSuggestion[]>([]);
+
+  /**
+   * Junta duas origens que são a mesma conta, e recarrega o que depende delas.
+   *
+   * <p>Depois da fusão, três coisas mudaram no servidor: a lista de contas (uma
+   * deixou de existir), o extrato (lançamentos trocaram de origem) e as
+   * sugestões (o par resolvido sai da lista). Recarregar as três aqui é o que
+   * evita a tela continuar oferecendo uma fusão que já aconteceu.
+   */
+  const juntarContas = useCallback(
+    async (sugestao: AccountMergeSuggestion) => {
+      try {
+        const movidos = await mergeAccounts(sugestao.sourceId, sugestao.targetId);
+        showToast(
+          movidos === 1
+            ? "1 lançamento mudou de conta. As duas origens agora são uma."
+            : `${movidos.toLocaleString("pt-BR")} lançamentos mudaram de conta. As duas origens agora são uma.`,
+          "success",
+        );
+        await fetchAccounts(true);
+        await fetchTransactions();
+        const restantes = await getMergeSuggestions().catch(() => []);
+        setDuplicadas(restantes);
+      } catch (erro) {
+        showToast(describeRequestFailure(erro).message, "error");
+      }
+    },
+    [fetchAccounts, fetchTransactions, showToast],
+  );
   // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
   const { width: windowWidth } = useWindowDimensions();
   const chartWidth = Math.min(windowWidth - 80, MAX_CHART_WIDTH);
@@ -458,6 +495,11 @@ export default function BankIntegration() {
       getBalanceCheck()
         .then((relatorio) => setAvisosDeSaldo(relatorio.findings))
         .catch(() => setAvisosDeSaldo([]));
+      // Origens duplicadas: mesmo best-effort da conferência acima. É aviso,
+      // não conteúdo — e uma falha aqui não pode tirar as conexões do ar
+      getMergeSuggestions()
+        .then(setDuplicadas)
+        .catch(() => setDuplicadas([]));
     }, [
       fetchTransactions,
       fetchCategories,
@@ -1084,6 +1126,16 @@ export default function BankIntegration() {
                 </Text>
 
                 <BalanceCheckNotice findings={avisosDeSaldo} />
+
+                {/* A mesma conta entrando por arquivo E por conector deixa o
+                    app com duas origens, e aí nenhum total por conta fecha.
+                    Medido na conta do dono: 1.632 dos 1.967 lançamentos
+                    moravam na origem solta do Inter, e o saldo só existia na
+                    ligada. Ver components/DuplicateAccountsCard */}
+                <DuplicateAccountsCard
+                  suggestions={duplicadas}
+                  onMerge={juntarContas}
+                />
 
                 {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
                     conectar deixou de ser configuração de servidor. O nome é

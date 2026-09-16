@@ -1002,6 +1002,49 @@ export const getDailyTotals = async (
 };
 
 /** Vazio quando o usuário nunca sincronizou um conector. */
+/**
+ * Duas origens que parecem a MESMA conta do mundo real.
+ *
+ * <p>Medido na conta do dono em 16/09/2026, depois de ele dizer que "os números
+ * parecem estar meio embaralhados": a conta do Inter existia duas vezes — uma
+ * solta, criada pelos arquivos importados, com 1.632 dos 1.967 lançamentos e
+ * nenhum saldo; e uma ligada, do conector, com 75 lançamentos e o saldo. Toda
+ * tela que agrupa por origem mostrava o mesmo banco repetido.
+ */
+export interface AccountMergeSuggestion {
+  /** Os últimos dígitos em comum — é o que a tela usa para explicar a suspeita. */
+  digits: string;
+  /** A origem que DESAPARECE na fusão (sempre a desvinculada). */
+  sourceId: string;
+  sourceName: string;
+  sourceInstitution: string | null;
+  sourceTransactions: number;
+  /** A origem que FICA: é ela que segue sincronizando e trazendo saldo. */
+  targetId: string;
+  targetName: string;
+  targetInstitution: string | null;
+  targetTransactions: number;
+}
+
+export const getMergeSuggestions = async (): Promise<AccountMergeSuggestion[]> => {
+  const response = await api.get<AccountMergeSuggestion[]>(
+    "/accounts/merge-suggestions",
+  );
+  return response.data;
+};
+
+/** Junta as duas: tudo de `sourceId` vai para `intoAccountId`, que fica. */
+export const mergeAccounts = async (
+  sourceId: string,
+  intoAccountId: string,
+): Promise<number> => {
+  const response = await api.post<{ movedTransactions: number }>(
+    `/accounts/${sourceId}/merge`,
+    { intoAccountId },
+  );
+  return response.data.movedTransactions;
+};
+
 export const getAccounts = async (): Promise<ConnectorAccount[]> => {
   const response = await api.get<ConnectorAccount[]>("/accounts");
   return response.data;
