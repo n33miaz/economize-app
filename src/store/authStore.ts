@@ -226,6 +226,16 @@ export const useAuthStore = create(
         // vencido veria o rótulo errado no Perfil
         const { usePlanStore } = require("./planStore");
         usePlanStore.getState().reset();
+        // A fila de anúncios: um pedido preso aqui faria o próximo login
+        // entrar com a vez ocupada por uma folha que já não existe, e o
+        // anúncio seguinte nunca falaria
+        const { useAnnouncementStore } = require("./announcementStore");
+        useAnnouncementStore.getState().reset();
+
+        // Parcelamentos são o retrato das compras de alguém, e o cache de
+        // cinco minutos sobreviveria a um login com outra conta
+        const { useInstallmentsStore } = require("./installmentsStore");
+        useInstallmentsStore.getState().reset();
 
         // Idem: posições, saldos e o perfil de investidor são o retrato mais
         // completo do patrimônio de alguém, e o cache de cinco minutos por

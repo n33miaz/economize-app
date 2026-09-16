@@ -46,6 +46,8 @@ import { usePlanStore } from "../store/planStore";
 import {
   Currency,
   Language,
+  RELOCK_MINUTES,
+  RelockPolicy,
   ThemeMode,
   ViewDepth,
   selectCycleAnchorDay,
@@ -235,6 +237,10 @@ export default function Profile() {
   const {
     theme,
     biometricLogin,
+    relockPolicy,
+    relockAfterMinutes,
+    setRelockPolicy,
+    setRelockAfterMinutes,
     defaultCurrency,
     language,
     viewDepth,
@@ -791,6 +797,77 @@ export default function Profile() {
               />
             }
           />
+
+          {/* QUANDO a tranca volta a pedir o dedo. Pedido do dono em
+              16/09/2026: "não bloquear toda vez que sair do app (só ao
+              fechá-lo ou depois de um tempo)". Eram 30 segundos fixos no
+              código — trocar para o WhatsApp para conferir um Pix e voltar já
+              pedia biometria, cerimônia sem segurança nenhuma.
+
+              Só aparece com a tranca LIGADA: oferecer a regra de uma tranca
+              que não existe é configuração que não configura nada. */}
+          {biometricLogin && (
+            <View
+              style={{
+                backgroundColor: t.background.elevated,
+                borderRadius: radius["2xl"],
+                padding: spacing[4],
+                marginBottom: spacing[3],
+              }}
+            >
+              <Text
+                style={{
+                  color: t.text.primary,
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                Trancar quando eu sair
+              </Text>
+              <Text
+                style={{
+                  color: t.text.secondary,
+                  fontSize: 12,
+                  lineHeight: 17,
+                  marginTop: 2,
+                  marginBottom: spacing[3],
+                }}
+              >
+                {relockPolicy === "always"
+                  ? "Pede biometria em qualquer ida para o segundo plano."
+                  : relockPolicy === "onClose"
+                    ? "Só pede quando o app é fechado de verdade. Voltar do segundo plano nunca pede."
+                    : `Pede depois de ${relockAfterMinutes} ${
+                        relockAfterMinutes === 1 ? "minuto" : "minutos"
+                      } fora do app.`}
+              </Text>
+              <SegmentedControl<RelockPolicy>
+                value={relockPolicy}
+                onChange={setRelockPolicy}
+                options={[
+                  { label: "Sempre", value: "always" },
+                  { label: "Depois de um tempo", value: "after" },
+                  { label: "Só ao fechar", value: "onClose" },
+                ]}
+              />
+              {relockPolicy === "after" && (
+                <View style={{ marginTop: spacing[3] }}>
+                  {/* O controle é de string (ele monta rótulo e valor no
+                      mesmo alfabeto); o minuto viaja como texto e volta a
+                      número na borda — converter aqui é mais honesto do que
+                      afrouxar o tipo do componente para todo o app */}
+                  <SegmentedControl<string>
+                    value={String(relockAfterMinutes)}
+                    onChange={(valor) => setRelockAfterMinutes(Number(valor))}
+                    options={RELOCK_MINUTES.map((m) => ({
+                      label: m >= 60 ? "1 h" : `${m} min`,
+                      value: String(m),
+                    }))}
+                  />
+                </View>
+              )}
+            </View>
+          )}
         </Animated.View>
 
         <Animated.View entering={listItemEntering(4)}>

@@ -78,6 +78,8 @@ import AssistantFAB from "../components/AssistantFAB";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { usePremiumOffer } from "../hooks/usePremiumOffer";
 import { useAccountsStore } from "../store/accountsStore";
+import { ANNOUNCEMENT_PRIORITY } from "../store/announcementStore";
+import { useAnnouncement } from "../hooks/useAnnouncement";
 import { cashPositionFrom, creditPositionFrom } from "../utils/cashPosition";
 import { installmentsSummary } from "../utils/installments";
 import { buildUpcoming, type UpcomingItem } from "../utils/upcoming";
@@ -322,6 +324,28 @@ export default function Home() {
     if (!performance || performance.income <= 0) return;
     setPotSheetOpen(true);
   }, [homeEmFoco, potAnnouncementSeen, potSheetOpen, performance]);
+
+  /**
+   * A FILA DA ABERTURA. O dono relatou em 16/09/2026 que "os modais estão
+   * aparecendo todos ao mesmo tempo ao entrar no app". Estavam: o anúncio de
+   * versão, a apresentação do pote e a oferta do Plus têm condições que se
+   * satisfazem no MESMO instante — o app acabou de abrir. Três folhas
+   * empilhadas não são três avisos, são zero: a pessoa fecha tudo no reflexo.
+   *
+   * Cada uma continua decidindo se QUER aparecer; quem decide se PODE é a
+   * ordem em `store/announcementStore` — informação antes de comercial,
+   * sempre.
+   */
+  const poteNaVez = useAnnouncement(
+    "pot-states",
+    ANNOUNCEMENT_PRIORITY.potStates,
+    potSheetOpen,
+  );
+  const plusNaVez = useAnnouncement(
+    "premium-offer",
+    ANNOUNCEMENT_PRIORITY.premiumOffer,
+    plusOffer.visible,
+  );
 
   const fecharAnuncioDoPote = useCallback(() => {
     setPotSheetOpen(false);
@@ -1863,7 +1887,7 @@ export default function Home() {
           nunca nas duas primeiras sessões, uma por sessão, 7 dias entre
           convites, 30 depois de um "tenho interesse") */}
       <PremiumOfferSheet
-        visible={plusOffer.visible}
+        visible={plusNaVez}
         onClose={plusOffer.close}
       />
 
@@ -1880,7 +1904,7 @@ export default function Home() {
       />
 
       <PotStatesSheet
-        visible={potSheetOpen}
+        visible={poteNaVez}
         onClose={fecharAnuncioDoPote}
         performance={performance}
       />
