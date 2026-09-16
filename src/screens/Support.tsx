@@ -152,7 +152,6 @@ export default function Support() {
       <ScreenHeader
         title="Falar com uma pessoa"
         subtitle="Com prazo, e sem sumir quando o app fecha"
-        showInfoButton={false}
         showProfileButton={false}
       />
 

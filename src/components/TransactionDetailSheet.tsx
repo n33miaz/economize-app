@@ -50,10 +50,12 @@ import {
   validateTransactionAlias,
   describeAliasFailure,
 } from "../utils/transactions";
+import { amountLabel, amountTone, amountVerb } from "../utils/transactionRow";
 import BankLogo from "./BankLogo";
 import CategoryIcon from "./CategoryIcon";
 import CustomModal from "./CustomModal";
 import FloatingLabelInput from "./FloatingLabelInput";
+import { amountColor } from "./TransactionRow";
 
 // A partir daqui o contador aparece: antes disso ele só faria barulho
 const COUNTER_VISIBLE_FROM = 60;
@@ -188,7 +190,6 @@ export default function TransactionDetailSheet({
   const displayName = transactionDisplayName(transaction);
   const originalName = transactionOriginalName(transaction);
   const renamed = Boolean(transaction.displayAlias?.trim());
-  const negative = transaction.type === "DEBIT" || transaction.amount < 0;
   const sanitizedDraft = sanitizeTransactionAlias(draft);
   const dirty = aliasChanged(transaction.displayAlias ?? null, sanitizedDraft);
   const atAliasLimit = draft.length >= TRANSACTION_ALIAS_MAX_LENGTH;
@@ -309,14 +310,21 @@ export default function TransactionDetailSheet({
               {displayName}
             </Text>
             <Text
+              // O mesmo verbo que a linha fala: "saída" na conta, "compra"
+              // no cartão — a folha não pode discordar da lista que a abriu
+              accessibilityLabel={`${amountVerb(
+                transaction,
+                account?.type === "CREDIT_CARD" ? "card" : "bank",
+              )} de ${formatBRL(Math.abs(transaction.amount))}`}
               style={{
                 ...typography.numericLg,
-                color: negative ? t.chart.down : t.chart.up,
+                // Pela régua da linha: débito neutro (gastar não é erro),
+                // crédito em alta, e o que não conta nas somas rebaixado
+                color: amountColor(t, amountTone(transaction)),
                 marginTop: spacing[1],
               }}
             >
-              {negative ? "- " : "+ "}
-              {formatBRL(Math.abs(transaction.amount))}
+              {amountLabel(transaction)}
             </Text>
           </View>
           <TouchableOpacity

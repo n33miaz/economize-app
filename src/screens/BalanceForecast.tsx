@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   LayoutAnimation,
   RefreshControl,
@@ -25,6 +31,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets } from "../theme/motionPresets";
+import { useAccountsStore } from "../store/accountsStore";
 import { useBankStore } from "../store/bankStore";
 import {
   FORECAST_WINDOWS,
@@ -44,7 +51,7 @@ import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
-import { calculateBankMetrics } from "../utils/bankMetrics";
+import { cashPositionFrom } from "../utils/cashPosition";
 import { declaredCaveat, forecastOrigin } from "../utils/forecastOrigin";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import {
@@ -142,7 +149,8 @@ function ForecastRow({
         <Text
           numberOfLines={1}
           style={{
-            color: origem.kind === "declared" ? t.semantic.warning : t.text.tertiary,
+            color:
+              origem.kind === "declared" ? t.semantic.warning : t.text.tertiary,
             fontSize: 10,
             marginTop: 1,
           }}
@@ -175,11 +183,18 @@ function ForecastMonthCard({
   index,
   expanded,
   onToggle,
+  saldoConhecido,
 }: {
   month: ForecastMonth;
   index: number;
   expanded: boolean;
   onToggle: () => void;
+  /**
+   * Existe saldo informado para a projeção partir de algum lugar? Sem ele o
+   * card mostra MOVIMENTO em vez de saldo — e diz qual dos dois está
+   * mostrando. Ver o bloco grande em `cash` mais abaixo.
+   */
+  saldoConhecido: boolean;
 }) {
   const t = useTheme();
   const { listItemEntering } = useMotionPresets();
@@ -196,6 +211,8 @@ function ForecastMonthCard({
 
   const total = month.expectedIncome + month.expectedExpense;
   const incomeShare = total > 0 ? (month.expectedIncome / total) * 100 : 0;
+  // O que o período mexe por si só, sem depender de um ponto de partida
+  const movimento = month.expectedIncome - month.expectedExpense;
 
   const itemCount = month.items.length;
 
@@ -250,22 +267,32 @@ function ForecastMonthCard({
         )}
       </View>
 
-      <Text style={{ color: t.text.secondary, fontSize: 12, marginTop: spacing[2] }}>
-        Saldo previsto no fim do {periodNoun}
+      {/* Com saldo conhecido o card responde "quanto sobra no fim"; sem
+          saldo, responde "quanto este período mexe" — e diz qual das duas
+          coisas está respondendo. Mostrar um acumulado partindo de zero seria
+          a mesma mentira de antes com outro nome */}
+      <Text
+        style={{ color: t.text.secondary, fontSize: 12, marginTop: spacing[2] }}
+      >
+        {saldoConhecido
+          ? `Saldo previsto no fim do ${periodNoun}`
+          : `Movimento previsto do ${periodNoun}`}
       </Text>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
-        accessibilityLabel={`Saldo previsto ao fechar ${period.spoken}: ${formatBRL(
-          month.cumulativeNet,
-        )}`}
+        accessibilityLabel={
+          saldoConhecido
+            ? `Saldo previsto ao fechar ${period.spoken}: ${formatBRL(month.cumulativeNet)}`
+            : `Movimento previsto em ${period.spoken}: ${formatBRL(movimento)}`
+        }
         style={{
           ...typography.numericLg,
           color: atRisk ? t.semantic.danger : t.text.primary,
           marginTop: 2,
         }}
       >
-        {formatBRLCompact(month.cumulativeNet)}
+        {formatBRLCompact(saldoConhecido ? month.cumulativeNet : movimento)}
       </Text>
 
       {/* Proporção entrada × saída do mês: a barra dá a leitura de relance que
@@ -356,7 +383,12 @@ function ForecastMonthCard({
           }}
         >
           <Text
-            style={{ flex: 1, color: t.text.secondary, fontSize: 13, fontWeight: "700" }}
+            style={{
+              flex: 1,
+              color: t.text.secondary,
+              fontSize: 13,
+              fontWeight: "700",
+            }}
           >
             {expanded
               ? `Ocultar o que compõe o ${periodNoun}`
@@ -462,6 +494,11 @@ export default function BalanceForecast() {
 
   const transactions = useBankStore((s) => s.transactions);
   const fetchTransactions = useBankStore((s) => s.fetchTransactions);
+  // As contas são a fonte do saldo base. Carregam uma vez e ficam em memória
+  // (o store cuida disso): o extrato devolve só `accountId`, e é aqui que o id
+  // vira tipo, saldo informado e limite
+  const accounts = useAccountsStore((s) => s.accounts);
+  const fetchAccounts = useAccountsStore((s) => s.fetchAccounts);
 
   const forecast = useRecurrenceStore((s) => s.forecast);
   const isForecastLoading = useRecurrenceStore((s) => s.isForecastLoading);
@@ -476,23 +513,32 @@ export default function BalanceForecast() {
   const [baselineReady, setBaselineReady] = useState(transactions.length > 0);
   const bankAttempted = useRef(false);
 
-  // O saldo base é o líquido do extrato já importado: é o único saldo que o
-  // app conhece, e mandá-lo é o que faz o acumulado significar alguma coisa.
-  //
-  // Fora da conta ficam as linhas que a Análise também não soma: dinheiro do
-  // titular trocando de bolso (entra e sai, e somar os dois lados aqui move o
-  // ponto de partida para os dois lados) e linha ignorada, que entrou por duas
-  // fontes e contaria em dobro. Medido no extrato do dono: 197 transferências
-  // próprias e 20 duplicatas.
-  const startingBalance = useMemo(
-    () =>
-      calculateBankMetrics(
-        transactions.filter(
-          (tx) => !tx.internalTransfer && !tx.ignored && !tx.refunded,
-        ),
-      ).total,
-    [transactions],
-  );
+  /**
+   * De onde a projeção parte — e por que ela agora pode não partir de lugar
+   * nenhum.
+   *
+   * <p><b>O que estava errado, com data.</b> Até 15/09/2026 o ponto de partida
+   * era o LÍQUIDO DO EXTRATO: a soma de tudo que já tinha sido importado,
+   * entradas menos saídas. O dono olhou o resultado e disse <i>"esse número é
+   * absurdo"</i> — o app projetava que ele fecharia o mês devendo dezenove mil
+   * reais, partindo de −R$ 20.515,63.
+   *
+   * <p>Não era um erro de arredondamento: <b>soma de movimento não é saldo</b>.
+   * Ela só coincidiria com o saldo se o extrato começasse no dia em que a conta
+   * foi aberta e não faltasse uma linha. E pior — a fatura do cartão caía na
+   * mesma soma: cada compra derrubava o total, e o pagamento da fatura pela
+   * conta corrente derrubava de novo. O mesmo dinheiro descontado duas vezes,
+   * sempre para baixo, mês após mês.
+   *
+   * <p><b>Agora o saldo tem dono e data</b>: vem do que a instituição informou,
+   * seja pelo conector, seja pelo bloco `LEDGERBAL` do OFX que a pessoa sobe.
+   * Quando ninguém informou, o valor é `null` — e `null` NÃO vira zero. A tela
+   * passa a projetar o MOVIMENTO do período em vez de um saldo inventado, e
+   * diz isso com todas as letras. Ver `utils/cashPosition`.
+   */
+  const cash = useMemo(() => cashPositionFrom(accounts), [accounts]);
+  const startingBalance = cash.amount ?? 0;
+  const saldoConhecido = cash.amount != null;
 
   useEffect(() => {
     if (transactions.length > 0) {
@@ -505,6 +551,12 @@ export default function BalanceForecast() {
     bankAttempted.current = true;
     fetchTransactions().finally(() => setBaselineReady(true));
   }, [transactions.length, fetchTransactions]);
+
+  // O saldo base vem das contas, não mais do extrato: sem esta busca a
+  // projeção partiria de "não sei" mesmo com o saldo já guardado no servidor
+  useEffect(() => {
+    fetchAccounts();
+  }, [fetchAccounts]);
 
   useEffect(() => {
     if (!baselineReady) return;
@@ -537,16 +589,18 @@ export default function BalanceForecast() {
 
   const onRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Promise.all([fetchTransactions(), fetchForecast(window, startingBalance)]);
+    await Promise.all([
+      fetchTransactions(),
+      fetchForecast(window, startingBalance),
+    ]);
   }, [fetchTransactions, fetchForecast, window, startingBalance]);
 
   const months = useMemo(() => forecast?.months ?? [], [forecast]);
   // EC-226: seis meses à frente com o que JÁ tem dono. As três fontes
   // (parcela, fatura prevista e recorrência) somadas respondem quanto de
   // cada mês está comprometido antes de ele começar
-  const [parcelamentos, setParcelamentos] = useState<InstallmentOverview | null>(
-    null,
-  );
+  const [parcelamentos, setParcelamentos] =
+    useState<InstallmentOverview | null>(null);
   const linhaDoTempo = useMemo(
     () => buildCommitmentTimeline(months, parcelamentos),
     [months, parcelamentos],
@@ -654,7 +708,8 @@ export default function BalanceForecast() {
                   fontWeight: "600",
                 }}
               >
-                {forecastError} Os valores abaixo são da última janela carregada.
+                {forecastError} Os valores abaixo são da última janela
+                carregada.
               </Text>
               <TouchableOpacity
                 onPress={() => fetchForecast(window, startingBalance)}
@@ -683,13 +738,16 @@ export default function BalanceForecast() {
             </View>
           )}
 
-          {/* Saldo base declarado na cara: a projeção inteira depende dele e o
-              usuário precisa saber de onde ele veio para confiar no número */}
+          {/* De onde a projeção parte — declarado na cara, porque a conta
+              inteira depende dele. Quando não há saldo informado, o que se
+              declara é a AUSÊNCIA: a tela projeta movimento, não saldo */}
           <View
             accessible
-            accessibilityLabel={`Saldo base da projeção: ${formatBRL(
-              startingBalance,
-            )}, somado a partir do extrato importado`}
+            accessibilityLabel={
+              saldoConhecido
+                ? `Partindo de ${formatBRL(startingBalance)}, o saldo que suas contas informaram`
+                : "Sem saldo informado: a projeção mostra o movimento do período, não o saldo"
+            }
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -698,10 +756,16 @@ export default function BalanceForecast() {
               borderRadius: radius.xl,
               backgroundColor: t.background.elevated,
               borderWidth: 1,
-              borderColor: t.border.subtle,
+              borderColor: saldoConhecido
+                ? t.border.subtle
+                : t.semantic.warning,
             }}
           >
-            <Info size={16} color={t.text.tertiary} />
+            {saldoConhecido ? (
+              <Info size={16} color={t.text.tertiary} />
+            ) : (
+              <TriangleAlert size={16} color={t.semantic.warning} />
+            )}
             <Text
               style={{
                 flex: 1,
@@ -711,11 +775,27 @@ export default function BalanceForecast() {
                 lineHeight: 17,
               }}
             >
-              Partindo de{" "}
-              <Text style={{ color: t.text.primary, fontWeight: "700" }}>
-                {formatBRLCompact(startingBalance)}
-              </Text>
-              , o líquido do extrato que você importou.
+              {saldoConhecido ? (
+                <>
+                  Partindo de{" "}
+                  <Text style={{ color: t.text.primary, fontWeight: "700" }}>
+                    {formatBRLCompact(startingBalance)}
+                  </Text>
+                  , o saldo que suas contas informaram
+                  {cash.caveat ? ` — ${cash.caveat.toLowerCase()}` : "."}
+                </>
+              ) : (
+                <>
+                  <Text style={{ color: t.text.primary, fontWeight: "700" }}>
+                    Não sei quanto você tem hoje.
+                  </Text>{" "}
+                  Nenhuma conta informou saldo, então os valores abaixo são o{" "}
+                  <Text style={{ fontWeight: "700" }}>movimento</Text> previsto
+                  do período — quanto entra e quanto sai —, e não o saldo.
+                  Importe um OFX do banco ou conecte a conta para a projeção
+                  ganhar um ponto de partida.
+                </>
+              )}
             </Text>
           </View>
 
@@ -796,10 +876,7 @@ export default function BalanceForecast() {
                   lembrar dos anteriores */}
               {linhaDoTempo.length > 0 ? (
                 <View style={{ marginTop: spacing[4] }}>
-                  <CommitmentTimeline
-                    months={linhaDoTempo}
-                    showValues
-                  />
+                  <CommitmentTimeline months={linhaDoTempo} showValues />
                 </View>
               ) : null}
 
@@ -816,6 +893,7 @@ export default function BalanceForecast() {
                       index={index}
                       expanded={expandedMonth === key}
                       onToggle={() => handleToggleMonth(key)}
+                      saldoConhecido={saldoConhecido}
                     />
                   );
                 })}
@@ -830,20 +908,20 @@ export default function BalanceForecast() {
                 }}
               >
                 O período corrente projeta só o que ainda falta acontecer: o que
-                já caiu na conta aparece marcado e fica fora da soma. Transferências
-                entre suas próprias contas e séries sem ritmo definido não entram
-                na projeção.
+                já caiu na conta aparece marcado e fica fora da soma.
+                Transferências entre suas próprias contas e séries sem ritmo
+                definido não entram na projeção.
               </Text>
             </>
           )}
-        {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
+          {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
             números dele. Some por completo no Plus */}
-        <AdSlot style={{ marginTop: spacing[4] }} />
+          <AdSlot style={{ marginTop: spacing[4] }} />
         </ScrollView>
       )}
-    {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
+      {/* EC-201: o assistente e porta, nao aba. Ele chega sabendo de
         qual tela foi aberto, e sugere as perguntas dela */}
-    <AssistantFAB origin="previsao" />
+      <AssistantFAB origin="previsao" />
     </PageContainer>
   );
 }

@@ -45,6 +45,8 @@ const CONTA: ConnectorAccount = {
   linked: true,
   reportedBalance: null,
   reportedBalanceAt: null,
+  creditLimit: null,
+  creditLimitSharedWith: null,
 };
 
 const CARTAO: ConnectorAccount = {

@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { TabBarHeightContext } from "../routes/tabBarHeight";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
 
@@ -15,6 +16,11 @@ import { assistantLabel, type AssistantOrigin } from "../utils/assistantEntry";
 
 interface AssistantFABProps {
   label?: string;
+  /**
+   * Distância explícita do rodapé. Sem ela o botão decide sozinho — ver
+   * `useAssistantFabOffset`. Só passe quando a tela tem um rodapé próprio
+   * (barra de ações fixa) que o botão precisa respeitar.
+   */
   bottomOffset?: number;
   /**
    * De qual tela a porta está sendo aberta (EC-201).
@@ -33,6 +39,41 @@ interface AssistantFABProps {
  */
 export const ASSISTANT_FAB_HEIGHT = 52;
 
+/** Respiro entre o botão e o que está abaixo dele (barra de abas ou borda). */
+export const ASSISTANT_FAB_GAP = spacing[5];
+
+/**
+ * Onde o botão assenta — e a folga dupla que isto corrige.
+ *
+ * <p>O botão sempre somou `insets.bottom` ao respiro. Numa tela de pilha isso
+ * é certo: o rodapé é a borda do aparelho e a barra de gestos do iPhone come
+ * 34 px dali. Numa ABA, porém, a barra inferior já paga esse inset (é ela que
+ * encosta na borda — `routes/index.tsx`, `tabBarStyle.height`), e o React
+ * Navigation NÃO desconta isso do contexto de insets da cena: dentro da aba
+ * `useSafeAreaInsets().bottom` continua devolvendo os 34. Resultado, medido
+ * em 16/09/2026 na web a 390 px com o inset de 34 emulado: na Home o botão
+ * flutuava 54 px acima da barra de abas, contra os 20 de uma tela de pilha —
+ * o dobro do respiro, e visivelmente "solto" sobre o calendário.
+ *
+ * <p>A pista de "estou numa aba" é o `TabBarHeightContext`, que o navegador
+ * de abas fornece a toda cena sob a barra (inclusive às abas superiores de
+ * Finanças, que vivem dentro dele) e que é `undefined` no resto do app. Assim
+ * as telas não precisam saber em que navegador estão. O contexto é NOSSO e
+ * não o do React Navigation — o motivo está em `routes/tabBarHeight.ts`, e
+ * envolvia dez suítes de teste que paravam de rodar.
+ *
+ * <p>Exportado para as listas reservarem o rodapé com a MESMA conta que o
+ * botão usa: `useAssistantFabOffset() + ASSISTANT_FAB_HEIGHT + spacing[4]`.
+ */
+export function useAssistantFabOffset(bottomOffset?: number): number {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useContext(TabBarHeightContext);
+  if (bottomOffset !== undefined) return bottomOffset;
+  return tabBarHeight === undefined
+    ? insets.bottom + ASSISTANT_FAB_GAP
+    : ASSISTANT_FAB_GAP;
+}
+
 export default function AssistantFAB({
   label,
   bottomOffset,
@@ -40,8 +81,8 @@ export default function AssistantFAB({
 }: AssistantFABProps) {
   const t = useTheme();
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const { fabEntering } = useMotionPresets();
+  const bottom = useAssistantFabOffset(bottomOffset);
 
   // Rótulo explícito vence a origem; sem os dois, o genérico. "Fale com o
   // Nino" em toda parte é o mesmo botão de sempre — dizer sobre O QUÊ se vai
@@ -55,6 +96,7 @@ export default function AssistantFAB({
 
   return (
     <Animated.View
+      testID="assistant-fab"
       entering={fabEntering}
       // O halo e a sombra passam da área do botão: sem o `box-none` a moldura
       // invisível deles rouba o clique de quem está por baixo
@@ -63,7 +105,7 @@ export default function AssistantFAB({
         {
           position: "absolute",
           right: spacing[5],
-          bottom: bottomOffset ?? insets.bottom + spacing[5],
+          bottom,
         },
       ]}
     >

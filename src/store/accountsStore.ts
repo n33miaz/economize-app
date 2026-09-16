@@ -1,4 +1,6 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   AccountInvoices,
@@ -27,6 +29,12 @@ interface AccountsState {
   isLoading: boolean;
   /** Separa "ainda não perguntei" de "perguntei e não tem conta nenhuma". */
   hasLoadedOnce: boolean;
+  /**
+   * Quando a lista foi lida, em ISO. Persiste JUNTO das contas: enquanto o
+   * servidor acorda, a cortina mostra o último saldo informado — e só pode
+   * fazê-lo dizendo de quando ele é.
+   */
+  accountsAt: string | null;
   error: string | null;
   invoices: Record<string, InvoicesSlot>;
 
@@ -48,11 +56,29 @@ const emptyState = () => ({
   byId: new Map<string, ConnectorAccount>(),
   isLoading: false,
   hasLoadedOnce: false,
+  accountsAt: null as string | null,
   error: null as string | null,
   invoices: {} as Record<string, InvoicesSlot>,
 });
 
-export const useAccountsStore = create<AccountsState>((set, get) => ({
+/** Chave do instantâneo das contas no armazenamento local. */
+export const ACCOUNTS_SNAPSHOT_KEY = "@accounts_snapshot";
+
+/**
+ * O que vai para o disco: a lista e a sua data. As faturas ficam de fora —
+ * são o rastro mais pesado e mais sensível do store (cada lançamento de cada
+ * cartão), e a cortina do servidor só precisa do saldo informado.
+ */
+type AccountsSnapshot = Pick<AccountsState, "accounts" | "accountsAt">;
+
+/** Uma conta que não tem cara de conta não volta do disco para a tela. */
+function looksLikeAccount(value: unknown): value is ConnectorAccount {
+  if (typeof value !== "object" || value === null) return false;
+  const account = value as Record<string, unknown>;
+  return typeof account.id === "string" && typeof account.type === "string";
+}
+
+const createAccountsState: StateCreator<AccountsState> = (set, get) => ({
   ...emptyState(),
 
   /**
@@ -84,6 +110,8 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
         byId: indexAccounts(data),
         isLoading: false,
         hasLoadedOnce: true,
+        // "Quando este aparelho leu": é o que a legenda de dado velho carimba
+        accountsAt: new Date().toISOString(),
       });
     } catch (e) {
       // `hasLoadedOnce` fica FALSO de propósito: marcá-lo aqui transformava um
@@ -153,7 +181,36 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       }));
     }
   },
-}));
+});
+
+export const useAccountsStore = create<AccountsState>()(
+  persist(createAccountsState, {
+    name: ACCOUNTS_SNAPSHOT_KEY,
+    storage: createJSONStorage(() => AsyncStorage),
+    partialize: (state): AccountsSnapshot => ({
+      accounts: state.accounts,
+      accountsAt: state.accountsAt,
+    }),
+    // O `byId` é um Map e não sobrevive ao JSON: é refeito da lista ao voltar
+    // do disco. `hasLoadedOnce` NÃO volta: continua falso para o primeiro
+    // foco buscar de novo — o que reidratou é o que se sabia, não resposta
+    merge: (persisted, current) => {
+      const snapshot = persisted as Partial<AccountsSnapshot> | undefined;
+      const accounts = Array.isArray(snapshot?.accounts)
+        ? snapshot.accounts.filter(looksLikeAccount)
+        : [];
+      return {
+        ...current,
+        accounts,
+        byId: indexAccounts(accounts),
+        accountsAt:
+          accounts.length > 0 && typeof snapshot?.accountsAt === "string"
+            ? snapshot.accountsAt
+            : null,
+      };
+    },
+  }),
+);
 
 /** A resposta que chegou ainda é a janela que a tela está pedindo? */
 function isWindowStillWanted(

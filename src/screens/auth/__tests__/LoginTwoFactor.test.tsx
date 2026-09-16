@@ -45,7 +45,19 @@ function renderLogin() {
   return { navigation, ...utils };
 }
 
+/**
+ * A abertura (EC-148) agora segura TODO o formulário, e não só o nome da
+ * marca: pedido do dono em 15/09/2026 — "ao abrir o app, nenhum campo e nada
+ * deve aparecer além do pote e a animação dele". Antes os campos existiam no
+ * primeiro quadro e o teste podia digitar de imediato; agora ele espera o
+ * mesmo que uma pessoa espera.
+ */
+async function esperarFormulario(getByLabelText: any) {
+  await waitFor(() => expect(getByLabelText("E-mail")).toBeTruthy(), ESPERA);
+}
+
 async function submitCredentials(getByLabelText: any) {
+  await esperarFormulario(getByLabelText);
   fireEvent.changeText(getByLabelText("E-mail"), "ana@teste.com");
   fireEvent.changeText(getByLabelText("Senha"), "senha-da-ana");
   fireEvent.press(getByLabelText("Entrar"));

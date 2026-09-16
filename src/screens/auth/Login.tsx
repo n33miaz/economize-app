@@ -47,6 +47,14 @@ export default function Login({ navigation }: any) {
   // métrica para buscar (ninguém entrou ainda), então o "pronto" é o próprio
   // fim do preparo — e o teto de tempo garante que a animação jamais vire a
   // razão da espera, que é a restrição dura do pedido.
+  //
+  // `revelado` manda em TUDO, e não só no nome da marca. Pedido do dono em
+  // 15/09/2026: "ao abrir o app, nenhum campo e nada deve aparecer além do
+  // pote e a animação dele, os outros elementos devem aparecer com fade
+  // suave". Antes o formulário já estava lá desde o primeiro quadro, e o pote
+  // subia por cima de uma tela cheia — a animação virava enfeite em vez de
+  // abertura. O `resgate` de 2,6 s continua sendo a rede: conteúdo nunca pode
+  // depender só de a animação terminar.
   const [pronto, setPronto] = useState(false);
   const [revelado, setRevelado] = useState(false);
 
@@ -174,7 +182,10 @@ export default function Login({ navigation }: any) {
           />
         </View>
         {revelado && (
-          <Animated.View entering={FadeIn.duration(280)} className="items-center">
+          <Animated.View
+            entering={FadeIn.duration(280)}
+            className="items-center"
+          >
             <Text className="text-3xl font-bold text-textPrimary">
               Economize!
             </Text>
@@ -187,141 +198,147 @@ export default function Login({ navigation }: any) {
         )}
       </View>
 
-      {error && (
-        <View className="bg-danger/15 p-3 rounded-xl mb-4 border border-danger/40">
-          <Text className="text-danger text-center text-sm">{error}</Text>
-        </View>
-      )}
+      {!revelado ? null : (
+        <Animated.View entering={FadeIn.duration(360).delay(60)}>
+          {error && (
+            <View className="bg-danger/15 p-3 rounded-xl mb-4 border border-danger/40">
+              <Text className="text-danger text-center text-sm">{error}</Text>
+            </View>
+          )}
 
-      {mfaToken ? (
-        <>
-          <Text className="text-textSecondary text-sm mb-4 text-center">
-            Digite o código de 6 dígitos do seu aplicativo autenticador — ou um
-            dos códigos de recuperação que você guardou.
-          </Text>
-          <View className="mb-6">
-            <FloatingLabelInput
-              label="Código de verificação"
-              value={mfaCode}
-              onChangeText={(text) => {
-                setMfaCode(text);
-                clearError();
-              }}
-              autoCapitalize="characters"
-              // `numeric` travaria o código de recuperação, que tem letras
-              keyboardType="default"
-            />
-          </View>
-
-          <TouchableOpacity
-            className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"
-            onPress={handleMfaSubmit}
-            disabled={isLoading}
-            accessibilityLabel="Verificar código"
-            accessibilityRole="button"
-          >
-            {isLoading ? (
-              <ActivityIndicator color={t.text.inverse} />
-            ) : (
-              <Text className="text-primaryDark font-bold text-lg">
-                Verificar
+          {mfaToken ? (
+            <>
+              <Text className="text-textSecondary text-sm mb-4 text-center">
+                Digite o código de 6 dígitos do seu aplicativo autenticador — ou
+                um dos códigos de recuperação que você guardou.
               </Text>
-            )}
-          </TouchableOpacity>
+              <View className="mb-6">
+                <FloatingLabelInput
+                  label="Código de verificação"
+                  value={mfaCode}
+                  onChangeText={(text) => {
+                    setMfaCode(text);
+                    clearError();
+                  }}
+                  autoCapitalize="characters"
+                  // `numeric` travaria o código de recuperação, que tem letras
+                  keyboardType="default"
+                />
+              </View>
 
-          <TouchableOpacity
-            className="mt-6 items-center"
-            onPress={() => {
-              setMfaToken(null);
-              setMfaCode("");
-              setPassword("");
-              clearError();
-            }}
-            accessibilityLabel="Voltar para o login"
-            accessibilityRole="button"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text className="text-textSecondary">Usar outra conta</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <View className="mb-4">
-            <FloatingLabelInput
-              label="E-mail"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                clearError();
-              }}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
+              <TouchableOpacity
+                className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"
+                onPress={handleMfaSubmit}
+                disabled={isLoading}
+                accessibilityLabel="Verificar código"
+                accessibilityRole="button"
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={t.text.inverse} />
+                ) : (
+                  <Text className="text-primaryDark font-bold text-lg">
+                    Verificar
+                  </Text>
+                )}
+              </TouchableOpacity>
 
-          <View className="mb-2">
-            <FloatingLabelInput
-              label="Senha"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                clearError();
-              }}
-              secureTextEntry
-            />
-          </View>
+              <TouchableOpacity
+                className="mt-6 items-center"
+                onPress={() => {
+                  setMfaToken(null);
+                  setMfaCode("");
+                  setPassword("");
+                  clearError();
+                }}
+                accessibilityLabel="Voltar para o login"
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text className="text-textSecondary">Usar outra conta</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View className="mb-4">
+                <FloatingLabelInput
+                  label="E-mail"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    clearError();
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
 
-          <TouchableOpacity
-            className="self-end mb-6 py-1"
-            onPress={() => navigation.navigate("ForgotPassword")}
-            accessibilityLabel="Esqueci minha senha"
-            accessibilityRole="button"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text className="text-primary font-bold text-sm">
-              Esqueci minha senha
-            </Text>
-          </TouchableOpacity>
+              <View className="mb-2">
+                <FloatingLabelInput
+                  label="Senha"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    clearError();
+                  }}
+                  secureTextEntry
+                />
+              </View>
 
-          <TouchableOpacity
-            className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"
-            onPress={handleLogin}
-            disabled={isLoading}
-            accessibilityLabel="Entrar"
-            accessibilityRole="button"
-          >
-            {isLoading ? (
-              <ActivityIndicator color={t.text.inverse} />
-            ) : (
-              <Text className="text-primaryDark font-bold text-lg">Entrar</Text>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                className="self-end mb-6 py-1"
+                onPress={() => navigation.navigate("ForgotPassword")}
+                accessibilityLabel="Esqueci minha senha"
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text className="text-primary font-bold text-sm">
+                  Esqueci minha senha
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            className="mt-6 items-center"
-            onPress={() => navigation.navigate("Register")}
-            accessibilityLabel="Criar conta"
-            accessibilityRole="button"
-          >
-            <Text className="text-textSecondary">
-              Não tem uma conta?{" "}
-              <Text className="text-primary font-bold">Cadastre-se</Text>
-            </Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"
+                onPress={handleLogin}
+                disabled={isLoading}
+                accessibilityLabel="Entrar"
+                accessibilityRole="button"
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={t.text.inverse} />
+                ) : (
+                  <Text className="text-primaryDark font-bold text-lg">
+                    Entrar
+                  </Text>
+                )}
+              </TouchableOpacity>
 
-          {/* A versão do build, na única tela que todo mundo vê antes de
+              <TouchableOpacity
+                className="mt-6 items-center"
+                onPress={() => navigation.navigate("Register")}
+                accessibilityLabel="Criar conta"
+                accessibilityRole="button"
+              >
+                <Text className="text-textSecondary">
+                  Não tem uma conta?{" "}
+                  <Text className="text-primary font-bold">Cadastre-se</Text>
+                </Text>
+              </TouchableOpacity>
+
+              {/* A versão do build, na única tela que todo mundo vê antes de
               entrar. Existe para o suporte: quando alguém relata um defeito,
               a primeira pergunta é "qual versão?" — e a resposta tem de estar
               na tela, não em Ajustes do Android. Fica discreta de propósito:
               é informação de diagnóstico, não de produto. */}
-          <Text
-            className="mt-8 text-center text-xs"
-            style={{ color: t.text.tertiary }}
-            accessibilityLabel={`Versão do aplicativo ${APP_VERSION}`}
-          >
-            versão {APP_VERSION}
-          </Text>
-        </>
+              <Text
+                className="mt-8 text-center text-xs"
+                style={{ color: t.text.tertiary }}
+                accessibilityLabel={`Versão do aplicativo ${APP_VERSION}`}
+              >
+                versão {APP_VERSION}
+              </Text>
+            </>
+          )}
+        </Animated.View>
       )}
 
       <BiometricPrompt

@@ -55,10 +55,46 @@ function toEpoch(value: Instant): number | null {
   return Number.isFinite(time) ? time : null;
 }
 
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
 function shortDate(time: number): string {
   const date = new Date(time);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+/**
+ * "15/09/2026 às 18:32" — a legenda de um número GUARDADO, que precisa dizer
+ * de quando é, e não há quanto tempo.
+ *
+ * O relativo ("há 2 h") serve ao número que acabou de ser lido; o número que
+ * saiu do disco enquanto o servidor acorda pode ser de ontem à noite, e
+ * "ontem à noite" é uma hora, não uma contagem. `null` sem instante, pela
+ * mesma regra do resto do módulo: quem chama decide o que dizer.
+ */
+export function formatDateTime(value: Instant): string | null {
+  const time = toEpoch(value);
+  if (time === null) return null;
+  const date = new Date(time);
+  return `${shortDate(time)} às ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+/**
+ * "Este número já venceu?" — para quem vai desenhar dado guardado e precisa
+ * decidir, antes de desenhar, se o mostra como de agora ou como do passado.
+ *
+ * Sem instante a resposta é SIM: dado sem data não tem como provar que é
+ * novo, e a dúvida joga contra o número, nunca a favor. Relógio adiantado no
+ * aparelho dá idade negativa, que fica abaixo de qualquer teto — o número é
+ * tratado como fresco, o que é o mais próximo da verdade que dá para afirmar.
+ */
+export function isStale(
+  value: Instant,
+  maxAgeMs: number,
+  now: number = Date.now(),
+): boolean {
+  const time = toEpoch(value);
+  if (time === null) return true;
+  return now - time >= maxAgeMs;
 }
 
 /**

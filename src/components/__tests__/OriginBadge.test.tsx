@@ -14,6 +14,8 @@ const cartao: ConnectorAccount = {
   linked: true,
   reportedBalance: null,
   reportedBalanceAt: null,
+  creditLimit: null,
+  creditLimitSharedWith: null,
 };
 
 describe("OriginBadge", () => {

@@ -15,24 +15,30 @@ import {
 // `createURL` — o destino por plataforma (deep link no aparelho, origem na
 // web) só sai do expo-linking. Os dois convivem, com nomes distintos
 import * as ExpoLinking from "expo-linking";
-import ArrowDownLeft from "lucide-react-native/dist/esm/icons/arrow-down-left";
-import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
-import FileText from "lucide-react-native/dist/esm/icons/file-text";
 import Landmark from "lucide-react-native/dist/esm/icons/landmark";
 import Link2 from "lucide-react-native/dist/esm/icons/link-2";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import RefreshCw from "lucide-react-native/dist/esm/icons/refresh-cw";
 import Unlink from "lucide-react-native/dist/esm/icons/unlink";
-import Tag from "lucide-react-native/dist/esm/icons/tag";
 import Upload from "lucide-react-native/dist/esm/icons/upload";
 import { PieChart } from "react-native-gifted-charts";
 import * as Haptics from "../utils/haptics";
 import Animated from "react-native-reanimated";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
 
-import { getBalanceCheck } from "../services/api";
+import {
+  describeRequestFailure,
+  getBalanceCheck,
+  getMergeSuggestions,
+  mergeAccounts,
+  type AccountMergeSuggestion,
+} from "../services/api";
 import type {
   BalanceFinding,
   BankTransaction,
@@ -56,10 +62,10 @@ import { askConfirm } from "../store/confirmStore";
 import PageContainer from "../components/PageContainer";
 import ActionRow from "../components/ActionRow";
 import BalanceCheckNotice from "../components/BalanceCheckNotice";
+import DuplicateAccountsCard from "../components/DuplicateAccountsCard";
 import AssistantFAB from "../components/AssistantFAB";
 import BankLogo from "../components/BankLogo";
 import ErrorState from "../components/ErrorState";
-import CategoryIcon from "../components/CategoryIcon";
 import ChartLegend from "../components/ChartLegend";
 import CycleAnchorSheet from "../components/CycleAnchorSheet";
 import CycleWindowChip from "../components/CycleWindowChip";
@@ -68,24 +74,23 @@ import FilterChipRow from "../components/FilterChipRow";
 import { bankKeyFor } from "../utils/bankBrand";
 import { useWaitingLine } from "../hooks/useWaitingLine";
 import FreshnessStamp from "../components/FreshnessStamp";
-import MemberBadge from "../components/MemberBadge";
-import OriginBadge from "../components/OriginBadge";
+import PotEmptyState from "../components/PotEmptyState";
 import Skeleton from "../components/Skeleton";
 import TransactionDetailSheet from "../components/TransactionDetailSheet";
+import TransactionRow, {
+  TRANSACTION_ROW_CARD_HEIGHT,
+} from "../components/TransactionRow";
 import { APP_ROUTES } from "../routes/routeNames";
-import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import {
   ORIGIN_ALL,
-  accountDisplayName,
   applyOriginFilter,
   connectionLabel,
   creditCardAccounts,
   describeOriginFilter,
-  originLabel,
   originFilterOptions,
   resolveOriginFilter,
 } from "../utils/accounts";
@@ -98,7 +103,6 @@ import {
   analysisRangeForMonth,
   cycleMonthKeyContaining,
   cycleWindowForMonth,
-  formatDayMonthShort,
   todayIso,
 } from "../utils/cycleWindow";
 import {
@@ -108,16 +112,22 @@ import {
   resolveMemberFilter,
 } from "../utils/family";
 import { formatBRL, formatBRLCompact } from "../utils/money";
-import {
-  isRenamed,
-  transactionDisplayName,
-  transactionOriginalName,
-} from "../utils/transactions";
 
 // Teto do gráfico de pizza: acima disso ele só cresce sem informar mais nada
 const MAX_CHART_WIDTH = 420;
 // Raio da rosca: 56 é o que o gráfico de fluxo já ocupava (altura 140)
 const MAX_CHART_RADIUS = 56;
+// Lado do quadrado de cada atalho de banco: logo 34 + rótulo em uma linha
+const BANK_SHORTCUT_SIZE = 72;
+
+// Rótulo-legenda das fileiras (Origem, Quem, métricas): o mesmo tratamento do
+// `SectionTitle`, sem as margens dele — aqui o respiro é do bloco
+const EYEBROW_TYPE = {
+  fontSize: 10,
+  fontWeight: "700",
+  letterSpacing: 1.2,
+  textTransform: "uppercase",
+} as const;
 
 // Atalhos para o app de cada banco. A identidade visual vem do logo
 // (`BankLogo`, que casa pelo nome), não de cor de marca solta fora dos tokens
@@ -163,7 +173,8 @@ function MetricCard({
       accessibilityLabel={`${label}: ${formatBRL(value)}`}
     >
       <Text
-        className="text-textTertiary text-[10px] font-bold uppercase tracking-[1.2px] mb-1.5"
+        className="text-textTertiary mb-1.5"
+        style={EYEBROW_TYPE}
         numberOfLines={1}
       >
         {label}
@@ -207,17 +218,22 @@ function StatementSkeleton() {
       <Skeleton width={112} height={16} className="mt-4 mb-3" />
       <View className="flex-row gap-3 mb-5">
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} width={72} height={72} borderRadius={radius.xl} />
+          <Skeleton
+            key={i}
+            width={BANK_SHORTCUT_SIZE}
+            height={BANK_SHORTCUT_SIZE}
+            borderRadius={radius.xl}
+          />
         ))}
       </View>
 
-      {/* linhas do histórico de transações */}
-      <Skeleton width={192} height={20} className="mb-3" />
+      {/* linhas de lançamento, na altura do card sem selos */}
+      <Skeleton width={148} height={20} className="mb-3" />
       {[0, 1, 2, 3].map((i) => (
         <Skeleton
           key={i}
           width="100%"
-          height={86}
+          height={TRANSACTION_ROW_CARD_HEIGHT}
           borderRadius={radius["2xl"]}
           className="mb-3"
         />
@@ -229,11 +245,16 @@ function StatementSkeleton() {
 export default function BankIntegration() {
   const t = useTheme();
   const navigation = useNavigation();
+  const route = useRoute();
   const { cardEntering, listItemEntering } = useMotionPresets();
-  // Instâncias separadas: cada botão de importar tem seu próprio ciclo de toque
+  // Instâncias separadas: cada botão tem seu próprio ciclo de toque
   const importPress = usePressScale();
-  const emptyImportPress = usePressScale();
   const bannerPress = usePressScale();
+  // O Extrato pode ser aberto já filtrado por uma conta (Cartões manda o
+  // cartão escolhido). O projeto não tem ParamList tipado — cast local
+  const requestedAccountId = (
+    route.params as { accountId?: string } | undefined
+  )?.accountId;
   const {
     transactions,
     isLoading,
@@ -258,7 +279,17 @@ export default function BankIntegration() {
   // E é filtro em memória, não ida ao servidor: a lista inteira já está na
   // tela, `/bank-statements` não aceita recorte, e assim as métricas do topo
   // recalculam no mesmo quadro do toque.
-  const [originFilter, setOriginFilter] = useState(ORIGIN_ALL);
+  //
+  // Nasce com a conta pedida pela rota, quando há: quem chega do card do
+  // cartão quer ver o extrato DELE, não a lista inteira para filtrar de novo
+  const [originFilter, setOriginFilter] = useState(
+    requestedAccountId ?? ORIGIN_ALL,
+  );
+  // A aba fica montada entre visitas: um segundo pedido com outra conta
+  // precisa trocar o filtro, e não só o estado inicial
+  useEffect(() => {
+    if (requestedAccountId) setOriginFilter(requestedAccountId);
+  }, [requestedAccountId]);
 
   // EC-150: o Extrato da CASA. O alternador é o mesmo da Análise, e o recorte
   // também: a casa não tem calendário próprio, tem o de quem está olhando.
@@ -343,6 +374,36 @@ export default function BankIntegration() {
   // entender de onde os números vêm — e foi exatamente entre estas duas telas
   // que o concorrente se contradisse
   const [avisosDeSaldo, setAvisosDeSaldo] = useState<BalanceFinding[]>([]);
+  const [duplicadas, setDuplicadas] = useState<AccountMergeSuggestion[]>([]);
+
+  /**
+   * Junta duas origens que são a mesma conta, e recarrega o que depende delas.
+   *
+   * <p>Depois da fusão, três coisas mudaram no servidor: a lista de contas (uma
+   * deixou de existir), o extrato (lançamentos trocaram de origem) e as
+   * sugestões (o par resolvido sai da lista). Recarregar as três aqui é o que
+   * evita a tela continuar oferecendo uma fusão que já aconteceu.
+   */
+  const juntarContas = useCallback(
+    async (sugestao: AccountMergeSuggestion) => {
+      try {
+        const movidos = await mergeAccounts(sugestao.sourceId, sugestao.targetId);
+        showToast(
+          movidos === 1
+            ? "1 lançamento mudou de conta. As duas origens agora são uma."
+            : `${movidos.toLocaleString("pt-BR")} lançamentos mudaram de conta. As duas origens agora são uma.`,
+          "success",
+        );
+        await fetchAccounts(true);
+        await fetchTransactions();
+        const restantes = await getMergeSuggestions().catch(() => []);
+        setDuplicadas(restantes);
+      } catch (erro) {
+        showToast(describeRequestFailure(erro).message, "error");
+      }
+    },
+    [fetchAccounts, fetchTransactions, showToast],
+  );
   // Hook, e não Dimensions.get no módulo: a janela do navegador redimensiona
   const { width: windowWidth } = useWindowDimensions();
   const chartWidth = Math.min(windowWidth - 80, MAX_CHART_WIDTH);
@@ -434,6 +495,11 @@ export default function BankIntegration() {
       getBalanceCheck()
         .then((relatorio) => setAvisosDeSaldo(relatorio.findings))
         .catch(() => setAvisosDeSaldo([]));
+      // Origens duplicadas: mesmo best-effort da conferência acima. É aviso,
+      // não conteúdo — e uma falha aqui não pode tirar as conexões do ar
+      getMergeSuggestions()
+        .then(setDuplicadas)
+        .catch(() => setDuplicadas([]));
     }, [
       fetchTransactions,
       fetchCategories,
@@ -566,8 +632,8 @@ export default function BankIntegration() {
   // Tudo que a linha lê de fora do `item`; estável entre renders que não mudam
   // nada disso, que é o ponto do `extraData`
   const cellDeps = useMemo(
-    () => ({ accountsById, catById, showOrigin }),
-    [accountsById, catById, showOrigin],
+    () => ({ accountsById, catById, showOrigin, myMemberId }),
+    [accountsById, catById, showOrigin, myMemberId],
   );
 
   // De propósito sobre a lista INTEIRA, e não sobre o recorte visível: o banner
@@ -614,7 +680,9 @@ export default function BankIntegration() {
             "info",
           );
         }
-        (navigation as any).navigate("Revisão", { uploadId: result.uploadId });
+        (navigation as any).navigate(APP_ROUTES.revisao, {
+          uploadId: result.uploadId,
+        });
       } else if (result.transactionsImported > 0) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const imported = `${result.transactionsImported} ${plural(result.transactionsImported, "transação importada", "transações importadas")}`;
@@ -709,158 +777,33 @@ export default function BankIntegration() {
     // Só no escopo da casa a linha tem dono a declarar: no extrato pessoal
     // todas são da mesma pessoa e o selo diria o óbvio em toda linha
     const member = "memberId" in item ? (item as FamilyTransaction) : null;
-    const isCredit = item.type === "CREDIT";
-    // Data pelo formatador da casa: ler o dia em UTC é o que impede a linha de
-    // 01/08 aparecer como "31 jul" no fuso de Brasília
-    const date = formatDayMonthShort(item.date);
-    const category = item.categoryId ? catById.get(item.categoryId) : undefined;
-    const isPending = item.reviewStatus && item.reviewStatus !== "CONFIRMED";
-    // `description` é texto de exibição desde o EC-094; o texto do banco fica
-    // logo abaixo quando há apelido, para o extrato não esconder o original
-    const name = transactionDisplayName(item);
-    const renamed = isRenamed(item);
-    const account = item.accountId
-      ? accountsById.get(item.accountId)
-      : undefined;
-    // O "No banco:" abaixo do nome fica DENTRO do touchable, e um touchable com
-    // label próprio não anuncia os filhos: sem repetir aqui, quem usa leitor de
-    // tela nunca ouviria o texto do banco de uma transação apelidada
-    const spokenName = renamed
-      ? `${name}, no banco: ${transactionOriginalName(item)}`
-      : name;
-    // Mesma armadilha do apelido: o selo de origem é filho do touchable e não
-    // seria anunciado sozinho
-    // Pelo helper: com `account.name` cru, uma conta que o provedor mandou sem
-    // nome fazia o olho ler "Cartão de crédito" no selo e o leitor de tela
-    // ouvir "origem ," na mesma linha
-    const spokenOrigin = !showOrigin
-      ? ""
-      : account
-        ? `, origem ${accountDisplayName(account)}`
-        : `, ${originLabel(item.accountId, account).toLowerCase()}`;
-
     // Linha de outra pessoa não abre o detalhe: lá dentro se edita apelido e
     // categoria, e o dado é dela. O servidor recusaria de qualquer forma (a
     // cláusula de dono), mas oferecer o toque seria prometer o que não se pode
     const alheia = member !== null && member.memberId !== myMemberId;
 
+    // A anatomia da linha (disco da categoria, apoio, selos, valor, o que o
+    // leitor de tela ouve) mora no TransactionRow — é a MESMA linha da Fatura
+    // e da Revisão. Aqui só se resolve o que vem de fora do item
     return (
       <Animated.View entering={listItemEntering(index)}>
-        <TouchableOpacity
-          onPress={() => {
-            if (!alheia) setDetailTx(item);
-          }}
-          disabled={alheia}
-          accessibilityLabel={`${spokenName}, ${date}, ${
-            isCredit ? "entrada" : "saída"
-          } de ${formatBRL(Math.abs(item.amount))}${spokenOrigin}${
-            alheia ? `, lançamento de ${member.memberName}` : ""
-          }${alheia ? "" : ". Abrir detalhes e apelido"}`}
-          accessibilityRole={alheia ? "text" : "button"}
-          activeOpacity={alheia ? 1 : 0.8}
-          className="bg-surface p-4 mb-3 rounded-2xl border border-border flex-row items-center justify-between"
-        >
-        <View className="flex-row items-center flex-1 mr-3">
-          <View
-            className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${isCredit ? "bg-success/15" : "bg-danger/15"}`}
-          >
-            {/* Entrada aponta para dentro, saída para fora — convenção de extrato */}
-            {isCredit ? (
-              <ArrowDownLeft size={20} color={t.semantic.success} />
-            ) : (
-              <ArrowUpRight size={20} color={t.semantic.danger} />
-            )}
-          </View>
-          <View className="flex-1">
-            <View className="flex-row items-center">
-              {renamed && (
-                <Tag
-                  size={12}
-                  color={t.text.tertiary}
-                  style={{ marginRight: 4 }}
-                />
-              )}
-              <Text
-                className="font-bold text-textPrimary text-sm leading-5 flex-1"
-                numberOfLines={2}
-              >
-                {name}
-              </Text>
-            </View>
-            {renamed && (
-              <Text
-                className="text-textTertiary text-xs mt-0.5"
-                numberOfLines={1}
-              >
-                No banco: {transactionOriginalName(item)}
-              </Text>
-            )}
-            <Text className="text-textTertiary text-xs mt-0.5">{date}</Text>
-            {/* Categoria e origem dividem a linha e quebram juntas: num
-                iPhone SE os dois selos não cabem lado a lado, e cortar o nome
-                do cartão apagaria justamente a resposta nova */}
-            <View
-              className="flex-row items-center mt-1.5"
-              style={{ flexWrap: "wrap", gap: spacing[1] }}
-            >
-              <View
-                className="flex-row items-center bg-elevated border border-border rounded-full"
-                style={{
-                  paddingVertical: 2,
-                  paddingLeft: 2,
-                  paddingRight: spacing[2],
-                }}
-              >
-                {/* AppTheme tipa hexas literais do dark; temas são
-                    estruturalmente idênticos — cast da união é seguro */}
-                <CategoryIcon category={category} theme={t as AppTheme} size={28} />
-                <Text
-                  className="text-textSecondary text-xs font-medium ml-1.5"
-                  numberOfLines={1}
-                  style={{ maxWidth: 118 }}
-                >
-                  {category ? category.name : "Sem categoria"}
-                </Text>
-              </View>
-              {showOrigin && (
-                <OriginBadge
-                  accountId={item.accountId}
-                  account={account}
-                  maxLabelWidth={118}
-                />
-              )}
-              {/* De quem é a linha. Só na casa, e ao lado da categoria porque
-                  responde a mesma pergunta do selo de origem: de onde veio */}
-              {member && (
-                <MemberBadge
-                  memberId={member.memberId}
-                  name={member.memberName}
-                  isMe={member.memberId === myMemberId}
-                />
-              )}
-              {isPending && (
-                // Ponto warning discreto: categorização ainda não confirmada
-                <View
-                  accessibilityLabel="Aguardando revisão"
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: radius.full,
-                    backgroundColor: t.semantic.warning,
-                    marginLeft: spacing[2],
-                  }}
-                />
-              )}
-            </View>
-          </View>
-        </View>
-        <Text
-          className={`font-bold text-base ${isCredit ? "text-success" : "text-textPrimary"}`}
-        >
-          {isCredit ? "+ " : "- "}
-          {formatBRL(Math.abs(item.amount))}
-        </Text>
-        </TouchableOpacity>
+        <TransactionRow
+          transaction={item}
+          density="card"
+          category={item.categoryId ? catById.get(item.categoryId) : undefined}
+          account={item.accountId ? accountsById.get(item.accountId) : undefined}
+          showOrigin={showOrigin}
+          member={
+            member
+              ? {
+                  memberId: member.memberId,
+                  memberName: member.memberName,
+                  isMe: member.memberId === myMemberId,
+                }
+              : null
+          }
+          onPress={alheia ? undefined : setDetailTx}
+        />
       </Animated.View>
     );
   };
@@ -956,7 +899,7 @@ export default function BankIntegration() {
 
             {inFamilyScope && memberOptions.length > 0 && (
               <View className="mb-4">
-                <Text className="text-textTertiary text-[10px] font-bold uppercase tracking-[1.2px] mb-2">
+                <Text className="text-textTertiary mb-2" style={EYEBROW_TYPE}>
                   Quem
                 </Text>
                 <FilterChipRow
@@ -994,7 +937,7 @@ export default function BankIntegration() {
                 {/* A fileira vem ANTES dos números porque é ela que decide o
                     que está sendo somado — filtro embaixo do total faria o
                     usuário ler o valor errado antes de saber do recorte */}
-                <Text className="text-textTertiary text-[10px] font-bold uppercase tracking-[1.2px] mb-2">
+                <Text className="text-textTertiary mb-2" style={EYEBROW_TYPE}>
                   Origem
                 </Text>
                 <FilterChipRow
@@ -1051,7 +994,10 @@ export default function BankIntegration() {
                   >
                     Origem indisponível agora
                   </Text>
-                  <Text className="text-textSecondary text-[11px] leading-4 mt-0.5">
+                  <Text
+                    className="text-textSecondary mt-0.5"
+                    style={{ fontSize: 11, lineHeight: 16 }}
+                  >
                     Não conseguimos carregar suas contas, então o extrato não
                     consegue dizer de qual cartão vem cada lançamento. Toque
                     para tentar de novo.
@@ -1097,7 +1043,10 @@ export default function BankIntegration() {
               {scopeNote && (
                 // A ressalva escrita, do mesmo jeito que o card de fatura
                 // declara que pagamento não entra no total
-                <Text className="text-textTertiary text-[11px] leading-4 mt-2">
+                <Text
+                  className="text-textTertiary mt-2"
+                  style={{ fontSize: 11, lineHeight: 16 }}
+                >
                   {scopeNote}
                 </Text>
               )}
@@ -1177,6 +1126,16 @@ export default function BankIntegration() {
                 </Text>
 
                 <BalanceCheckNotice findings={avisosDeSaldo} />
+
+                {/* A mesma conta entrando por arquivo E por conector deixa o
+                    app com duas origens, e aí nenhum total por conta fecha.
+                    Medido na conta do dono: 1.632 dos 1.967 lançamentos
+                    moravam na origem solta do Inter, e o saldo só existia na
+                    ligada. Ver components/DuplicateAccountsCard */}
+                <DuplicateAccountsCard
+                  suggestions={duplicadas}
+                  onMerge={juntarContas}
+                />
 
                 {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
                     conectar deixou de ser configuração de servidor. O nome é
@@ -1281,7 +1240,8 @@ export default function BankIntegration() {
                 {BANK_SHORTCUTS.map((bank) => (
                   <TouchableOpacity
                     key={bank.id}
-                    className="w-[72px] h-[72px] rounded-xl justify-center items-center bg-surface border border-border"
+                    className="rounded-xl justify-center items-center bg-surface border border-border"
+                    style={{ width: BANK_SHORTCUT_SIZE, height: BANK_SHORTCUT_SIZE }}
                     onPress={() => openBankApp(bank.url)}
                     accessibilityLabel={`Abrir app do ${bank.name}`}
                     accessibilityRole="button"
@@ -1292,7 +1252,8 @@ export default function BankIntegration() {
                         que fica com o monograma */}
                     <BankLogo institution={bank.name} size={34} />
                     <Text
-                      className="text-textSecondary font-bold text-[10px] mt-1"
+                      className="text-textSecondary font-bold mt-1"
+                      style={{ fontSize: 10 }}
                       numberOfLines={1}
                     >
                       {bank.name}
@@ -1305,8 +1266,12 @@ export default function BankIntegration() {
             {transactions.length > 0 && (
               <>
                 <View className="flex-row items-center justify-between mt-5 mb-2">
+                  {/* "Lançamentos", e não "Histórico de Transações": a
+                      Carteira, aba irmã, usa este segundo título para o
+                      histórico de ATIVOS — duas seções homônimas nomeando
+                      coisas diferentes */}
                   <Text className="text-lg font-bold text-textPrimary">
-                    Histórico de Transações
+                    Lançamentos
                   </Text>
                   {/* Import vira ação inline: o canto inferior é do AssistantFAB */}
                   <Animated.View style={importPress.pressStyle}>
@@ -1348,7 +1313,9 @@ export default function BankIntegration() {
                   // Sem uploadId: a Revisão abre a fila global de pendências
                   <Animated.View style={bannerPress.pressStyle}>
                     <TouchableOpacity
-                      onPress={() => (navigation as any).navigate("Revisão")}
+                      onPress={() =>
+                        (navigation as any).navigate(APP_ROUTES.revisao)
+                      }
                       onPressIn={bannerPress.onPressIn}
                       onPressOut={bannerPress.onPressOut}
                       accessibilityLabel={`${pendingCount} ${pendingCount === 1 ? "transação aguardando" : "transações aguardando"} revisão. Abrir revisão`}
@@ -1386,48 +1353,24 @@ export default function BankIntegration() {
           // mostrando lançamentos"): repetir o convite a importar aqui pediria
           // à pessoa que resolvesse com o extrato dela algo que não é dela
           inFamilyScope ? null : (
+          // EC-231: o pote vazio no lugar do glifo de arquivo num disco; o
+          // card tracejado continua dizendo "aqui vai entrar algo". A segunda
+          // porta (conectar o banco) só existe para quem tem o conector
+          // ligado — quem não configurou não precisa nem saber dele
           <Animated.View
             entering={cardEntering}
-            className="items-center justify-center mt-10 bg-surface p-8 rounded-3xl border border-dashed border-border"
+            className="mt-6 bg-surface rounded-3xl border border-dashed border-border"
           >
-            <View className="w-20 h-20 bg-elevated rounded-full justify-center items-center mb-4">
-              <FileText size={40} color={t.accent.neon} />
-            </View>
-            <Text className="text-textPrimary font-bold text-lg text-center mb-2">
-              Nenhum extrato importado
-            </Text>
-            <Text className="text-textSecondary text-sm text-center leading-5 mb-2">
-              Exporte o arquivo de extrato em seu banco e importe aqui para gerar seus
-              gráficos e relatórios.
-            </Text>
-            <Text className="text-textTertiary text-xs text-center leading-4 mb-5">
-              Prefira OFX (ou CSV) — é o formato mais confiável dos bancos.
-            </Text>
-            <Animated.View style={emptyImportPress.pressStyle}>
-              <TouchableOpacity
-                className="flex-row items-center bg-primary rounded-full px-6 py-3 active:bg-accentPressed"
-                onPress={handleImport}
-                onPressIn={emptyImportPress.onPressIn}
-                onPressOut={emptyImportPress.onPressOut}
-                disabled={isImporting}
-                accessibilityLabel={
-                  isImporting ? "Importando extrato" : "Importar extrato"
-                }
-                accessibilityRole="button"
-                accessibilityState={{ disabled: isImporting }}
-                activeOpacity={0.85}
-                style={{ opacity: isImporting ? 0.7 : 1 }}
-              >
-                {isImporting ? (
-                  <ActivityIndicator size="small" color={t.text.inverse} />
-                ) : (
-                  <Upload size={18} color={t.text.inverse} />
-                )}
-                <Text className="text-primaryDark font-bold text-sm ml-2">
-                  {isImporting ? "Importando..." : "Importar extrato"}
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
+            <PotEmptyState
+              mood="comecar"
+              size={72}
+              title="Nenhum extrato importado"
+              body="Exporte o extrato no app do seu banco — prefira OFX, ou CSV — e importe aqui para gerar seus gráficos e relatórios."
+              actionLabel={isImporting ? "Importando…" : "Importar extrato"}
+              onAction={handleImport}
+              secondaryActionLabel={connector.enabled ? "Conectar banco" : undefined}
+              onSecondaryAction={connector.enabled ? handleConectarBanco : undefined}
+            />
           </Animated.View>
           )
         }

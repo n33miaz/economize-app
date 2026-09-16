@@ -223,7 +223,6 @@ export default function AiAssistant() {
       <ScreenHeader
         title="Nino"
         subtitle="Assistente financeiro"
-        showInfoButton={false}
         showProfileButton={false}
         topInset={false}
         rightActions={[

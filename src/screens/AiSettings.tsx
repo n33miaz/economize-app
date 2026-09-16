@@ -158,7 +158,6 @@ export default function AiSettings() {
       <ScreenHeader
         title="Opções de IA"
         subtitle="Escolha o provedor e use a sua própria chave"
-        showInfoButton={false}
         showProfileButton={false}
       />
       <ScrollView

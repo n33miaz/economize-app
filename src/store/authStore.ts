@@ -186,6 +186,14 @@ export const useAuthStore = create(
         const { useAccountsStore } = require("./accountsStore");
         useAccountsStore.getState().reset();
 
+        // Idem, e agora com disco: a consolidação da Home passou a ficar
+        // guardada no aparelho para a cortina do servidor mostrar o último
+        // saldo conhecido. Sem zerar aqui, o próximo login neste aparelho
+        // veria o mês de OUTRA pessoa enquanto a API acorda — antes mesmo de
+        // qualquer tela autenticada
+        const { useAnalyticsStore } = require("./analyticsStore");
+        useAnalyticsStore.getState().reset();
+
         // A cortina de abertura vale por SESSÃO: sem zerar aqui, quem sai e
         // entra com outra conta não veria a abertura, e o app começaria no
         // esqueleto cinza como antes do EC-148

@@ -24,10 +24,28 @@ import { getAdProvider, nextHouseAd } from "../utils/ads";
  * Alturas FIXAS por variante. Anúncio que muda de tamanho depois de carregar
  * empurra o conteúdo debaixo do dedo — o "pulo de layout" que faz o usuário
  * clicar no que não queria. O slot reserva o espaço antes e o mantém.
+ *
+ * <p>Os números subiram em 15/09/2026. A legenda "Publicidade" era desenhada
+ * em `position: absolute` por cima da linha de conteúdo, e nos 64 px do
+ * telefone ela caía em cima do título e do ícone — o dono apontou o resultado
+ * como "muito mal espaçado", e estava certo: não era espaçamento apertado,
+ * era sobreposição. Agora a legenda tem linha própria, e a altura paga por
+ * ela.
+ *
+ * <p>A conta dos 88 do telefone, para ninguém precisar refazê-la: 8 de topo +
+ * 12 da legenda + 4 de respiro + 52 da linha de conteúdo (título 16 + 2 +
+ * duas linhas de corpo a 15) + 12 de base. As alturas de linha abaixo são
+ * explícitas por isso — sem elas cada plataforma arredonda a fonte do seu
+ * jeito e a soma deixa de fechar.
  */
-const BANNER_HEIGHT_PHONE = 64;
-const BANNER_HEIGHT_DESKTOP = 90;
-const CARD_HEIGHT = 120;
+const BANNER_HEIGHT_PHONE = 88;
+const BANNER_HEIGHT_DESKTOP = 104;
+const CARD_HEIGHT = 144;
+
+// Respiro lateral quando o slot é filho direto de uma lista sem gutter.
+// Igual ao `padding: spacing[5]` que as telas com gutter próprio já usam,
+// para o anúncio alinhar com os cards vizinhos e não com a borda da tela
+export const AD_SLOT_INSET = spacing[5];
 
 const ICONS: Record<string, LucideIcon> = {
   plus: Sparkles,
@@ -39,6 +57,14 @@ const ICONS: Record<string, LucideIcon> = {
 interface AdSlotProps {
   /** `banner` é a faixa entre blocos; `card` é o bloco inteiro numa lista. */
   variant?: "banner" | "card";
+  /**
+   * Respiro lateral por conta do slot. É OPT-IN de propósito: nas telas cujo
+   * contêiner já tem `padding: spacing[5]` o respiro viria em dobro e o
+   * anúncio ficaria mais estreito que os cards ao lado. Liga-se onde o slot
+   * é filho direto de uma lista sem gutter — o caso que deixava o banner
+   * colado nas duas bordas do telefone.
+   */
+  inset?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -55,7 +81,11 @@ interface AdSlotProps {
  * <p>O que aparece dentro vem de `utils/ads` — hoje só a casa. O ponto de
  * troca para uma rede de terceiros é lá, não aqui.
  */
-export default function AdSlot({ variant = "banner", style }: AdSlotProps) {
+export default function AdSlot({
+  variant = "banner",
+  inset = false,
+  style,
+}: AdSlotProps) {
   const t = useTheme();
   const navigation = useNavigation();
   const { isDesktop } = useBreakpoint();
@@ -94,83 +124,96 @@ export default function AdSlot({ variant = "banner", style }: AdSlotProps) {
           borderRadius: radius.xl,
           borderWidth: 1,
           borderColor: t.border.subtle,
-          backgroundColor: t.background.surface,
+          // `elevated` e não `surface`: o slot precisa se destacar do fundo da
+          // página o suficiente para ler como um bloco, senão o ícone e o
+          // texto parecem soltos no vazio
+          backgroundColor: t.background.elevated,
           overflow: "hidden",
           paddingHorizontal: spacing[4],
-          paddingVertical: isCard ? spacing[4] : spacing[2],
-          flexDirection: "row",
-          alignItems: "center",
+          paddingTop: spacing[2],
+          paddingBottom: isCard ? spacing[4] : spacing[3],
           opacity: pressed ? 0.85 : 1,
         },
+        inset ? { marginHorizontal: AD_SLOT_INSET } : null,
         style,
       ]}
     >
-      {/* A legenda é obrigatória e é o que separa anúncio de conteúdo. Minúscula
-          e terciária porque precisa ser lida, não gritada */}
+      {/* A legenda é obrigatória e é o que separa anúncio de conteúdo.
+          Minúscula e terciária porque precisa ser lida, não gritada — e em
+          LINHA PRÓPRIA, porque em `absolute` ela caía por cima do título */}
       <Text
         style={{
-          position: "absolute",
-          top: 6,
-          right: 12,
           color: t.text.tertiary,
           fontSize: 10,
+          lineHeight: 12,
           fontWeight: "700",
           letterSpacing: 0.8,
           textTransform: "uppercase",
+          textAlign: "right",
+          marginBottom: spacing[1],
         }}
       >
         Publicidade
       </Text>
 
-      <View
-        style={{
-          width: isCard ? 44 : 36,
-          height: isCard ? 44 : 36,
-          borderRadius: radius.full,
-          backgroundColor: t.accent.neonMuted,
-          alignItems: "center",
-          justifyContent: "center",
-          marginRight: spacing[3],
-        }}
-      >
-        <Icon size={isCard ? 22 : 18} color={t.accent.neon} />
-      </View>
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+        <View
+          style={{
+            width: isCard ? 44 : 36,
+            height: isCard ? 44 : 36,
+            borderRadius: radius.full,
+            backgroundColor: t.accent.neonMuted,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: spacing[3],
+          }}
+        >
+          <Icon size={isCard ? 22 : 18} color={t.accent.neon} />
+        </View>
 
-      <View style={{ flex: 1, marginRight: spacing[3] }}>
-        <Text
-          numberOfLines={1}
-          style={{
-            color: t.text.primary,
-            fontSize: isCard ? 15 : 13,
-            fontWeight: "700",
-          }}
-        >
-          {ad.title}
-        </Text>
-        <Text
-          numberOfLines={isCard ? 3 : 1}
-          style={{
-            color: t.text.secondary,
-            fontSize: isCard ? 13 : 11,
-            lineHeight: isCard ? 18 : 15,
-            marginTop: 2,
-          }}
-        >
-          {ad.body}
-        </Text>
-      </View>
+        {/* `minWidth: 0` é o que permite à coluna ENCOLHER na web: sem ele o
+            flex mantém a largura do texto mais longo, o `numberOfLines` nunca
+            corta e o CTA é empurrado para fora dos 390 px */}
+        <View style={{ flex: 1, minWidth: 0, marginRight: spacing[3] }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              color: t.text.primary,
+              fontSize: isCard ? 15 : 13,
+              lineHeight: isCard ? 20 : 16,
+              fontWeight: "700",
+            }}
+          >
+            {ad.title}
+          </Text>
+          <Text
+            numberOfLines={isCard ? 3 : 2}
+            style={{
+              color: t.text.secondary,
+              fontSize: isCard ? 13 : 11,
+              lineHeight: isCard ? 18 : 15,
+              marginTop: 2,
+            }}
+          >
+            {ad.body}
+          </Text>
+        </View>
 
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text
-          style={{
-            color: t.accent.neon,
-            fontSize: 12,
-            fontWeight: "700",
-          }}
+        {/* O CTA não encolhe: o que cede espaço é o corpo, que já tem corte */}
+        <View
+          style={{ flexDirection: "row", alignItems: "center", flexShrink: 0 }}
         >
-          {ad.cta}
-        </Text>
-        <ChevronRight size={14} color={t.accent.neon} />
+          <Text
+            style={{
+              color: t.accent.neon,
+              fontSize: 12,
+              fontWeight: "700",
+            }}
+          >
+            {ad.cta}
+          </Text>
+          <ChevronRight size={14} color={t.accent.neon} />
+        </View>
       </View>
     </Pressable>
   );

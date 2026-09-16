@@ -7,9 +7,13 @@ import { usePreferencesStore } from "../store/preferencesStore";
 import { useVersionStore } from "../store/versionStore";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { typography } from "../theme/typography";
 import { APP_VERSION, DEFAULT_DOWNLOAD_URL } from "../utils/appVersion";
 
 import CustomModal from "./CustomModal";
+
+/** Título da lista de novidades; exportado para o teste cobrar a ausência. */
+export const NOTES_TITLE = "O que há de novo";
 
 /**
  * O anúncio de versão nova, uma vez por versão.
@@ -29,10 +33,13 @@ import CustomModal from "./CustomModal";
  * atualizar segue vendo a faixa: a folha avisa, a faixa insiste. Sem isso,
  * fechar sem querer significaria perder o aviso até a versão seguinte.
  *
- * <p><b>Notas da versão, quando existirem.</b> O que há de novo ainda não vem
- * da API — quando vier, entra no lugar marcado abaixo, e é por isso que o
- * corpo já é um {@code ScrollView}: lista de mudanças cresce, e um texto que
- * cresce dentro de folha sem rolagem empurra o botão para fora da tela.
+ * <p><b>Notas da versão, quando existirem.</b> O que há de novo vem da API
+ * ({@code notes}), escrito pelo operador na hora do release, e entra como
+ * lista com marcador entre a explicação e o botão. Sem notas a folha não
+ * mostra nem o título: anunciar "novidades" sem dizer quais seria promessa
+ * vazia. O corpo é um {@code ScrollView} por causa dela — lista de mudanças
+ * cresce, e um texto que cresce dentro de folha sem rolagem empurra o botão
+ * para fora da tela.
  */
 export default function NewVersionSheet() {
   const t = useTheme();
@@ -46,6 +53,9 @@ export default function NewVersionSheet() {
   // "versão nova" sem número é aviso que não informa nada
   const visible =
     status === "update-available" && publicada != null && seenFor !== publicada;
+  // Servidor anterior ao campo não manda `notes`; servidor atual sem notas
+  // manda a lista vazia. Os dois casos são o mesmo para a folha: nada a listar
+  const notas = info?.notes ?? [];
 
   const fechar = useCallback(() => {
     if (publicada) setSeenFor(publicada);
@@ -111,10 +121,63 @@ export default function NewVersionSheet() {
             : "Baixe a versão nova para continuar recebendo as correções. Leva menos de um minuto."}
         </Text>
 
-        {/* AQUI entram as notas da versão quando a API passar a mandá-las: o
-            que mudou, em uma linha por item. Enquanto não vierem, anunciar
-            "novidades" sem dizer quais seria promessa vazia — então a folha
-            diz só o que sabe. */}
+        {notas.length > 0 && (
+          <View
+            // Semântica de lista: na web vira <ul>/<li>, e o leitor de tela
+            // anuncia "lista, 2 itens" em vez de duas frases soltas
+            role="list"
+            style={{
+              marginTop: spacing[5],
+              paddingVertical: spacing[4],
+              paddingHorizontal: spacing[4],
+              borderRadius: radius.xl,
+              backgroundColor: t.background.elevated,
+              borderWidth: 1,
+              borderColor: t.border.subtle,
+            }}
+          >
+            <Text
+              style={{
+                ...typography.caption,
+                color: t.text.tertiary,
+                fontFamily: "Roboto_700Bold",
+                letterSpacing: 0.6,
+                marginBottom: spacing[3],
+              }}
+            >
+              {NOTES_TITLE}
+            </Text>
+            {notas.map((nota, indice) => (
+              <View
+                // A mesma frase pode aparecer duas vezes numa lista escrita à
+                // mão; o índice garante a chave única sem esconder a repetição
+                key={`${indice}-${nota}`}
+                role="listitem"
+                // Marcador e frase são UM item para o leitor de tela: sem isto o
+                // foco parava no ponto decorativo e depois na frase, separados
+                accessible
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  marginTop: indice === 0 ? 0 : spacing[2],
+                }}
+              >
+                <View
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: radius.full,
+                    backgroundColor: t.accent.neon,
+                    // Centrado na primeira linha do texto (corpo 14 / entrelinha 20)
+                    marginTop: 7,
+                    marginRight: spacing[3],
+                  }}
+                />
+                <Text style={{ ...typography.body, flex: 1, color: t.text.primary }}>{nota}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <Pressable
           onPress={atualizar}

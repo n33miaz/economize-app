@@ -3,6 +3,7 @@ import ChartColumn from "lucide-react-native/dist/esm/icons/chart-column";
 import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
 import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
+import ReceiptText from "lucide-react-native/dist/esm/icons/receipt-text";
 import Settings2 from "lucide-react-native/dist/esm/icons/settings-2";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Target from "lucide-react-native/dist/esm/icons/target";
@@ -39,6 +40,7 @@ export type RailKey =
   | "financas"
   | "mercado"
   | "cartoes"
+  | "extrato"
   | "investimentos"
   | "analise"
   | "relatorios"
@@ -140,6 +142,19 @@ export const RAIL_GROUPS: RailGroup[] = [
         route: APP_ROUTES.cartoes,
         inMainTabs: false,
         Icon: CreditCard,
+        primary: false,
+      },
+      {
+        // O Extrato é a aba a que se volta todo dia — mas no desktop
+        // "Finanças" cai na Carteira e o Extrato ficava a dois cliques, sem
+        // porta própria. Como Investimentos: atalho para uma aba de segundo
+        // nível, então navega aninhado pela aba-mãe
+        key: "extrato",
+        label: "Extrato",
+        route: FINANCE_TAB_ROUTES.extrato,
+        inMainTabs: true,
+        parentTab: MAIN_TAB_ROUTES.financas,
+        Icon: ReceiptText,
         primary: false,
       },
       {
@@ -274,7 +289,9 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   [MAIN_TAB_ROUTES.principal]: "home",
   [MAIN_TAB_ROUTES.financas]: "financas",
   [FINANCE_TAB_ROUTES.carteira]: "financas",
-  [FINANCE_TAB_ROUTES.extrato]: "financas",
+  // Pílula própria, como Investimentos: o item "Extrato" está no trilho, e
+  // acender "Finanças" com ele apagado diria que o usuário está noutro lugar
+  [FINANCE_TAB_ROUTES.extrato]: "extrato",
   [FINANCE_TAB_ROUTES.recorrencias]: "financas",
   // Pílula própria, como Cartões: o item "Investimentos" está no trilho, e
   // deixá-lo apagado enquanto "Finanças" acende diria ao usuário que ele

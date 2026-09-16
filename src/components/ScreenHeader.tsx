@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import ChevronLeft from "lucide-react-native/dist/esm/icons/chevron-left";
-import Info from "lucide-react-native/dist/esm/icons/info";
 import User from "lucide-react-native/dist/esm/icons/user";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
@@ -13,7 +12,6 @@ interface ScreenHeaderProps {
   title: string;
   subtitle?: string;
   rightActions?: React.ReactNode[];
-  showInfoButton?: boolean;
   showProfileButton?: boolean;
   /**
    * Seta de voltar à esquerda do título. Sem valor, aparece sozinha nas
@@ -35,7 +33,6 @@ export default function ScreenHeader({
   title,
   subtitle,
   rightActions,
-  showInfoButton = true,
   showProfileButton = true,
   showBackButton,
   topInset = true,
@@ -62,7 +59,14 @@ export default function ScreenHeader({
         borderBottomRightRadius: radius["2xl"],
       }}
     >
-      {/* NÃO declarar StatusBar aqui. Este cabeçalho aparece em quase toda
+      {/* NÃO existe mais botão de informação aqui. Ele aparecia em QUASE TODA
+          tela — um "i" repetido em cima de cada cabeçalho, disputando espaço
+          com o título — e apontava para a rota "Sobre", que tinha sido tirada
+          da navegação num pedido anterior: era um botão que já não levava a
+          lugar nenhum. O dono pediu para tirar todos; este era a fábrica
+          deles.
+
+          NÃO declarar StatusBar aqui. Este cabeçalho aparece em quase toda
           tela, e a barra de status é GLOBAL: a declaração daqui sobrescrevia a
           do App.tsx, que é a que segue o tema. Com `light-content` fixo os
           ícones do sistema ficavam brancos -- certo no escuro por acidente, e
@@ -114,25 +118,6 @@ export default function ScreenHeader({
           {rightActions?.map((action, idx) => (
             <React.Fragment key={idx}>{action}</React.Fragment>
           ))}
-
-          {showInfoButton && (
-            <TouchableOpacity
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              accessibilityLabel="Sobre o app"
-              accessibilityRole="button"
-              className="bg-elevated active:bg-border"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: radius.full,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              onPress={() => navigation.navigate("Sobre" as never)}
-            >
-              <Info size={18} color={t.text.primary} />
-            </TouchableOpacity>
-          )}
 
           {showProfileButton && (
             <TouchableOpacity
