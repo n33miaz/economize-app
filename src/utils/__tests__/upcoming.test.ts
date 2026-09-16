@@ -298,4 +298,52 @@ describe("a vencer — frases", () => {
     expect(duePillLabel({ daysUntil: 1, dueDate: "2026-09-17" })).toBe("amanhã");
     expect(duePillLabel({ daysUntil: 9, dueDate: "2026-09-25" })).toBe("25/09");
   });
+
+  /**
+   * O defeito visto na tela em 16/09/2026: com o cartão cadastrado, a linha da
+   * fatura já cobra a parcela inteira. A recorrência "MAGAZINE LUIZA - Parcela
+   * 3/6" ao lado dela somava a MESMA parcela outra vez — R$ 3.414,57 onde o
+   * certo eram R$ 3.002,07.
+   */
+  it("parcela de cartão não aparece ao lado da fatura que já a cobra", () => {
+    const resultado = buildUpcoming({
+      series: [
+        serie({ id: "r1", displayName: "Aluguel", expectedAmount: 1450, nextDueDate: "2026-09-25" }),
+        serie({
+          id: "r2",
+          displayName: "MAGAZINE LUIZA - Parcela 3/6",
+          expectedAmount: 412.5,
+          nextDueDate: "2026-09-20",
+        }),
+      ],
+      accounts: [cartao({ reportedBalance: -1432.17 })],
+      installments: null,
+      today: new Date("2026-09-16T12:00:00Z"),
+    });
+
+    const nomes = [...resultado.soon, ...resultado.later].map((i) => i.name);
+    expect(nomes).not.toContain("MAGAZINE LUIZA - Parcela 3/6");
+    expect(nomes).toContain("Aluguel");
+  });
+
+  /** Sem cartão cadastrado não há fatura para engolir a parcela: ela fica. */
+  it("sem fatura para contê-la, a parcela continua na lista", () => {
+    const resultado = buildUpcoming({
+      series: [
+        serie({
+          id: "r2",
+          displayName: "MAGAZINE LUIZA - Parcela 3/6",
+          expectedAmount: 412.5,
+          nextDueDate: "2026-09-20",
+        }),
+      ],
+      accounts: [],
+      installments: null,
+      today: new Date("2026-09-16T12:00:00Z"),
+    });
+
+    expect([...resultado.soon, ...resultado.later].map((i) => i.name)).toContain(
+      "MAGAZINE LUIZA - Parcela 3/6",
+    );
+  });
 });

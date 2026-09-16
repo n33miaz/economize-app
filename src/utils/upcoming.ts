@@ -99,6 +99,27 @@ export function looksLikeInvoicePayment(name: string): boolean {
   return /\bfatura\b|cart[aã]o/i.test(name);
 }
 
+/**
+ * Série que é uma PARCELA de compra no cartão, e não uma conta do mês.
+ *
+ * <p><b>O defeito que isto fecha, visto na tela em 16/09/2026.</b> A detecção
+ * de recorrências do servidor acerta ao ver "MAGAZINE LUIZA - Parcela 3/6"
+ * repetindo todo mês pelo mesmo valor: é mesmo uma cobrança mensal. Só que
+ * parcela de cartão <b>já está dentro da fatura</b> — e a fatura tem linha
+ * própria aqui, com o valor devido inteiro. Com as duas na lista, o total
+ * somava a mesma parcela duas vezes: R$ 3.414,57 onde o certo eram
+ * R$ 3.002,07.
+ *
+ * <p>A parcela sai da lista quando existe linha de fatura para engoli-la, e
+ * fica quando não existe (cartão não cadastrado) — a mesma regra que já vale
+ * para a recorrência "pagamento de fatura". O rodapé do card continua dizendo
+ * quanto das parcelas está na próxima fatura, que é a informação que não
+ * aparece em lugar nenhum.
+ */
+export function looksLikeInstallment(name: string): boolean {
+  return /\bparc(ela)?\s*\d+\s*\/\s*\d+/i.test(name);
+}
+
 function ymd(date: Date): { year: number; month: number; day: number } {
   return {
     year: date.getFullYear(),
@@ -282,7 +303,13 @@ export function buildUpcoming(input: BuildUpcomingInput): UpcomingOverview {
   );
   const faturas = invoiceItems(input.accounts, today, days, temRecorrenciaDeFatura);
 
-  const todos = [...recorrencias, ...faturas].sort(
+  // Parcela de cartão só aparece sozinha quando NÃO há fatura para contê-la
+  const semParcelasEngolidas =
+    faturas.length === 0
+      ? recorrencias
+      : recorrencias.filter((item) => !looksLikeInstallment(item.name));
+
+  const todos = [...semParcelasEngolidas, ...faturas].sort(
     (a, b) => a.daysUntil - b.daysUntil || a.name.localeCompare(b.name, "pt-BR"),
   );
 
