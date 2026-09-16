@@ -24,10 +24,17 @@ import { getAdProvider, nextHouseAd } from "../utils/ads";
  * Alturas FIXAS por variante. Anúncio que muda de tamanho depois de carregar
  * empurra o conteúdo debaixo do dedo — o "pulo de layout" que faz o usuário
  * clicar no que não queria. O slot reserva o espaço antes e o mantém.
+ *
+ * <p>Os números subiram em 15/09/2026. A legenda "Publicidade" era desenhada
+ * em `position: absolute` por cima da linha de conteúdo, e nos 64 px do
+ * telefone ela caía em cima do título e do ícone — o dono apontou o resultado
+ * como "muito mal espaçado", e estava certo: não era espaçamento apertado,
+ * era sobreposição. Agora a legenda tem linha própria, e a altura paga por
+ * ela.
  */
-const BANNER_HEIGHT_PHONE = 64;
-const BANNER_HEIGHT_DESKTOP = 90;
-const CARD_HEIGHT = 120;
+const BANNER_HEIGHT_PHONE = 88;
+const BANNER_HEIGHT_DESKTOP = 104;
+const CARD_HEIGHT = 144;
 
 const ICONS: Record<string, LucideIcon> = {
   plus: Sparkles,
@@ -94,83 +101,87 @@ export default function AdSlot({ variant = "banner", style }: AdSlotProps) {
           borderRadius: radius.xl,
           borderWidth: 1,
           borderColor: t.border.subtle,
-          backgroundColor: t.background.surface,
+          // `elevated` e não `surface`: o slot precisa se destacar do fundo da
+          // página o suficiente para ler como um bloco, senão o ícone e o
+          // texto parecem soltos no vazio
+          backgroundColor: t.background.elevated,
           overflow: "hidden",
           paddingHorizontal: spacing[4],
-          paddingVertical: isCard ? spacing[4] : spacing[2],
-          flexDirection: "row",
-          alignItems: "center",
+          paddingTop: spacing[2],
+          paddingBottom: isCard ? spacing[4] : spacing[3],
           opacity: pressed ? 0.85 : 1,
         },
         style,
       ]}
     >
-      {/* A legenda é obrigatória e é o que separa anúncio de conteúdo. Minúscula
-          e terciária porque precisa ser lida, não gritada */}
+      {/* A legenda é obrigatória e é o que separa anúncio de conteúdo.
+          Minúscula e terciária porque precisa ser lida, não gritada — e em
+          LINHA PRÓPRIA, porque em `absolute` ela caía por cima do título */}
       <Text
         style={{
-          position: "absolute",
-          top: 6,
-          right: 12,
           color: t.text.tertiary,
           fontSize: 10,
           fontWeight: "700",
           letterSpacing: 0.8,
           textTransform: "uppercase",
+          textAlign: "right",
+          marginBottom: spacing[1],
         }}
       >
         Publicidade
       </Text>
 
-      <View
-        style={{
-          width: isCard ? 44 : 36,
-          height: isCard ? 44 : 36,
-          borderRadius: radius.full,
-          backgroundColor: t.accent.neonMuted,
-          alignItems: "center",
-          justifyContent: "center",
-          marginRight: spacing[3],
-        }}
-      >
-        <Icon size={isCard ? 22 : 18} color={t.accent.neon} />
-      </View>
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+        <View
+          style={{
+            width: isCard ? 44 : 36,
+            height: isCard ? 44 : 36,
+            borderRadius: radius.full,
+            backgroundColor: t.accent.neonMuted,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: spacing[3],
+          }}
+        >
+          <Icon size={isCard ? 22 : 18} color={t.accent.neon} />
+        </View>
 
-      <View style={{ flex: 1, marginRight: spacing[3] }}>
-        <Text
-          numberOfLines={1}
-          style={{
-            color: t.text.primary,
-            fontSize: isCard ? 15 : 13,
-            fontWeight: "700",
-          }}
-        >
-          {ad.title}
-        </Text>
-        <Text
-          numberOfLines={isCard ? 3 : 1}
-          style={{
-            color: t.text.secondary,
-            fontSize: isCard ? 13 : 11,
-            lineHeight: isCard ? 18 : 15,
-            marginTop: 2,
-          }}
-        >
-          {ad.body}
-        </Text>
-      </View>
+        <View style={{ flex: 1, marginRight: spacing[3] }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              color: t.text.primary,
+              fontSize: isCard ? 15 : 13,
+              fontWeight: "700",
+            }}
+          >
+            {ad.title}
+          </Text>
+          <Text
+            numberOfLines={isCard ? 3 : 2}
+            style={{
+              color: t.text.secondary,
+              fontSize: isCard ? 13 : 11,
+              lineHeight: isCard ? 18 : 15,
+              marginTop: 2,
+            }}
+          >
+            {ad.body}
+          </Text>
+        </View>
 
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text
-          style={{
-            color: t.accent.neon,
-            fontSize: 12,
-            fontWeight: "700",
-          }}
-        >
-          {ad.cta}
-        </Text>
-        <ChevronRight size={14} color={t.accent.neon} />
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text
+            style={{
+              color: t.accent.neon,
+              fontSize: 12,
+              fontWeight: "700",
+            }}
+          >
+            {ad.cta}
+          </Text>
+          <ChevronRight size={14} color={t.accent.neon} />
+        </View>
       </View>
     </Pressable>
   );

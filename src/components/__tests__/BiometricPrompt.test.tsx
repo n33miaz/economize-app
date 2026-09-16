@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal as RNModal } from "react-native";
+import { BackHandler } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
@@ -93,9 +93,24 @@ describe("BiometricPrompt", () => {
     expect(check.props.accessibilityState?.checked).toBe(false);
   });
 
+  /**
+   * O voltar chega pelo `BackHandler` do `CustomModal`, e não mais por um
+   * `onRequestClose` de `Modal`: a folha deixou de ser janela do sistema
+   * quando se descobriu que o `Modal` do Android não entrega toque na nova
+   * arquitetura (a história está em `store/overlayStore.ts`). O teste passa a
+   * puxar o mesmo gatilho que o aparelho puxa.
+   */
   it("o voltar do Android conta como recusa, levando o check junto", () => {
     const onDecline = jest.fn();
-    const { getByLabelText, UNSAFE_getByType } = montar({
+    const inscricoes: Array<() => boolean> = [];
+    const espiao = jest
+      .spyOn(BackHandler, "addEventListener")
+      .mockImplementation((_evento, handler) => {
+        inscricoes.push(handler as () => boolean);
+        return { remove: jest.fn() };
+      });
+
+    const { getByLabelText } = montar({
       visible: true,
       onEnable: jest.fn().mockResolvedValue(true),
       onDecline,
@@ -105,9 +120,11 @@ describe("BiometricPrompt", () => {
     // Voltar e tocar fora chamam o mesmo `onClose` do CustomModal; sem
     // ligá-lo ao onDecline, a sessão retida ficaria pendurada e o app não
     // entraria nunca
-    UNSAFE_getByType(RNModal).props.onRequestClose();
+    expect(inscricoes.length).toBeGreaterThan(0);
+    inscricoes.forEach((handler) => handler());
 
     expect(onDecline).toHaveBeenCalledWith(true);
+    espiao.mockRestore();
   });
 
   it("enquanto liga, o botão trava — dois toques seriam dois prompts", async () => {

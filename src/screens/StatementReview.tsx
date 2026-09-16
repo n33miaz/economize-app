@@ -709,7 +709,6 @@ export default function StatementReview() {
       <ScreenHeader
         title="Revisar categorias"
         subtitle={subtitle}
-        showInfoButton={false}
         showProfileButton={false}
         topInset={false}
         rightActions={[

@@ -185,7 +185,6 @@ export default function AdvancedOptions() {
       <ScreenHeader
         title="Opções avançadas"
         subtitle="Dados, notificações e suporte"
-        showInfoButton={false}
         showProfileButton={false}
       />
       <ScrollView

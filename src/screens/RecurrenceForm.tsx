@@ -284,7 +284,6 @@ export default function RecurrenceForm() {
             ? "Ajuste o ritmo, o valor e a vigência"
             : "Declare um gasto fixo ou uma renda que se repete"
         }
-        showInfoButton={false}
         showProfileButton={false}
         topInset={false}
         rightActions={[

@@ -49,6 +49,8 @@ function card(overrides: Partial<ConnectorAccount> = {}): ConnectorAccount {
     linked: true,
     reportedBalance: null,
     reportedBalanceAt: null,
+  creditLimit: null,
+  creditLimitSharedWith: null,
     ...overrides,
   };
 }
@@ -64,6 +66,8 @@ function bank(overrides: Partial<ConnectorAccount> = {}): ConnectorAccount {
     linked: true,
     reportedBalance: null,
     reportedBalanceAt: null,
+  creditLimit: null,
+  creditLimitSharedWith: null,
     ...overrides,
   };
 }

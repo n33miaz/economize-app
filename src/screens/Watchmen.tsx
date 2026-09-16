@@ -122,7 +122,6 @@ export default function Watchmen() {
       <ScreenHeader
         title="Vigias"
         subtitle="Quem trabalha no seu extrato, e o que mexeu"
-        showInfoButton={false}
         showProfileButton={false}
       />
 

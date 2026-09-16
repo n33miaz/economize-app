@@ -27,6 +27,7 @@ import { useTheme, type Theme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import AppOpening from "../components/AppOpening";
+import OverlayHost from "../components/OverlayHost";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
@@ -360,11 +361,29 @@ function MainTabs() {
 // --- ROTAS DE AUTENTICAÇÃO ---
 function AuthRoutes() {
   return (
+    // O fade fica só no Login, que é a raiz: ele não desliza de lugar nenhum.
+    // Cadastro, "esqueci minha senha" e a redefinição são passos PARA A FRENTE
+    // e deslizam como o resto do app — trocar de tela por fade, num fluxo que
+    // tem ida e volta, lê como corte seco e apaga a noção de onde se está.
+    // Pedido do dono em 15/09/2026: "transição mais suavizada entre as
+    // telas/abas do login e para todo o sistema".
     <Stack.Navigator screenOptions={{ headerShown: false, ...fadeTransition }}>
       <Stack.Screen name={AUTH_ROUTES.login} component={Login} />
-      <Stack.Screen name={AUTH_ROUTES.register} component={Register} />
-      <Stack.Screen name={AUTH_ROUTES.forgotPassword} component={ForgotPassword} />
-      <Stack.Screen name={AUTH_ROUTES.resetPassword} component={ResetPassword} />
+      <Stack.Screen
+        name={AUTH_ROUTES.register}
+        component={Register}
+        options={slideRightTransition}
+      />
+      <Stack.Screen
+        name={AUTH_ROUTES.forgotPassword}
+        component={ForgotPassword}
+        options={slideRightTransition}
+      />
+      <Stack.Screen
+        name={AUTH_ROUTES.resetPassword}
+        component={ResetPassword}
+        options={slideRightTransition}
+      />
     </Stack.Navigator>
   );
 }
@@ -649,6 +668,11 @@ export default function Routes() {
             <AuthRoutes />
           )}
         </View>
+        {/* As folhas do app moram AQUI: dentro do contexto de navegação e
+            depois do navegador, que é o que as põe acima da barra de abas.
+            O porquê (o Modal do Android sem toque na nova arquitetura) está
+            em store/overlayStore.ts */}
+        <OverlayHost />
       </View>
     </NavigationContainer>
   );

@@ -30,8 +30,16 @@ interface FloatingLabelInputProps extends Omit<TextInputProps, "placeholder"> {
 }
 
 // Curva e duração portadas do float-label do lumilivre-web (ease-out do CSS)
+//
+// A curva mudou em 15/09/2026 a pedido do dono ("quero que o efeito da label
+// subir seja mais fluido"). O `ease-out` clássico (0, 0, 0.58, 1) arranca
+// rápido e termina arrastando — em 200 px/s de subida isso lê como travada no
+// fim. Esta é a "emphasized decelerate" do Material 3: sai quase instantânea,
+// gasta a maior parte do tempo desacelerando, e é a razão de o mesmo gesto
+// parecer mais macio sem ficar mais lento. A duração continua 200 ms, que é o
+// que ele pediu — a fluidez veio da curva, não do relógio.
 const FLOAT_DURATION_MS = 200;
-const floatEasing = Easing.bezier(0, 0, 0.58, 1);
+const floatEasing = Easing.bezier(0.05, 0.7, 0.1, 1);
 
 // Geometria do flutuar: campo de 56px (h-14) e rótulo com linha de 24px
 // (text-base) assentado em top-4, ou seja, centrado. Com origem 'left center'

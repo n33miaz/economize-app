@@ -79,7 +79,14 @@ import IndicatorDetailSheet from "../components/IndicatorDetailSheet";
 import AssistantFAB from "../components/AssistantFAB";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { usePremiumOffer } from "../hooks/usePremiumOffer";
-import { formatBRL, formatBRLCompact, formatDecimal, formatPercent } from "../utils/money";
+import { useAccountsStore } from "../store/accountsStore";
+import { cashPositionFrom, creditPositionFrom } from "../utils/cashPosition";
+import {
+  formatBRL,
+  formatBRLCompact,
+  formatDecimal,
+  formatPercent,
+} from "../utils/money";
 import { formatMonthLabel, formatWindowLabel } from "../utils/cycleWindow";
 import { favoriteDisplayItems } from "../utils/indicatorList";
 import {
@@ -170,7 +177,8 @@ export default function Home() {
   // números custam menos de 2 KB; baixar o extrato inteiro para somá-los
   // custaria 92 KB e segundos de espera
   const [diasDoMes, setDiasDoMes] = useState<DailyTotal[]>([]);
-  const [parcelamentos, setParcelamentos] = useState<InstallmentOverview | null>(null);
+  const [parcelamentos, setParcelamentos] =
+    useState<InstallmentOverview | null>(null);
   const mesCorrente = useMemo(() => {
     const hoje = new Date();
     return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
@@ -231,7 +239,11 @@ export default function Home() {
         lastTransactionDate: monthly?.lastTransactionDate,
         dismissedFor: mealVoucherPromptDismissedFor,
       }),
-    [incomeSources, monthly?.lastTransactionDate, mealVoucherPromptDismissedFor],
+    [
+      incomeSources,
+      monthly?.lastTransactionDate,
+      mealVoucherPromptDismissedFor,
+    ],
   );
 
   // EC-146: o pote conta o ciclo. `null` enquanto não há dado — e aí ele
@@ -245,6 +257,31 @@ export default function Home() {
     [performance],
   );
   const [potSheetOpen, setPotSheetOpen] = useState(false);
+
+  /**
+   * Quanto existe em conta — e a diferença entre saber e chutar.
+   *
+   * <p>O dono olhou a Home em 15/09/2026 e disse: <i>"não faz o menor sentido
+   * ter sobrado 3.021,06 — não tem nada nas minhas contas"</i>. O número estava
+   * aritmeticamente certo (era o que sobrou no mês) e semanticamente errado:
+   * quem abre um app de finanças e vê um valor grande no topo lê SALDO. O
+   * rótulo dizia "sobrou", e ninguém lê rótulo antes de número.
+   *
+   * <p>A manchete passou a ser o saldo de verdade, quando ele existe — o que
+   * a instituição informou, pelo conector ou pelo bloco `LEDGERBAL` do OFX que
+   * a pessoa sobe. Quando não existe, a Home volta a falar do mês e DIZ que
+   * não sabe o saldo, em vez de deixar a ambiguidade de pé. Ver
+   * `utils/cashPosition`.
+   */
+  const accounts = useAccountsStore((s) => s.accounts);
+  const fetchAccounts = useAccountsStore((s) => s.fetchAccounts);
+  const cash = useMemo(() => cashPositionFrom(accounts), [accounts]);
+  const credito = useMemo(() => creditPositionFrom(accounts), [accounts]);
+  const saldoConhecido = cash.amount != null;
+
+  useEffect(() => {
+    fetchAccounts();
+  }, [fetchAccounts]);
 
   // A cortina de abertura espera POR AQUI. O sinal é "já sei o que mostrar",
   // e não "deu tudo certo": mês sem movimento também é resposta, e segurar a
@@ -323,7 +360,13 @@ export default function Home() {
       fetchPendingCount(),
     ]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [fetchIndicators, fetchNews, fetchWallet, fetchHomeMonthly, fetchPendingCount]);
+  }, [
+    fetchIndicators,
+    fetchNews,
+    fetchWallet,
+    fetchHomeMonthly,
+    fetchPendingCount,
+  ]);
 
   const walletBalance = useMemo(() => {
     return walletTxs.reduce((total, tx) => {
@@ -443,6 +486,7 @@ export default function Home() {
   const goToImport = () =>
     (navigation as any).navigate("Finanças", { screen: "Extrato" });
   const goToAnalytics = () => navigation.navigate("Análise" as never);
+  const goToCards = () => navigation.navigate("Cartões" as never);
   const goToRecurrences = () =>
     (navigation as any).navigate("Finanças", { screen: "Recorrências" });
 
@@ -535,13 +579,22 @@ export default function Home() {
                     <View style={{ height: spacing[3] }} />
                     <Skeleton width="70%" height={34} />
                     <View style={{ height: spacing[4] }} />
-                    <Skeleton width="100%" height={44} borderRadius={radius.full} />
+                    <Skeleton
+                      width="100%"
+                      height={44}
+                      borderRadius={radius.full}
+                    />
                   </View>
                 ) : hasStatement ? (
                   // Tem extrato, o ciclo é que está parado. Pedir importação aqui
                   // era mentira; o que falta é poder mexer no recorte, então a
                   // engrenagem vem junto do texto
-                  <View style={{ alignItems: "center", paddingVertical: spacing[2] }}>
+                  <View
+                    style={{
+                      alignItems: "center",
+                      paddingVertical: spacing[2],
+                    }}
+                  >
                     <View
                       style={{
                         width: 56,
@@ -563,7 +616,8 @@ export default function Home() {
                         textAlign: "center",
                       }}
                     >
-                      Nada movimentou {isWindowMode ? "neste ciclo" : "neste mês"}
+                      Nada movimentou{" "}
+                      {isWindowMode ? "neste ciclo" : "neste mês"}
                     </Text>
                     <Text
                       style={{
@@ -613,7 +667,12 @@ export default function Home() {
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <View style={{ alignItems: "center", paddingVertical: spacing[2] }}>
+                  <View
+                    style={{
+                      alignItems: "center",
+                      paddingVertical: spacing[2],
+                    }}
+                  >
                     <View
                       style={{
                         width: 56,
@@ -646,8 +705,8 @@ export default function Home() {
                         marginTop: spacing[1],
                       }}
                     >
-                      Exporte o OFX do seu banco. O Economize! categoriza sozinho e
-                      fecha o mês para você.
+                      Exporte o OFX do seu banco. O Economize! categoriza
+                      sozinho e fecha o mês para você.
                     </Text>
                     <TouchableOpacity
                       onPress={goToImport}
@@ -688,16 +747,27 @@ export default function Home() {
                         textTransform: "uppercase",
                       }}
                     >
-                      {/* "Sobrou" em cima de número negativo é frase errada:
+                      {/* A primeira linha da Home passou a ser QUANTO EXISTE
+                          em conta, e não quanto sobrou no mês. Pedido do dono
+                          em 15/09/2026, depois de ler "Sobrou R$ 3.021,06"
+                          numa conta onde não havia nada: ele leu um saldo, e
+                          "sobrou" é fluxo. Quando nenhuma conta informou
+                          saldo, a manchete continua sendo o mês — dizer "em
+                          conta" sem saber quanto seria a mesma mentira com
+                          outro rótulo.
+
+                          "Sobrou" em cima de número negativo é frase errada:
                           o mês em que faltou dinheiro é o mês em que a leitura
                           precisa estar mais correta, não menos */}
-                      {monthly.net < 0
-                        ? isWindowMode
-                          ? `Faltou no ciclo ${periodLabel}`
-                          : `Faltou em ${periodLabel}`
-                        : isWindowMode
-                          ? `Sobrou no ciclo ${periodLabel}`
-                          : `Sobrou em ${periodLabel}`}
+                      {saldoConhecido
+                        ? "Em conta hoje"
+                        : monthly.net < 0
+                          ? isWindowMode
+                            ? `Faltou no ciclo ${periodLabel}`
+                            : `Faltou em ${periodLabel}`
+                          : isWindowMode
+                            ? `Sobrou no ciclo ${periodLabel}`
+                            : `Sobrou em ${periodLabel}`}
                     </Text>
                     <TouchableOpacity
                       onPress={toggleBalance}
@@ -723,7 +793,10 @@ export default function Home() {
                   {/* EC-146: o pote ao lado do número que ele representa. Solto
                       em outro canto da tela ele seria enfeite; aqui a relação
                       entre o desenho e o resultado se explica sozinha */}
-                  <View className="flex-row items-center" style={{ gap: spacing[3] }}>
+                  <View
+                    className="flex-row items-center"
+                    style={{ gap: spacing[3] }}
+                  >
                     <Text
                       numberOfLines={1}
                       adjustsFontSizeToFit
@@ -744,12 +817,19 @@ export default function Home() {
                       }
                       style={{
                         ...typography.numericDisplay,
-                        color: monthly.net >= 0 ? t.text.primary : t.chart.down,
+                        color:
+                          (saldoConhecido ? cash.amount! : monthly.net) >= 0
+                            ? t.text.primary
+                            : t.chart.down,
                         marginTop: spacing[1],
                         flexShrink: 1,
                       }}
                     >
-                      {showBalance ? formatBRLCompact(monthly.net) : HIDDEN}
+                      {showBalance
+                        ? formatBRLCompact(
+                            saldoConhecido ? cash.amount! : monthly.net,
+                          )
+                        : HIDDEN}
                     </Text>
                     <TouchableOpacity
                       onPress={() => setPotSheetOpen(true)}
@@ -757,31 +837,128 @@ export default function Home() {
                       accessibilityLabel={`Seu pote: ${potState.label}. Entender os estados`}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <PotIcon size={44} level={potState.level} tone={potState.tone} />
+                      <PotIcon
+                        size={44}
+                        level={potState.level}
+                        tone={potState.tone}
+                      />
                     </TouchableOpacity>
                   </View>
+
+                  {/* A LINHA DE APOIO. Com saldo conhecido ela carrega o que
+                      era manchete ("sobrou no mês") mais a procedência do
+                      número; sem saldo, ela é o convite para o app passar a
+                      saber — o OFX do banco traz o saldo dentro dele */}
+                  {saldoConhecido ? (
+                    <Text
+                      style={{
+                        color: t.text.tertiary,
+                        fontSize: 12,
+                        marginTop: spacing[1],
+                      }}
+                      numberOfLines={2}
+                    >
+                      {monthly.net < 0 ? "Faltou" : "Sobrou"}{" "}
+                      {formatBRLCompact(Math.abs(monthly.net))} em {periodLabel}
+                      {cash.caveat ? ` · ${cash.caveat}` : ""}
+                    </Text>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={goToImport}
+                      accessibilityRole="button"
+                      accessibilityLabel="Importar extrato para o app saber seu saldo"
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: spacing[2],
+                      }}
+                    >
+                      <Text
+                        style={{
+                          flexShrink: 1,
+                          color: t.text.tertiary,
+                          fontSize: 12,
+                        }}
+                        numberOfLines={2}
+                      >
+                        Isto é o do mês, não o seu saldo — ainda não sei quanto
+                        você tem em conta.
+                      </Text>
+                      <Text
+                        style={{
+                          color: t.accent.neon,
+                          fontSize: 12,
+                          fontWeight: "700",
+                          marginLeft: spacing[2],
+                        }}
+                      >
+                        Importar
+                      </Text>
+                      <ChevronRight size={14} color={t.accent.neon} />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* GASTOS EM DESTAQUE, ENTRADAS MENORES — e o gasto é
+                      atalho. A ordem é pedido do dono: "destacar gastos e
+                      deixar ele ser um atalho para mais detalhes, mostrar
+                      entradas com menos destaque ou menor". Faz sentido: o
+                      número sobre o qual dá para AGIR é o que sai */}
+                  <TouchableOpacity
+                    onPress={goToAnalytics}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Gastos do período: ${formatBRL(
+                      monthly.totalExpense,
+                    )}. Ver no que foi o dinheiro`}
+                    activeOpacity={0.7}
+                    style={{ marginTop: spacing[4] }}
+                  >
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <Text style={{ color: t.text.tertiary, fontSize: 12 }}>
+                        Gastos em {periodLabel}
+                      </Text>
+                      <ChevronRight size={14} color={t.text.tertiary} />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      style={{
+                        ...typography.numericMd,
+                        color: t.chart.down,
+                        marginTop: 2,
+                      }}
+                    >
+                      {showBalance
+                        ? formatBRLCompact(monthly.totalExpense)
+                        : HIDDEN}
+                    </Text>
+                  </TouchableOpacity>
 
                   <View
                     style={{
                       flexDirection: "row",
-                      // 12 e não 16: cada ponto de vão sai da largura do
-                      // número, que aqui é o slot mais estreito da tela
-                      gap: spacing[3],
-                      marginTop: spacing[4],
+                      alignItems: "baseline",
+                      gap: spacing[2],
+                      marginTop: spacing[2],
                     }}
                   >
-                    <MoneyColumn
-                      label="Entradas"
-                      value={monthly.totalIncome}
-                      color={t.chart.up}
-                      hidden={!showBalance}
-                    />
-                    <MoneyColumn
-                      label="Saídas"
-                      value={monthly.totalExpense}
-                      color={t.chart.down}
-                      hidden={!showBalance}
-                    />
+                    <Text style={{ color: t.text.tertiary, fontSize: 12 }}>
+                      Entradas
+                    </Text>
+                    <Text
+                      style={{
+                        color: t.chart.up,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {showBalance
+                        ? formatBRLCompact(monthly.totalIncome)
+                        : HIDDEN}
+                    </Text>
                   </View>
 
                   <TouchableOpacity
@@ -821,7 +998,8 @@ export default function Home() {
                         )}
                         <Text
                           style={{
-                            color: expenseDeltaPct <= 0 ? t.chart.up : t.chart.down,
+                            color:
+                              expenseDeltaPct <= 0 ? t.chart.up : t.chart.down,
                             fontSize: 12,
                             fontWeight: "700",
                             fontVariant: ["tabular-nums"],
@@ -862,6 +1040,90 @@ export default function Home() {
                     </Text>
                     <ChevronRight size={14} color={t.accent.neon} />
                   </TouchableOpacity>
+
+                  {/* CRÉDITO, SEPARADO DO DINHEIRO. Pedido do dono no mesmo
+                      dia: "atualmente eu só tenho saldo disponível em crédito
+                      nos cartões, mas sempre devemos deixar bem claro isso".
+                      Fica embaixo de uma linha divisória e com rótulo próprio
+                      justamente para não ser lido como dinheiro — limite é
+                      permissão para gastar o que ainda não é seu.
+
+                      Sem limite informado o bloco não some: ele PERGUNTA. O
+                      limite não vem em arquivo nenhum (a fatura declara o
+                      devido, não o limite), então a única fonte é o dono do
+                      cartão */}
+                  {credito.cards > 0 && (
+                    <TouchableOpacity
+                      onPress={goToCards}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        credito.available != null
+                          ? `Crédito disponível: ${formatBRL(credito.available)} de ${formatBRL(
+                              credito.limit ?? 0,
+                            )}. Ver cartões`
+                          : "Informar o limite dos seus cartões"
+                      }
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        borderTopWidth: 1,
+                        borderTopColor: t.border.subtle,
+                        marginTop: spacing[3],
+                        paddingTop: spacing[3],
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: t.text.tertiary, fontSize: 11 }}>
+                          {credito.available != null
+                            ? "Crédito disponível nos cartões"
+                            : credito.limit != null
+                              ? "Limite total dos cartões"
+                              : `${credito.cards} ${
+                                  credito.cards === 1 ? "cartão" : "cartões"
+                                } sem limite informado`}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: t.text.primary,
+                            fontSize: 15,
+                            fontWeight: "700",
+                            fontVariant: ["tabular-nums"],
+                            marginTop: 2,
+                          }}
+                        >
+                          {credito.available != null
+                            ? showBalance
+                              ? `${formatBRLCompact(credito.available)} de ${formatBRLCompact(
+                                  credito.limit ?? 0,
+                                )}`
+                              : HIDDEN
+                            : credito.limit != null
+                              ? showBalance
+                                ? formatBRLCompact(credito.limit)
+                                : HIDDEN
+                              : "Diga quanto é para eu somar"}
+                        </Text>
+                        {/* Limite conhecido e dívida desconhecida é um estado
+                            de verdade: a fatura só entra quando o extrato do
+                            cartão é importado ou a conta é conectada. Dizer
+                            "disponível" aqui seria afirmar que nada foi gasto */}
+                        {credito.limit != null && credito.available == null && (
+                          <Text
+                            style={{
+                              color: t.text.tertiary,
+                              fontSize: 11,
+                              marginTop: 2,
+                            }}
+                          >
+                            Ainda não sei quanto está usado
+                          </Text>
+                        )}
+                      </View>
+                      <ChevronRight size={16} color={t.accent.neon} />
+                    </TouchableOpacity>
+                  )}
 
                   {/* O comparável do modo janela não é o mês passado: é uma janela
                       de mesmo tamanho terminando na véspera. Sem esta linha, o
@@ -1058,7 +1320,8 @@ export default function Home() {
                             (`start`/`end`), pela mesma regra da tela de previsão:
                             a projeção agora corre no ciclo do usuário (EC-116) e
                             a Home fala numa régua só */}
-                        Saldo previsto negativo em {forecastPeriodLabel(riskMonth).short}
+                        Saldo previsto negativo em{" "}
+                        {forecastPeriodLabel(riskMonth).short}
                       </Text>
                     </View>
                   ) : null}
@@ -1098,7 +1361,11 @@ export default function Home() {
                     style={{ flexDirection: "row", alignItems: "center" }}
                   >
                     <Text
-                      style={{ color: t.accent.neon, fontSize: 13, fontWeight: "700" }}
+                      style={{
+                        color: t.accent.neon,
+                        fontSize: 13,
+                        fontWeight: "700",
+                      }}
                     >
                       Detalhes
                     </Text>
@@ -1115,12 +1382,20 @@ export default function Home() {
                   }}
                 >
                   <Text
-                    style={{ color: t.text.secondary, fontSize: 12, marginRight: spacing[2] }}
+                    style={{
+                      color: t.text.secondary,
+                      fontSize: 12,
+                      marginRight: spacing[2],
+                    }}
                   >
                     Esta semana
                   </Text>
                   <Text
-                    style={{ color: t.text.primary, fontSize: 18, fontWeight: "700" }}
+                    style={{
+                      color: t.text.primary,
+                      fontSize: 18,
+                      fontWeight: "700",
+                    }}
                     accessibilityLabel={`Esta semana: ${formatBRL(semana.spent)} de saída`}
                   >
                     {formatBRLCompact(semana.spent)}
@@ -1160,7 +1435,11 @@ export default function Home() {
                     <MetricTile
                       label={`A vencer em ${COMMITMENT_WINDOW_DAYS} dias`}
                       value={showBalance ? commitment.total : 0}
-                      hint={commitment.nextName ? `próxima: ${commitment.nextName}` : null}
+                      hint={
+                        commitment.nextName
+                          ? `próxima: ${commitment.nextName}`
+                          : null
+                      }
                       onPress={goToRecurrences}
                     />
                     {committed?.free != null ? (
@@ -1209,7 +1488,9 @@ export default function Home() {
                         ? "1 parcelamento em andamento"
                         : `${parcelamentos.openSeries} parcelamentos em andamento`}
                       {" · "}
-                      <Text style={{ color: t.text.primary, fontWeight: "700" }}>
+                      <Text
+                        style={{ color: t.text.primary, fontWeight: "700" }}
+                      >
                         {formatBRLCompact(parcelamentos.remainingTotal)}
                       </Text>
                       {" a vencer"}
@@ -1392,7 +1673,11 @@ export default function Home() {
               className="flex-row px-5 mb-5"
               style={{ gap: spacing[3] }}
             >
-              <QuickAction Icon={Upload} label="Importar" onPress={goToImport} />
+              <QuickAction
+                Icon={Upload}
+                label="Importar"
+                onPress={goToImport}
+              />
               <QuickAction
                 Icon={ChartColumn}
                 label="Análise"
@@ -1413,7 +1698,9 @@ export default function Home() {
             >
               <TouchableOpacity
                 onPress={() =>
-                  (navigation as any).navigate("Finanças", { screen: "Carteira" })
+                  (navigation as any).navigate("Finanças", {
+                    screen: "Carteira",
+                  })
                 }
                 // O valor entra AQUI: o rótulo do touchable substitui o dos
                 // filhos, então um label só de ação fazia o patrimônio nunca
@@ -1553,7 +1840,9 @@ export default function Home() {
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text className="text-primary font-bold text-sm">Ver mais</Text>
+                  <Text className="text-primary font-bold text-sm">
+                    Ver mais
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -1580,7 +1869,7 @@ export default function Home() {
                   <ChevronRight size={18} color={t.text.secondary} />
                 </TouchableOpacity>
               ))}
-        </Animated.View>,
+            </Animated.View>,
           ]}
         </BlockGrid>
 
@@ -1592,7 +1881,10 @@ export default function Home() {
       {/* A oferta do Plus decide sozinha se sobe (regras em utils/premiumOffer:
           nunca nas duas primeiras sessões, uma por sessão, 7 dias entre
           convites, 30 depois de um "tenho interesse") */}
-      <PremiumOfferSheet visible={plusOffer.visible} onClose={plusOffer.close} />
+      <PremiumOfferSheet
+        visible={plusOffer.visible}
+        onClose={plusOffer.close}
+      />
 
       {/* Detalhes do indicador: sheet canônico compartilhado com as listas */}
       <IndicatorDetailSheet
@@ -1614,44 +1906,6 @@ export default function Home() {
 
       <AssistantFAB origin="home" />
     </PageContainer>
-  );
-}
-
-
-function MoneyColumn({
-  label,
-  value,
-  color,
-  hidden,
-}: {
-  label: string;
-  value: number;
-  color: string;
-  hidden: boolean;
-}) {
-  const t = useTheme();
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={{ color: t.text.tertiary, fontSize: 12 }}>{label}</Text>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        // Rede nativa apenas: na web o `adjustsFontSizeToFit` não existe, e é
-        // o corpo `numericMd` que garante o encaixe
-        accessibilityLabel={
-          hidden ? `${label}: ${HIDDEN_SPOKEN}` : `${label}: ${formatBRL(value)}`
-        }
-        style={{ ...typography.numericMd, color, marginTop: spacing[1] }}
-      >
-        {/* Slot mais estreito do app: duas colunas dentro de um card que já
-            pode estar numa grade de duas colunas. Medido com a fonte real,
-            "R$ 99.999,99" (o pior caso POR EXTENSO, logo abaixo do piso de
-            abreviação) ocupa 144 px no corpo 24 e o slot tem ~140 no celular
-            de 375 px — abreviar não salvava, porque o piso é 100 mil.
-            O corpo 20 traz o mesmo texto para 120 px */}
-        {hidden ? HIDDEN : formatBRLCompact(value)}
-      </Text>
-    </View>
   );
 }
 

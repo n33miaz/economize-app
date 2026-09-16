@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Modal, Platform, Text, TouchableOpacity, View } from "react-native";
+import {
+  BackHandler,
+  Platform,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 import { useConfirmStore } from "../store/confirmStore";
 import { useTheme } from "../theme/ThemeProvider";
@@ -8,6 +14,12 @@ import { radius, shadow, spacing } from "../theme/ds";
 // Diálogo único do app, montado no App.tsx ao lado do Toast. Substitui o
 // `Alert.alert`, que no react-native-web é um no-op silencioso. Estilo vem de
 // `useTheme()` (e não de classes NativeWind) para nascer certo no tema claro.
+//
+// NÃO é mais um `Modal`: na nova arquitetura o Modal do Android entrega ao
+// conteúdo uma caixa de tamanho zero — o diálogo virava cacos no canto
+// superior esquerdo e nenhum botão respondia. Aqui a camada é uma View
+// absoluta comum, e ela já fica acima de tudo porque o App.tsx a monta DEPOIS
+// das rotas. A investigação inteira está em store/overlayStore.ts.
 export default function ConfirmDialog() {
   const t = useTheme();
   const request = useConfirmStore((s) => s.request);
@@ -41,8 +53,19 @@ export default function ConfirmDialog() {
     }
   }, [request, busy, dismiss]);
 
-  // Esc cancela no navegador — no celular quem faz esse papel é o botão voltar,
-  // já tratado pelo onRequestClose do Modal
+  // O voltar do Android cancela. Era de graça enquanto isto era um `Modal`
+  // (`onRequestClose`); sem ele, o voltar navegaria a tela de trás com um
+  // diálogo aberto por cima
+  useEffect(() => {
+    if (!visible) return;
+    const inscricao = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleCancel();
+      return true;
+    });
+    return () => inscricao.remove();
+  }, [visible, handleCancel]);
+
+  // Esc cancela no navegador — no celular quem faz esse papel é o botão voltar
   useEffect(() => {
     if (Platform.OS !== "web" || !visible) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -64,12 +87,14 @@ export default function ConfirmDialog() {
   const confirmColor = request.destructive ? t.semantic.danger : t.accent.neon;
 
   return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="fade"
-      onRequestClose={handleCancel}
-      statusBarTranslucent
+    <View
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+      }}
     >
       <View
         style={{
@@ -185,6 +210,6 @@ export default function ConfirmDialog() {
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }

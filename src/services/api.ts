@@ -772,6 +772,19 @@ export interface ConnectorAccount {
    */
   reportedBalance: number | null;
   reportedBalanceAt: string | null;
+  /**
+   * Limite total do cartão, informado pelo usuário (V36).
+   *
+   * Nulo é o normal: o limite não existe em arquivo nenhum — a fatura declara
+   * o valor DEVIDO, não o limite. Nulo aqui é o que faz a tela PERGUNTAR em
+   * vez de somar um crédito que ela não conhece.
+   */
+  creditLimit: number | null;
+  /**
+   * A conta dona do limite, quando ele é compartilhado (cartão virtual,
+   * adicional). Quem aponta para outra NÃO entra na soma de crédito.
+   */
+  creditLimitSharedWith: string | null;
 }
 
 /**
