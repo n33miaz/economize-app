@@ -50,13 +50,21 @@ export default function ScreenHeader({
 
   return (
     <View
-      className="bg-background-surface border-b border-border"
+      // SEM cartucho e SEM linha embaixo. O cabeçalho era uma superfície
+      // `surface` com borda inferior E cantos inferiores arredondados — três
+      // molduras para o mesmo elemento, e o resultado era uma barra que
+      // parecia colada por cima da tela. Foi o que o dono apontou em 15/09:
+      // "não parece muito moderno essas bordas".
+      //
+      // Agora ele usa o fundo da PÁGINA e a hierarquia vem só da tipografia,
+      // que é como cabeçalho grande funciona no iOS e no Material 3: o título
+      // é o maior texto da tela, e nada precisa desenhar uma caixa em volta
+      // dele para provar isso. A separação do conteúdo é o próprio respiro.
       style={{
+        backgroundColor: t.background.base,
         paddingTop,
-        paddingBottom: spacing[5],
+        paddingBottom: spacing[4],
         paddingHorizontal: spacing[5],
-        borderBottomLeftRadius: radius["2xl"],
-        borderBottomRightRadius: radius["2xl"],
       }}
     >
       {/* NÃO existe mais botão de informação aqui. Ele aparecia em QUASE TODA
@@ -96,7 +104,10 @@ export default function ScreenHeader({
         <View className="flex-1 mr-4">
           <Text
             className="text-textPrimary tracking-tight"
-            style={{ fontSize: 24, fontWeight: "700" }}
+            // 28 e não 24: com o cartucho fora, é a tipografia que faz a
+            // hierarquia. Peso 800 onde a fonte tem — a Roboto do app para em
+            // 700, e o `tracking-tight` é o que dá o resto da presença
+            style={{ fontSize: 28, fontWeight: "700", lineHeight: 34 }}
             numberOfLines={1}
             ellipsizeMode="tail"
           >

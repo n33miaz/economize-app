@@ -225,6 +225,9 @@ export default function AssetCatalog() {
                   isFavorite={isFavorite(item.id)}
                   onPress={() => abrir(item)}
                   onToggleFavorite={() => toggleFavoriteWithSnapshot(item)}
+                  sparkline={item.sparkline}
+                  dayLow={item.dayLow}
+                  dayHigh={item.dayHigh}
                 />
               )}
             </View>

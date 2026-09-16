@@ -10,6 +10,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
 import { formatDecimal, formatPercent } from "../utils/money";
+import Sparkline from "./Sparkline";
 
 interface IndicatorCardProps {
   name: string;
@@ -22,6 +23,17 @@ interface IndicatorCardProps {
   symbol?: string;
   code?: string;
   type?: string;
+  /**
+   * Fechamentos recentes, para a linha de tendência (EC: Mercado enriquecido,
+   * 16/09/2026). O dado já vinha na mesma resposta da cotação e era
+   * descartado; o card mostrava preço e porcentagem do dia, e porcentagem do
+   * dia não conta história. Ausente ou com menos de dois pontos, o espaço é
+   * reservado e nada é desenhado — ver `components/Sparkline`.
+   */
+  sparkline?: number[] | null;
+  /** Mínima e máxima do dia, quando a fonte informa. */
+  dayLow?: number | null;
+  dayHigh?: number | null;
 }
 
 const IndicatorCard = React.memo(
@@ -36,6 +48,9 @@ const IndicatorCard = React.memo(
     symbol = "R$",
     code,
     type,
+    sparkline,
+    dayLow,
+    dayHigh,
   }: IndicatorCardProps) => {
     const t = useTheme();
     const { pressStyle, onPressIn, onPressOut } = usePressScale();
@@ -60,6 +75,14 @@ const IndicatorCard = React.memo(
       };
       // `t` na lista: sem ele as cores ficavam presas ao tema da montagem
     }, [safeVariation, t]);
+
+    /** "Dia: 42,10 – 43,55" — os dois extremos, ou nada. */
+    const faixaDoDia = useMemo(() => {
+      const baixa = dayLow != null && Number.isFinite(Number(dayLow)) ? Number(dayLow) : null;
+      const alta = dayHigh != null && Number.isFinite(Number(dayHigh)) ? Number(dayHigh) : null;
+      if (baixa == null || alta == null || alta <= baixa) return null;
+      return `Dia: ${formatDecimal(baixa)} – ${formatDecimal(alta)}`;
+    }, [dayLow, dayHigh]);
 
     const displayName = useMemo(() => {
       return name?.split("/")[0].replace("Comercial", "").trim() || "Ativo";
@@ -207,6 +230,14 @@ const IndicatorCard = React.memo(
               </Text>
             </View>
 
+            <View style={{ flexDirection: "row", alignItems: "center", gap: ds.spacing[2] }}>
+            {/* A linha vem ANTES do selo de variação: ela é o contexto, e o
+                selo é a conclusão. O tom sai da variação para os dois nunca
+                discordarem lado a lado */}
+            <Sparkline
+              values={sparkline}
+              tone={safeVariation >= 0 ? "up" : "down"}
+            />
             <View
               style={{
                 flexDirection: "row",
@@ -234,7 +265,23 @@ const IndicatorCard = React.memo(
                 {variationInfo.formatted}
               </Text>
             </View>
+            </View>
           </View>
+
+          {/* A FAIXA DO DIA. Preço sozinho não diz se ele está no alto ou no
+              fundo do próprio dia — e é essa a pergunta de quem pensa em
+              comprar. Só aparece quando a fonte informou os dois extremos:
+              meia faixa não é faixa */}
+          {faixaDoDia ? (
+            <Text
+              style={[
+                ds.typography.caption,
+                { color: t.text.tertiary, marginTop: ds.spacing[2] },
+              ]}
+            >
+              {faixaDoDia}
+            </Text>
+          ) : null}
         </TouchableOpacity>
       </Animated.View>
     );

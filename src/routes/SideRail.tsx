@@ -120,10 +120,17 @@ export default function SideRail({ activeKey, onNavigate }: SideRailProps) {
       style={{
         width: SIDE_RAIL_WIDTH + insets.left,
         paddingLeft: insets.left,
-        backgroundColor: t.background.surface,
-        // Trilho lateral separa por borda à direita, não em cima
+        // Fundo da PÁGINA, e não `surface`: o dono apontou em 15/09 que o
+        // trilho e o cabeçalho não pareciam modernos por causa das bordas.
+        // Eram duas superfícies elevadas com linha divisória em volta, e o
+        // efeito é de painéis colados. Com o mesmo fundo, o que separa é o
+        // respiro e a pílula do item ativo — que já é o elemento mais forte
+        // aqui e não precisa competir com uma moldura.
+        backgroundColor: t.background.base,
+        // A linha da direita fica, mas no tom SUTIL: ela ainda tem trabalho
+        // (o conteúdo rola atrás dela), só não precisa gritar
         borderRightWidth: 1,
-        borderRightColor: t.border.default,
+        borderRightColor: t.border.subtle,
       }}
     >
       <View

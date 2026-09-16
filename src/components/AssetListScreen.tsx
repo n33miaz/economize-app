@@ -357,6 +357,9 @@ export default function AssetListScreen({
             // O card só conhece o id; o retrato precisa do objeto inteiro
             onToggleFavorite={() => handleToggleFavorite(item)}
             symbol={displaySymbol}
+            sparkline={item.sparkline}
+            dayLow={item.dayLow}
+            dayHigh={item.dayHigh}
           />
         </Animated.View>
       );
