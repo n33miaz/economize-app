@@ -11,6 +11,8 @@ import { typography } from "../theme/typography";
 import { APP_VERSION, DEFAULT_DOWNLOAD_URL } from "../utils/appVersion";
 
 import CustomModal from "./CustomModal";
+import { useAnnouncement } from "../hooks/useAnnouncement";
+import { ANNOUNCEMENT_PRIORITY } from "../store/announcementStore";
 
 /** Título da lista de novidades; exportado para o teste cobrar a ausência. */
 export const NOTES_TITLE = "O que há de novo";
@@ -51,8 +53,16 @@ export default function NewVersionSheet() {
   const publicada = info?.latestVersion ?? null;
   // Só com versão publicada conhecida: sem ela não há o que anunciar, e
   // "versão nova" sem número é aviso que não informa nada
-  const visible =
+  // O que este anúncio QUER: versão publicada conhecida e ainda não dispensada.
+  // Se ele PODE aparecer agora é a fila que decide — três folhas abrindo juntas
+  // na abertura do app é o mesmo que nenhuma (ver store/announcementStore)
+  const quer =
     status === "update-available" && publicada != null && seenFor !== publicada;
+  const visible = useAnnouncement(
+    "new-version",
+    ANNOUNCEMENT_PRIORITY.newVersion,
+    quer,
+  );
   // Servidor anterior ao campo não manda `notes`; servidor atual sem notas
   // manda a lista vazia. Os dois casos são o mesmo para a folha: nada a listar
   const notas = info?.notes ?? [];

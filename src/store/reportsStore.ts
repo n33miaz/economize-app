@@ -32,6 +32,26 @@ interface ReportsState {
   remove: (id: string) => Promise<boolean>;
 }
 
+/**
+ * Número da última busca pedida.
+ *
+ * <p><b>Por que sequência e não uma guarda de "já tem uma em voo".</b> Esta
+ * busca tem PARÂMETRO: trocar o período dispara outra. Uma guarda de em-voo
+ * descartaria o pedido NOVO e a tela ficaria no período velho — o contrário do
+ * que o usuário acabou de pedir. Aqui todo pedido sai; só o mais recente pode
+ * escrever.
+ *
+ * <p>O defeito que isto fecha: tocar "Mensal" e depois "Anual" num intervalo
+ * curto, com a instância gratuita lenta, deixava a resposta de "Mensal"
+ * chegando DEPOIS e sobrescrevendo a lista — a tela mostrava relatórios
+ * mensais sob o rótulo "Anual", sem nenhum erro em lugar nenhum.
+ *
+ * <p>Fora do store de propósito: é contador de processo, não estado de tela.
+ * Dentro do estado ele viraria mais um campo para todo componente re-renderizar
+ * a cada busca.
+ */
+let ultimaBusca = 0;
+
 export const useReportsStore = create<ReportsState>((set, get) => ({
   items: [],
   isLoading: false,
@@ -39,13 +59,17 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   error: null,
 
   fetch: async (period) => {
+    const minhaVez = ++ultimaBusca;
     set({ isLoading: true, error: null });
     try {
       const response = await api.get<{ content: Report[] }>("/reports", {
         params: { period, page: 0, size: 20 },
       });
+      // Resposta atrasada de um período que já não está na tela é descartada
+      if (minhaVez !== ultimaBusca) return;
       set({ items: response.data?.content ?? [], isLoading: false });
     } catch (e) {
+      if (minhaVez !== ultimaBusca) return;
       set({
         error: describeLoadFailure(e, "Falha ao carregar relatórios"),
         isLoading: false,
