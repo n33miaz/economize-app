@@ -84,10 +84,17 @@
 
     <h1>Baixe o Economize!</h1>
     <p id="mensagem">Controle de gastos com importação de extrato, categorias automáticas e análise do mês.</p>
-    <span class="versao">Versão mais recente: <b id="versao">consultando…</b></span>
+    <span class="versao">Versão mais recente: <b id="versao">a mais nova publicada</b></span>
 
-    <a id="apk" class="btn oculto" href="#" rel="noopener">Baixar APK (Android)</a>
-    <span id="embreve" class="btn desligado">Em breve na Play Store</span>
+    <!-- O BOTÃO NASCE PRONTO, com a URL estável do último release. Antes ele
+         só aparecia DEPOIS de a API responder — e a API dorme no plano
+         gratuito: com ela hibernada (até quatro minutos para acordar, e o
+         tempo limite aqui é de 12 segundos) a página ficava sem botão nenhum
+         e oferecendo "em breve na Play Store". Quem chegou aqui para baixar o
+         app não podia depender de um servidor acordar. A consulta à API segue
+         existindo, mas só para REFINAR o número da versão. -->
+    <a id="apk" class="btn" href="https://github.com/n33miaz/economize-app/releases/latest/download/economize.apk" rel="noopener">Baixar APK (Android)</a>
+    <span id="embreve" class="btn desligado oculto">Em breve na Play Store</span>
     <p id="alternativa" style="margin-top:14px">
       Enquanto isso, <a class="sec" href="/">use a versão web</a> — funciona no
       celular e no computador, sem instalar nada.
@@ -97,7 +104,12 @@
   <div class="cartao">
     <h2>No Android</h2>
     <ol>
-      <li>Toque em <b>Baixar APK</b> e aguarde o arquivo terminar.</li>
+      <li>Toque em <b>Baixar APK</b> e aguarde o arquivo terminar (são 33 MB).</li>
+      <li><b>Se a barra parar em 100%, está tudo certo:</b> o Chrome avisa que
+          um arquivo de instalação "pode ser perigoso" e fica esperando você.
+          Puxe a barra de notificações ou abra <i>Downloads</i> no navegador e
+          toque em <b>Manter</b> ou <b>Continuar</b>. A conta de bytes já
+          terminou — o que falta é essa confirmação.</li>
       <li>Abra o arquivo baixado (na notificação ou em <i>Downloads</i>).</li>
       <li>Se o Android perguntar, <b>permita instalar</b> a partir do navegador. É só desta vez.</li>
       <li>Toque em <b>Instalar</b>, abra o app e entre com sua conta.</li>
@@ -118,55 +130,153 @@
 
 <script>
 (function () {
-  // O endereço público da API. É o MESMO que o app usa em produção; a página
-  // não tem como perguntar ao app, então repete o literal
+  "use strict";
+
+  // O endereco publico da API. E o MESMO que o app usa em producao; a pagina
+  // nao tem como perguntar ao app, entao repete o literal
   var URL_VERSAO = "https://economize-api.onrender.com/api/v1/app/version";
+
+  /**
+   * De quanto em quanto tempo reconsultar a versao, com a pagina a vista.
+   * Cinco minutos: o mesmo cache que a API declara no `/app/version`, entao
+   * consultar mais que isso responderia o mesmo documento.
+   */
+  var INTERVALO_MS = 5 * 60 * 1000;
+
+  /**
+   * Inatividade que manda RECARREGAR a pagina inteira, e nao so o numero.
+   * Meia hora: uma pagina esquecida aberta durante a noite pode estar
+   * oferecendo uma versao que ja nao e a ultima, e o HTML dela tambem pode
+   * ter mudado. Recarregar e o unico jeito de trocar as duas coisas.
+   */
+  var INATIVIDADE_MS = 30 * 60 * 1000;
+
+  /**
+   * Teto de espera de cada consulta. A API dorme no plano gratuito e pode
+   * levar minutos para acordar — e NADA nesta pagina pode depender disso: o
+   * botao de download ja nasce pronto no HTML, com a URL estavel do ultimo
+   * release. Aqui a consulta so refina o numero da versao.
+   */
+  var TETO_MS = 12000;
 
   var versao = document.getElementById("versao");
   var mensagem = document.getElementById("mensagem");
   var apk = document.getElementById("apk");
   var emBreve = document.getElementById("embreve");
 
-  // Sem resposta, a página continua completa — só sem o número. É o caso da
-  // API hibernada (plano gratuito do Render), e quem chegou aqui não deve
-  // esperar um minuto olhando para "consultando…"
-  function semApi() {
-    versao.textContent = "veja no app";
+  var ultimoToque = Date.now();
+  var relogioPeriodico = null;
+
+  function registrarAtividade() {
+    ultimoToque = Date.now();
   }
 
-  if (typeof fetch !== "function") {
-    semApi();
-    return;
+  /**
+   * Uma consulta, com teto de espera e sem quebrar nada quando falha.
+   *
+   * <p>Falhar aqui e o caso NORMAL, nao a excecao: a API hibernada nao
+   * responde em doze segundos. A pagina continua inteira, com o botao
+   * funcionando — o que se perde e so o numero exato da versao.
+   */
+  function consultar() {
+    if (typeof fetch !== "function") return;
+
+    var controle =
+      typeof AbortController === "function" ? new AbortController() : null;
+    var relogio = setTimeout(function () {
+      if (controle) controle.abort();
+    }, TETO_MS);
+
+    // `cache: no-store` porque o ponto desta consulta e estar em dia: um
+    // documento guardado pelo navegador responderia a versao de antes
+    var opcoes = { cache: "no-store" };
+    if (controle) opcoes.signal = controle.signal;
+
+    fetch(URL_VERSAO, opcoes)
+      .then(function (resposta) {
+        if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+        return resposta.json();
+      })
+      .then(function (dados) {
+        clearTimeout(relogio);
+        if (!dados) return;
+        if (dados.latestVersion) versao.textContent = dados.latestVersion;
+        if (dados.message) mensagem.textContent = dados.message;
+
+        // A URL do servidor vence a do HTML quando vem valida — e so nesse
+        // caso. Servidor sem `apkUrl` nao pode APAGAR um botao que funciona
+        if (typeof dados.apkUrl === "string" && /^https?:\/\//.test(dados.apkUrl)) {
+          apk.href = dados.apkUrl;
+          apk.classList.remove("oculto");
+          emBreve.classList.add("oculto");
+        }
+      })
+      .catch(function () {
+        clearTimeout(relogio);
+        // De proposito: nada muda na tela. O botao do HTML continua valendo.
+      });
   }
 
-  var controle = typeof AbortController === "function" ? new AbortController() : null;
-  var relogio = setTimeout(function () {
-    if (controle) controle.abort();
-  }, 12000);
+  /**
+   * Recarrega de verdade quando a pagina passou da inatividade, ou so
+   * reconsulta quando ela continua em uso.
+   */
+  function aoVoltar() {
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - ultimoToque >= INATIVIDADE_MS) {
+      // `location.reload()` sem argumento: o parametro `true` do Firefox
+      // antigo e ignorado pelos navegadores atuais e quebra o tipo em TS
+      location.reload();
+      return;
+    }
+    registrarAtividade();
+    consultar();
+  }
 
-  fetch(URL_VERSAO, controle ? { signal: controle.signal } : undefined)
-    .then(function (resposta) {
-      if (!resposta.ok) throw new Error("HTTP " + resposta.status);
-      return resposta.json();
-    })
-    .then(function (dados) {
-      clearTimeout(relogio);
-      if (dados && dados.latestVersion) versao.textContent = dados.latestVersion;
-      else semApi();
-      if (dados && dados.message) mensagem.textContent = dados.message;
+  // Primeira consulta ja na abertura
+  consultar();
 
-      // Só oferece o arquivo quando ele existe. `apkUrl` nulo é o estado
-      // normal enquanto o dono não publica — a página não inventa o link
-      if (dados && typeof dados.apkUrl === "string" && /^https?:\/\//.test(dados.apkUrl)) {
-        apk.href = dados.apkUrl;
-        apk.classList.remove("oculto");
-        emBreve.classList.add("oculto");
+  // Periodica, so com a pagina a vista: temporizador rodando em aba escondida
+  // gasta bateria do telefone para atualizar um numero que ninguem esta lendo
+  function ligarRelogio() {
+    if (relogioPeriodico !== null) return;
+    relogioPeriodico = setInterval(function () {
+      if (document.visibilityState === "visible") consultar();
+    }, INTERVALO_MS);
+  }
+
+  function desligarRelogio() {
+    if (relogioPeriodico === null) return;
+    clearInterval(relogioPeriodico);
+    relogioPeriodico = null;
+  }
+
+  if (typeof document.addEventListener === "function") {
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") {
+        ligarRelogio();
+        aoVoltar();
+      } else {
+        desligarRelogio();
       }
-    })
-    .catch(function () {
-      clearTimeout(relogio);
-      semApi();
     });
+
+    // Qualquer sinal de gente na pagina conta como atividade: sem isto, ler
+    // as instrucoes de instalacao com calma contaria como inatividade e a
+    // pagina recarregaria no meio da leitura
+    ["pointerdown", "keydown", "scroll", "touchstart"].forEach(function (evento) {
+      document.addEventListener(evento, registrarAtividade, { passive: true });
+    });
+
+    // Tocar em baixar e o unico momento em que a pagina NAO pode recarregar:
+    // uma recarga no meio do inicio do download o cancela
+    apk.addEventListener("click", function () {
+      registrarAtividade();
+      desligarRelogio();
+    });
+  }
+
+  ligarRelogio();
 })();
 </script>
 </body>
