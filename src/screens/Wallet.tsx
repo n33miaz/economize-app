@@ -25,6 +25,7 @@ import { useWalletStore, Transaction } from "../store/walletStore";
 import { useIndicatorStore } from "../store/indicatorStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import ErrorState from "../components/ErrorState";
 import PotEmptyState from "../components/PotEmptyState";
 import FreshnessStamp from "../components/FreshnessStamp";
@@ -77,6 +78,8 @@ export default function Wallet() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const insets = useSafeAreaInsets();
+  // Liga a lista à ilha da barra de abas e ao segmentado do topo
+  const barra = useEsconderBarra();
   // Deslocamento do FAB até o rodapé. A reserva da lista sai deste mesmo
   // número: eram dois valores independentes, e por isso o `pb-32` sobrava
   const fabBottom = insets.bottom > 0 ? insets.bottom : spacing[6];
@@ -311,7 +314,12 @@ export default function Wallet() {
         </View>
       ) : (
         <FlatList
-            refreshControl={refreshControl}
+          // Carteira é a aba que ABRE ao entrar em Finanças. Sem este sinal a
+          // ilha de baixo e o segmentado de cima nunca somiam justamente na
+          // tela onde a pessoa cai primeiro — as duas escolhas de 16/09 (6 e 7)
+          // pedem que eles sumam ao rolar, e quem diz que rolou é a lista
+          {...barra}
+          refreshControl={refreshControl}
           data={transactions}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}

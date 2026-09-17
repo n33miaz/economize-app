@@ -45,6 +45,7 @@ import {
   toggleFavoriteWithSnapshot,
   useFavoritesStore,
 } from "../store/favoritesStore";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { AssetTab, useIndicatorStore } from "../store/indicatorStore";
 
 interface AssetListScreenProps {
@@ -55,6 +56,15 @@ interface AssetListScreenProps {
   symbol?: string;
   title?: string;
   featuredItems?: Indicator[];
+  /**
+   * Liga a lista à ilha da barra de abas e ao segmentado do topo.
+   *
+   * <p>OPT-IN de propósito. Esta mesma lista é usada dentro do
+   * `IndicatorDetailSheet`, e rolar o conteúdo de uma FOLHA não deve esconder
+   * a navegação atrás dela — a barra sumiria por causa de um gesto que não era
+   * sobre ela, e reapareceria só quando a folha fechasse.
+   */
+  esconderBarraAoRolar?: boolean;
 }
 
 // Resultado remoto amarrado ao termo que o produziu: sem isso, a resposta de
@@ -72,7 +82,12 @@ export default function AssetListScreen({
   tab,
   symbol,
   featuredItems = [],
+  esconderBarraAoRolar = false,
 }: AssetListScreenProps) {
+  // O hook é chamado SEMPRE (regra dos hooks); o que a prop decide é se os
+  // handlers chegam à lista
+  const barra = useEsconderBarra();
+  const barraDaLista = esconderBarraAoRolar ? barra : null;
   const t = useTheme();
   // Card de ativo é largo e baixo: numa coluna de 1180 px sobra deserto entre
   // o nome e a cotação. Duas colunas encurtam a varredura pela metade
@@ -481,6 +496,7 @@ export default function AssetListScreen({
         </View>
       ) : (
         <FlatList
+          {...barraDaLista}
           // `numColumns` não muda em voo: a chave remonta a lista no breakpoint
           key={`grade-${columns}`}
           data={rows}
