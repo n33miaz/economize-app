@@ -34,6 +34,7 @@ import { Indicator, getDailyTotals } from "../services/api";
 import type { DailyTotal } from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -145,6 +146,8 @@ const BLOCK_WEIGHTS = {
 export default function Home() {
   const navigation = useNavigation();
   const t = useTheme();
+  // A ilha da barra de abas se esconde quando esta lista rola para baixo
+  const barraQueSeEsconde = useEsconderBarra();
   // A Home é uma pilha de blocos independentes — o caso mais direto de grade:
   // no desktop eles se dividem em duas colunas em vez de virar uma fita de
   // 1180 px de largura por três telas de altura
@@ -629,6 +632,7 @@ export default function Home() {
       />
 
       <ScrollView
+        {...barraQueSeEsconde}
         className="flex-1"
         contentContainerClassName="pb-10 pt-4"
         showsVerticalScrollIndicator={false}

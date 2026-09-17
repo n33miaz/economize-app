@@ -82,6 +82,7 @@ import TransactionRow, {
 } from "../components/TransactionRow";
 import { APP_ROUTES } from "../routes/routeNames";
 import { useTheme } from "../theme/ThemeProvider";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -244,6 +245,8 @@ function StatementSkeleton() {
 
 export default function BankIntegration() {
   const t = useTheme();
+  // A ilha da barra de abas se esconde quando esta lista rola para baixo
+  const barraQueSeEsconde = useEsconderBarra();
   const navigation = useNavigation();
   const route = useRoute();
   const { cardEntering, listItemEntering } = useMotionPresets();
@@ -1233,6 +1236,7 @@ export default function BankIntegration() {
                 Acesso Rápido
               </Text>
               <ScrollView
+        {...barraQueSeEsconde}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerClassName="gap-3"

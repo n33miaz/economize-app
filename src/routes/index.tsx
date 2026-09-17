@@ -24,11 +24,15 @@ import { useReducedMotion } from "react-native-reanimated";
 
 import { lightTheme } from "../theme/colors";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { spacing } from "../theme/ds";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import AppOpening from "../components/AppOpening";
 import OverlayHost from "../components/OverlayHost";
-import { BOTTOM_BAR_HEIGHT, TabBarHeightContext } from "./tabBarHeight";
+import {
+  BOTTOM_BAR_HEIGHT,
+  ILHA_ALTURA,
+  TabBarHeightContext,
+} from "./tabBarHeight";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
@@ -301,22 +305,17 @@ function MainTabs() {
         // abaixo é do celular. A versão anterior desta tela mandava a MESMA
         // barra para a esquerda no desktop; virava uma segunda navegação, de
         // três destinos, encostada no trilho de doze.
+        // A ILHA mora no `TabBarWithIndicator`: é lá que ficam posição, raio,
+        // fundo e sombra. Aqui a barra interna é só o conteúdo dela, e precisa
+        // ser TRANSPARENTE — fundo opaco cobriria a pílula que marca a aba
+        // ativa, desenhada atrás dos ícones.
         tabBarStyle: {
-          backgroundColor: t.background.surface,
-          // 84 dá folga para o ícone da Home (28, ~30 no pico do pop) +
-          // rótulo dentro do `overflow: hidden` da barra. Com 70 o rótulo
-          // era cortado sempre que não havia inset de barra de gestos
-          height: BOTTOM_BAR_HEIGHT + bottomInset,
-          paddingBottom: bottomInset > 0 ? bottomInset : 10,
-          paddingTop: 8,
-          // No dark, sombra é invisível — a borda superior faz a separação
-          borderTopWidth: 1,
-          borderTopColor: t.border.default,
-          // Cantos superiores arredondados: o fundo do navigator (base) fica
-          // visível atrás e a barra ganha a mesma geometria dos cards
-          borderTopLeftRadius: radius["2xl"],
-          borderTopRightRadius: radius["2xl"],
-          overflow: "hidden",
+          backgroundColor: "transparent",
+          height: ILHA_ALTURA,
+          // o inset da borda do aparelho já é pago pelo `bottom` da ilha
+          paddingBottom: 6,
+          paddingTop: 6,
+          borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
         },
