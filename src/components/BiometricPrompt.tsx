@@ -13,7 +13,7 @@ import FingerprintPattern from "lucide-react-native/dist/esm/icons/fingerprint-p
 
 import CustomModal from "./CustomModal";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 
 /**
  * Quanto dura o selo de sucesso antes de a folha descer.
@@ -158,8 +158,7 @@ export default function BiometricPrompt({
         <Text
           style={{
             color: t.text.primary,
-            fontSize: 18,
-            fontWeight: "700",
+            ...SHEET_TITLE,
             textAlign: "center",
             marginBottom: spacing[3],
           }}

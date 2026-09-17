@@ -11,6 +11,7 @@ import {
 } from "react-native-reanimated";
 
 import Skeleton from "../Skeleton";
+import { useServerStore } from "../../store/serverStore";
 
 jest.mock("react-native-reanimated", () => {
   const real = jest.requireActual("react-native-reanimated");
@@ -47,6 +48,7 @@ function montarMedido() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockReducedMotion.mockReturnValue(false);
+  useServerStore.setState({ isWaking: false, waitedSeconds: 0 });
 });
 
 describe("Skeleton — varredura", () => {
@@ -73,6 +75,45 @@ describe("Skeleton — varredura", () => {
     expect(duracoes).not.toContain(PERIODO_MS);
     expect(duracoes).toContain(800);
     expect(mockRepeat).toHaveBeenCalledWith(expect.anything(), -1, true);
+  });
+
+  /**
+   * A outra metade da escolha 12: *"nas telas com servidor dormindo, a faixa
+   * desacelera para dizer sem palavras que vai demorar mais"*.
+   *
+   * <p>O plano free do Render hiberna e o primeiro acesso já custou 229 s
+   * medidos. Uma faixa rápida nessa espera promete o que não vai cumprir.
+   */
+  it("com a API subindo, a faixa varre no dobro do tempo", () => {
+    useServerStore.setState({ isWaking: true });
+    montarMedido();
+
+    expect(mockTiming).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        duration: PERIODO_MS * 2,
+        easing: Easing.linear,
+      }),
+    );
+    const duracoes = mockTiming.mock.calls.map(([, cfg]) => cfg?.duration);
+    expect(duracoes).not.toContain(PERIODO_MS);
+  });
+
+  it("quando a API responde, a faixa volta ao ritmo rápido", () => {
+    useServerStore.setState({ isWaking: true });
+    const resultado = montarMedido();
+    jest.clearAllMocks();
+
+    // O que o efeito precisa observar: a espera acaba NO MEIO do carregamento,
+    // e a tela não pode terminar de carregar devagar
+    act(() => {
+      useServerStore.setState({ isWaking: false });
+    });
+    resultado.rerender(<Skeleton />);
+
+    const duracoes = mockTiming.mock.calls.map(([, cfg]) => cfg?.duration);
+    expect(duracoes).toContain(PERIODO_MS);
+    expect(duracoes).not.toContain(PERIODO_MS * 2);
   });
 
   it("o período não bifurca por plataforma", () => {
