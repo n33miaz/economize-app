@@ -9,7 +9,8 @@ import * as Haptics from "../utils/haptics";
 import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
-import { formatDecimal, formatPercent } from "../utils/money";
+import { dayRangeLabel, formatIndicatorValue } from "../utils/indicatorFormat";
+import { formatPercent } from "../utils/money";
 import Sparkline from "./Sparkline";
 
 interface IndicatorCardProps {
@@ -55,34 +56,30 @@ const IndicatorCard = React.memo(
     const t = useTheme();
     const { pressStyle, onPressIn, onPressOut } = usePressScale();
 
-    // Ausência de preço é um FATO ("o catálogo não gastou cota com este
-    // ativo"), não o número zero. `Number(null) || 0` apagava essa diferença
-    // e o card afirmava R$ 0,00 com a variação certa ao lado — mesmo defeito
-    // que o EC-151 corrigiu para `points` e não para o preço
-    const hasValue = value != null && Number.isFinite(Number(value));
-    const safeValue = hasValue ? Number(value) : 0;
+    // A ausência de preço é um FATO ("o catálogo não gastou cota com este
+    // ativo"), não o número zero — e quem sabe disso agora é
+    // `formatIndicatorValue`, que desenha traço. O `safeValue` de antes
+    // morava aqui só para a formatação, e foi com ela
     const safeVariation = Number(variation) || 0;
 
     const variationInfo = useMemo(() => {
       const isPositive = safeVariation >= 0;
       return {
         color: isPositive ? t.semantic.success : t.semantic.danger,
-        bgColor: isPositive
-          ? t.semantic.successMuted
-          : t.semantic.dangerMuted,
+        bgColor: isPositive ? t.semantic.successMuted : t.semantic.dangerMuted,
         Icon: isPositive ? ArrowUpRight : ArrowDownRight,
         formatted: formatPercent(safeVariation, { signed: true }),
       };
       // `t` na lista: sem ele as cores ficavam presas ao tema da montagem
     }, [safeVariation, t]);
 
-    /** "Dia: 42,10 – 43,55" — os dois extremos, ou nada. */
-    const faixaDoDia = useMemo(() => {
-      const baixa = dayLow != null && Number.isFinite(Number(dayLow)) ? Number(dayLow) : null;
-      const alta = dayHigh != null && Number.isFinite(Number(dayHigh)) ? Number(dayHigh) : null;
-      if (baixa == null || alta == null || alta <= baixa) return null;
-      return `Dia: ${formatDecimal(baixa)} – ${formatDecimal(alta)}`;
-    }, [dayLow, dayHigh]);
+    // A regra saiu daqui para `utils/indicatorFormat`: a manchete da escolha
+    // 10 mostra o MESMO ativo em cima, grande, e duas cópias da regra fariam
+    // os dois discordarem
+    const faixaDoDia = useMemo(
+      () => dayRangeLabel(dayLow, dayHigh),
+      [dayLow, dayHigh],
+    );
 
     const displayName = useMemo(() => {
       return name?.split("/")[0].replace("Comercial", "").trim() || "Ativo";
@@ -94,24 +91,13 @@ const IndicatorCard = React.memo(
       return code ? `${code} · BRL` : "BRL";
     }, [type, symbol, code]);
 
-    const displayValue = useMemo(() => {
-      // Traço, e não zero: quem lê entende "sem cotação" em vez de
-      // "não vale nada"
-      if (!hasValue) return "—";
-      // Índices são pontuados (sem "R$"), no formato pt-BR — pelo tipo, não
-      // só pelo símbolo: o catálogo não passa símbolo e mostrava o IBOVESPA
-      // como "R$ 179.722,48"
-      if (symbol === "pts" || type === "index") {
-        return `${safeValue.toLocaleString("pt-BR", {
-          maximumFractionDigits: 0,
-        })} pts`;
-      }
-      // Moeda que vale centavos de real (peso argentino, iene) não pode sair
-      // "R$ 0,00" ao lado de uma variação de -0,82%: abaixo de R$ 0,10 o card
-      // mostra quatro casas, que é o que a cotação de fato tem
-      const decimals = safeValue > 0 && safeValue < 0.1 ? 4 : 2;
-      return `${symbol} ${formatDecimal(safeValue, decimals)}`;
-    }, [symbol, type, safeValue, hasValue]);
+    // Mesma função da manchete — as três cicatrizes da formatação (traço em
+    // vez de zero, índice pontuado pelo TIPO, quatro casas abaixo de R$ 0,10)
+    // estão documentadas lá
+    const displayValue = useMemo(
+      () => formatIndicatorValue({ value, symbol, type }),
+      [value, symbol, type],
+    );
 
     const VariationIcon = variationInfo.Icon;
 
@@ -167,7 +153,9 @@ const IndicatorCard = React.memo(
                 >
                   {displayName}
                 </Text>
-                <Text style={[ds.typography.bodySm, { color: t.text.secondary }]}>
+                <Text
+                  style={[ds.typography.bodySm, { color: t.text.secondary }]}
+                >
                   {subtitle}
                 </Text>
               </View>
@@ -225,46 +213,54 @@ const IndicatorCard = React.memo(
               >
                 Cotação Atual
               </Text>
-              <Text style={[ds.typography.numericLg, { color: t.text.primary }]}>
+              <Text
+                style={[ds.typography.numericLg, { color: t.text.primary }]}
+              >
                 {displayValue}
               </Text>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: ds.spacing[2] }}>
-            {/* A linha vem ANTES do selo de variação: ela é o contexto, e o
-                selo é a conclusão. O tom sai da variação para os dois nunca
-                discordarem lado a lado */}
-            <Sparkline
-              values={sparkline}
-              tone={safeVariation >= 0 ? "up" : "down"}
-            />
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                paddingHorizontal: ds.spacing[2],
-                paddingVertical: ds.spacing[1],
-                borderRadius: ds.radius.lg,
-                backgroundColor: variationInfo.bgColor,
+                gap: ds.spacing[2],
               }}
             >
-              <VariationIcon
-                size={14}
-                color={variationInfo.color}
-                style={{ marginRight: ds.spacing[1] }}
+              {/* A linha vem ANTES do selo de variação: ela é o contexto, e o
+                selo é a conclusão. O tom sai da variação para os dois nunca
+                discordarem lado a lado */}
+              <Sparkline
+                values={sparkline}
+                tone={safeVariation >= 0 ? "up" : "down"}
               />
-              <Text
-                style={[
-                  ds.typography.bodySm,
-                  {
-                    color: variationInfo.color,
-                    fontFamily: "Roboto_700Bold",
-                  },
-                ]}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: ds.spacing[2],
+                  paddingVertical: ds.spacing[1],
+                  borderRadius: ds.radius.lg,
+                  backgroundColor: variationInfo.bgColor,
+                }}
               >
-                {variationInfo.formatted}
-              </Text>
-            </View>
+                <VariationIcon
+                  size={14}
+                  color={variationInfo.color}
+                  style={{ marginRight: ds.spacing[1] }}
+                />
+                <Text
+                  style={[
+                    ds.typography.bodySm,
+                    {
+                      color: variationInfo.color,
+                      fontFamily: "Roboto_700Bold",
+                    },
+                  ]}
+                >
+                  {variationInfo.formatted}
+                </Text>
+              </View>
             </View>
           </View>
 
