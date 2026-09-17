@@ -1,0 +1,46 @@
+# Blueprint de HOMOLOGAÇÃO do site — guardado, não sincronizado.
+#
+# O ambiente de homologação foi aposentado em 17/09/2026: o Postgres gratuito do
+# Render expira (aviso de suspensão do `economize-homolog-db` para 08/10) e, no
+# plano free, o recurso escasso é hora de instância — produção passou a ser
+# mantida acordada e não sobra orçamento para um segundo ambiente aquecido.
+#
+# Este site sozinho não custa hora de instância (site estático não hiberna), mas
+# ele não serve para nada sem a API de homologação: o `EXPO_PUBLIC_API_BASE_URL`
+# abaixo aponta para ela, e apontá-lo para produção seria PIOR do que não ter
+# homologação — daria a sensação de ambiente separado enquanto se escreve no
+# banco de verdade do dono.
+#
+# ------------------------------------------------------------------------------
+# COMO TRAZER DE VOLTA
+#   1. Primeiro o lado da API: sincronize o `render.homolog.yaml` do repositório
+#      economize-api (ele cria o serviço e o banco).
+#   2. Depois, no Render: New > Blueprint apontando para ESTE arquivo.
+#   3. Confira se a URL abaixo é mesmo a do serviço de API que subiu no passo 1 —
+#      ela é embutida no bundle em tempo de build, e no navegador já é tarde.
+# ------------------------------------------------------------------------------
+
+services:
+  # --------------------------------------------------------------------------
+  - type: web
+    name: economize-web-homolog
+    runtime: static
+    buildCommand: npm ci && npx expo export --platform web --output-dir dist --clear
+    staticPublishPath: ./dist
+    branch: homolog
+    autoDeploy: true
+    envVars:
+      # A URL é inlinada no bundle em tempo de build: é ELA que decide em qual
+      # banco o teste vai escrever, e por isso nunca pode ser a de produção
+      - key: EXPO_PUBLIC_API_BASE_URL
+        value: https://economize-api-homolog.onrender.com/api/v1
+      - key: NODE_VERSION
+        value: "20"
+    routes:
+      # Mesma ordem do site de produção — ver o comentário lá em cima
+      - type: rewrite
+        source: /baixar
+        destination: /baixar.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
