@@ -6,7 +6,7 @@ import X from "lucide-react-native/dist/esm/icons/x";
 
 import CustomModal from "./CustomModal";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import { selectPlans, usePlanStore } from "../store/planStore";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { useToastStore } from "../store/toastStore";
@@ -95,7 +95,7 @@ export default function PremiumOfferSheet({ visible, onClose }: Props) {
           </View>
           <View style={{ flex: 1 }}>
             <Text
-              style={{ color: t.text.primary, fontSize: 20, fontWeight: "700" }}
+              style={{ color: t.text.primary, ...SHEET_TITLE }}
             >
               Economize! Plus
             </Text>

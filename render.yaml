@@ -52,26 +52,9 @@ services:
   # --------------------------------------------------------------------------
   # HOMOLOGAÇÃO — o mesmo site, do branch `homolog`, falando com a API de
   # homologação. É aqui que a tela nova é vista antes de chegar ao dono.
-  # --------------------------------------------------------------------------
-  - type: web
-    name: economize-web-homolog
-    runtime: static
-    buildCommand: npm ci && npx expo export --platform web --output-dir dist --clear
-    staticPublishPath: ./dist
-    branch: homolog
-    autoDeploy: true
-    envVars:
-      # A URL é inlinada no bundle em tempo de build: é ELA que decide em qual
-      # banco o teste vai escrever, e por isso nunca pode ser a de produção
-      - key: EXPO_PUBLIC_API_BASE_URL
-        value: https://economize-api-homolog.onrender.com/api/v1
-      - key: NODE_VERSION
-        value: "20"
-    routes:
-      # Mesma ordem do site de produção — ver o comentário lá em cima
-      - type: rewrite
-        source: /baixar
-        destination: /baixar.html
-      - type: rewrite
-        source: /*
-        destination: /index.html
+
+# ------------------------------------------------------------------------------
+# O SITE DE HOMOLOGAÇÃO FOI APOSENTADO em 17/09/2026, junto da API de
+# homologação. A definição completa está em `render.homolog.yaml`, com o passo a
+# passo para recriar — e a ordem importa: a API primeiro, o site depois.
+# ------------------------------------------------------------------------------

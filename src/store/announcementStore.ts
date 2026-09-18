@@ -38,6 +38,20 @@ import { create } from "zustand";
  * encaixar um anúncio novo sem renumerar os que já existem.
  */
 export const ANNOUNCEMENT_PRIORITY = {
+  /**
+   * A TRANCA. Vem antes de tudo, e por isso é zero.
+   *
+   * <p><b>O defeito, relatado pelo dono em 17/09/2026:</b> <i>"ao aparecer a
+   * tela de biometria, depois que o app se conecta à api ele abre na hora o
+   * modal de nova versão"</i>. A causa: o `BiometricGate` desenha os filhos e
+   * põe a tranca por cima, então a folha de versão <b>montava</b> atrás dela —
+   * e, como o gate não pedia vez nesta fila, o piso estava livre e ela falava.
+   *
+   * <p>Enquanto o app está trancado não existe anúncio legítimo: a pessoa não
+   * provou que é ela. Qualquer coisa dita aqui é dita para quem está do lado de
+   * fora.
+   */
+  biometricGate: 0,
   /** Oferta de biometria: a pessoa acabou de digitar a senha e está esperando. */
   biometric: 10,
   /** Versão nova: pode ser o app inteiro desalinhado com o servidor. */

@@ -5,7 +5,7 @@ import Info from "lucide-react-native/dist/esm/icons/info";
 import X from "lucide-react-native/dist/esm/icons/x";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
 import {
   MAX_CYCLE_ANCHOR_DAY,
@@ -123,12 +123,7 @@ export default function CycleAnchorSheet({
           }}
         >
           <Text
-            style={{
-              flex: 1,
-              color: t.text.primary,
-              fontSize: 20,
-              fontWeight: "700",
-            }}
+            style={{ flex: 1, color: t.text.primary, ...SHEET_TITLE }}
           >
             Ciclo do mês
           </Text>

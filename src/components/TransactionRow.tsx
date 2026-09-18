@@ -2,7 +2,11 @@ import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Tag from "lucide-react-native/dist/esm/icons/tag";
 
-import type { BankTransaction, Category, ConnectorAccount } from "../services/api";
+import type {
+  BankTransaction,
+  Category,
+  ConnectorAccount,
+} from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
@@ -36,6 +40,9 @@ export type TransactionRowDensity = "card" | "list";
 /** Altura da linha `card` sem selos: o esqueleto do Extrato imita esta geometria. */
 export const TRANSACTION_ROW_CARD_HEIGHT = 72;
 
+/** Teto de selos na linha do Extrato (escolha 8: "no máximo dois"). */
+export const MAX_BADGES_CARD = 2;
+
 export interface TransactionRowMember {
   memberId: string;
   memberName: string;
@@ -55,6 +62,10 @@ export interface TransactionRowProps {
   showOrigin?: boolean;
   /** Falso quando a categoria já está no contêiner (chip do grupo da Revisão). */
   showCategory?: boolean;
+  /**
+   * Falso quando a tela já diz a data em cima — o cabeçalho de dia do Extrato.
+   */
+  showDate?: boolean;
   /** Só na casa: de quem é a linha. */
   member?: TransactionRowMember | null;
   density?: TransactionRowDensity;
@@ -125,6 +136,7 @@ export default function TransactionRow({
   account,
   showOrigin = false,
   showCategory = true,
+  showDate = true,
   member,
   density = "list",
   voice,
@@ -145,8 +157,21 @@ export default function TransactionRow({
     showCategory,
     account,
     showOrigin,
+    showDate,
   });
-  const badges = rowBadges(transaction);
+  // Teto de dois selos na densidade de card (escolha 8: "selos vivem só na
+  // segunda linha, no máximo dois"). Cinco selos podiam coexistir — Revisar,
+  // Ignorada, Entre contas, Na casa, Estornada — e a linha crescia até três
+  // alturas por causa deles.
+  //
+  // O que se perde não se perde de vez: `rowBadges` já ordena pelo que pede
+  // AÇÃO primeiro, então "Revisar" nunca é cortado; o resto continua inteiro
+  // no rótulo falado (`spokenLabel`, logo abaixo, usa a transação e não esta
+  // lista) e na folha de detalhes, que é o destino de um toque na linha
+  const badges =
+    density === "card"
+      ? rowBadges(transaction).slice(0, MAX_BADGES_CARD)
+      : rowBadges(transaction);
   // Sem conta mapeada a origem vira selo, não texto de apoio — é o que
   // separa "não informada" (histórico de arquivo) de "não reconhecida"
   const originAsBadge = showOrigin && !account;

@@ -1,12 +1,50 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, TouchableOpacity } from "react-native";
 import ChevronLeft from "lucide-react-native/dist/esm/icons/chevron-left";
 import User from "lucide-react-native/dist/esm/icons/user";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
+import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useTabBarStore } from "../store/tabBarStore";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacing, radius } from "../theme/ds";
+import { motion, spacing, radius } from "../theme/ds";
+import { selectionEasing } from "../theme/motionPresets";
+
+/**
+ * O CABEÇALHO CONDENSA AO ROLAR — a metade da escolha 5 que faltava.
+ *
+ * <p>O dono escolheu em 16/09 a variante <i>"sem fio: separação por respiro e
+ * tinta"</i>, e ela tem duas partes. A primeira (tirar as molduras) saiu no
+ * mesmo dia. A segunda é esta: <i>"no celular, o header condensa ao rolar: o
+ * título de 28 px encolhe para 18 e vira uma barra fina com sombra, liberando
+ * altura"</i>.
+ *
+ * <p><b>Por que importa ter número.</b> O alvo declarado é o Safari de um
+ * iPhone 12, onde sobram <b>664 px</b> de altura útil. Aberto, este cabeçalho
+ * come 47 (status bar) + 20 + 34 (título) + 15 (legenda) + 16 = <b>132 px</b>,
+ * 20% do que a pessoa vê sem rolar — gastos com o nome de uma tela que ela
+ * acabou de escolher. Condensado ele fica em 47 + 8 + 24 + 8 = 87.
+ *
+ * <p><b>O sinal é o mesmo da ilha e do segmentado</b> (`tabBarStore`): rolar
+ * para baixo esconde, para cima traz de volta, com a histerese de 12 px que
+ * impede o tremor. Um segundo mecanismo de rolagem só para o cabeçalho seria
+ * outro relógio para desandar.
+ */
+
+/** Altura reservada para a legenda quando ela existe. */
+const SUBTITULO_ALTURA = 15;
+
+/** Respiro acima do título, aberto e condensado. */
+const TOPO_ABERTO = spacing[5];
+const TOPO_CONDENSADO = spacing[2];
 
 interface ScreenHeaderProps {
   title: string;
@@ -44,12 +82,64 @@ export default function ScreenHeader({
   const navState = navigation.getState();
   const isPushed = navState?.type === "stack" && navigation.canGoBack();
   const showBack = showBackButton ?? isPushed;
-  const paddingTop = topInset
-    ? Constants.statusBarHeight + spacing[5]
-    : spacing[5];
+
+  // Condensar é coisa de telefone: no desktop o cabeçalho divide a tela com o
+  // trilho lateral e não há altura escassa para devolver
+  const { isPhone } = useBreakpoint();
+  const reducedMotion = useReducedMotion();
+  const escondida = useTabBarStore((s) => s.escondida);
+  const condensado = isPhone && escondida;
+
+  const progresso = useSharedValue(0);
+  const jaMontou = React.useRef(false);
+  React.useEffect(() => {
+    const alvo = condensado ? 1 : 0;
+    // Primeira montagem não é trajeto: o cabeçalho apenas ESTÁ no estado
+    // certo. Mesmo princípio da ilha de baixo e do segmentado do topo
+    if (!jaMontou.current) {
+      jaMontou.current = true;
+      progresso.value = alvo;
+      return;
+    }
+    progresso.value = reducedMotion
+      ? alvo
+      : withTiming(alvo, {
+          duration: motion.duration.fast,
+          easing: selectionEasing,
+        });
+  }, [condensado, reducedMotion, progresso]);
+
+  const respiroDoTopo = topInset ? Constants.statusBarHeight : 0;
+
+  const estiloBarra = useAnimatedStyle(() => ({
+    paddingTop:
+      respiroDoTopo +
+      interpolate(progresso.value, [0, 1], [TOPO_ABERTO, TOPO_CONDENSADO]),
+    paddingBottom: interpolate(
+      progresso.value,
+      [0, 1],
+      [spacing[4], spacing[2]],
+    ),
+    // A sombra nasce com o condensado: é o que separa a barra fina do conteúdo
+    // que passa por baixo dela, agora que não há mais fio nem cartucho.
+    // `shadowOpacity` e `elevation` na mesma regra — cada plataforma usa a sua
+    shadowOpacity: interpolate(progresso.value, [0, 1], [0, 0.18]),
+    elevation: interpolate(progresso.value, [0, 1], [0, 4]),
+  }));
+
+  const estiloTitulo = useAnimatedStyle(() => ({
+    fontSize: interpolate(progresso.value, [0, 1], [28, 18]),
+    lineHeight: interpolate(progresso.value, [0, 1], [34, 24]),
+  }));
+
+  const estiloSubtitulo = useAnimatedStyle(() => ({
+    height: interpolate(progresso.value, [0, 1], [SUBTITULO_ALTURA, 0]),
+    opacity: interpolate(progresso.value, [0, 1], [1, 0]),
+    marginTop: interpolate(progresso.value, [0, 1], [2, 0]),
+  }));
 
   return (
-    <View
+    <Animated.View
       // SEM cartucho e SEM linha embaixo. O cabeçalho era uma superfície
       // `surface` com borda inferior E cantos inferiores arredondados — três
       // molduras para o mesmo elemento, e o resultado era uma barra que
@@ -60,12 +150,20 @@ export default function ScreenHeader({
       // que é como cabeçalho grande funciona no iOS e no Material 3: o título
       // é o maior texto da tela, e nada precisa desenhar uma caixa em volta
       // dele para provar isso. A separação do conteúdo é o próprio respiro.
-      style={{
-        backgroundColor: t.background.base,
-        paddingTop,
-        paddingBottom: spacing[4],
-        paddingHorizontal: spacing[5],
-      }}
+      style={[
+        {
+          backgroundColor: t.background.base,
+          paddingHorizontal: spacing[5],
+          // Estáticos: só a opacidade da sombra é animada, senão cada quadro
+          // recalcularia o desenho dela
+          shadowColor: "#000",
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+          // A barra tem de ficar POR CIMA do conteúdo que ela deixa passar
+          zIndex: 1,
+        },
+        estiloBarra,
+      ]}
     >
       {/* NÃO existe mais botão de informação aqui. Ele aparecia em QUASE TODA
           tela — um "i" repetido em cima de cada cabeçalho, disputando espaço
@@ -102,26 +200,36 @@ export default function ScreenHeader({
           </TouchableOpacity>
         )}
         <View className="flex-1 mr-4">
-          <Text
-            className="text-textPrimary tracking-tight"
-            // 28 e não 24: com o cartucho fora, é a tipografia que faz a
-            // hierarquia. Peso 800 onde a fonte tem — a Roboto do app para em
-            // 700, e o `tracking-tight` é o que dá o resto da presença
-            style={{ fontSize: 28, fontWeight: "700", lineHeight: 34 }}
+          {/* Sem `className` nos dois animados: a cor e o espaçamento entram
+              no estilo. Misturar o css-interop com estilo animado no mesmo nó
+              é onde esta pilha já quebrou antes */}
+          <Animated.Text
+            // 28 aberto, 18 condensado. Com o cartucho fora, é a tipografia
+            // que faz a hierarquia — e é ela que devolve altura ao rolar
+            style={[
+              {
+                color: t.text.primary,
+                fontWeight: "700",
+                letterSpacing: -0.4,
+              },
+              estiloTitulo,
+            ]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             {title}
-          </Text>
+          </Animated.Text>
           {subtitle && (
-            <Text
-              className="text-textSecondary"
-              style={{ fontSize: 13, marginTop: 2, fontWeight: "500" }}
+            <Animated.Text
+              style={[
+                { color: t.text.secondary, fontSize: 13, fontWeight: "500" },
+                estiloSubtitulo,
+              ]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
               {subtitle}
-            </Text>
+            </Animated.Text>
           )}
         </View>
 
@@ -150,6 +258,6 @@ export default function ScreenHeader({
           )}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }

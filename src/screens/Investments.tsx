@@ -39,6 +39,7 @@ import {
 import { useToastStore } from "../store/toastStore";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -126,6 +127,8 @@ const isBlockingError = (slice: Slice<unknown>) =>
  */
 export default function Investments() {
   const t = useTheme();
+  // A ilha da barra de abas se esconde quando esta lista rola para baixo
+  const barraQueSeEsconde = useEsconderBarra();
   const navigation = useNavigation();
   const { columns } = useBreakpoint();
   const { cardEntering } = useMotionPresets();
@@ -399,6 +402,7 @@ export default function Investments() {
       ) : (
         <>
           <ScrollView
+        {...barraQueSeEsconde}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: spacing[3], paddingRight: spacing[1] }}

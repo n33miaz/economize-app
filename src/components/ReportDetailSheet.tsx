@@ -8,7 +8,7 @@ import ChartLegend, { ChartLegendItem } from "./ChartLegend";
 import { resolveCategoryColor } from "./CategoryIcon";
 import { useTheme } from "../theme/ThemeProvider";
 import type { AppTheme } from "../theme/colors";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import { formatDayMonthShort } from "../utils/cycleWindow";
 import { categoryForSlice, parseReportCategories } from "../utils/reportBreakdown";
@@ -126,8 +126,7 @@ export default function ReportDetailSheet({
         <Text
           style={{
             color: t.text.primary,
-            fontSize: 20,
-            fontWeight: "700",
+            ...SHEET_TITLE,
             marginTop: spacing[1],
           }}
         >
