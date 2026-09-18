@@ -1,9 +1,6 @@
 import React from "react";
 import { render, waitFor } from "@testing-library/react-native";
-import {
-  SafeAreaProvider,
-  type Metrics,
-} from "react-native-safe-area-context";
+import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import BalanceForecast from "../BalanceForecast";
 import { useBankStore } from "../../store/bankStore";
@@ -18,7 +15,27 @@ jest.mock("../../services/api", () => ({
   default: {},
   getInstallments: jest
     .fn()
-    .mockResolvedValue({ totalSeries: 0, openSeries: 0, remainingTotal: 0, series: [] }),
+    .mockResolvedValue({
+      totalSeries: 0,
+      openSeries: 0,
+      remainingTotal: 0,
+      series: [],
+    }),
+  // Os três cenários da escolha 9 precisam de gasto REAL passado, que a
+  // previsão não tem. Sem este mock a chamada vinha `undefined` e o efeito
+  // travava a suíte inteira; com zero de gasto, só o cenário "folgado"
+  // aparece — que é o comportamento correto sem histórico
+  getMonthlyAnalytics: jest.fn().mockResolvedValue({
+    month: "2026-08",
+    start: "2026-08-01",
+    end: "2026-08-31",
+    totalIncome: 0,
+    totalExpense: 0,
+    net: 0,
+    previous: { totalIncome: 0, totalExpense: 0, net: 0 },
+    categories: [],
+    pendingReviewCount: 0,
+  }),
 }));
 
 jest.mock("@react-navigation/native", () => ({
@@ -26,7 +43,10 @@ jest.mock("@react-navigation/native", () => ({
     navigate: jest.fn(),
     goBack: jest.fn(),
     canGoBack: () => true,
-    getState: () => ({ index: 1, routes: [{ name: "Main" }, { name: "Previsao" }] }),
+    getState: () => ({
+      index: 1,
+      routes: [{ name: "Main" }, { name: "Previsao" }],
+    }),
   }),
   useRoute: () => ({ params: {} }),
   useIsFocused: () => true,
