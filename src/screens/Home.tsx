@@ -13,12 +13,15 @@ import Banknote from "lucide-react-native/dist/esm/icons/banknote";
 import Bitcoin from "lucide-react-native/dist/esm/icons/bitcoin";
 import CalendarRange from "lucide-react-native/dist/esm/icons/calendar-range";
 import ChartColumn from "lucide-react-native/dist/esm/icons/chart-column";
+import ChartLine from "lucide-react-native/dist/esm/icons/chart-line";
 import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import Eye from "lucide-react-native/dist/esm/icons/eye";
 import EyeOff from "lucide-react-native/dist/esm/icons/eye-off";
 import ListChecks from "lucide-react-native/dist/esm/icons/list-checks";
 import Star from "lucide-react-native/dist/esm/icons/star";
+import Tag from "lucide-react-native/dist/esm/icons/tag";
+import Target from "lucide-react-native/dist/esm/icons/target";
 import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import Upload from "lucide-react-native/dist/esm/icons/upload";
 import type { LucideIcon } from "lucide-react-native";
@@ -34,6 +37,7 @@ import { Indicator, getDailyTotals } from "../services/api";
 import type { DailyTotal } from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -145,6 +149,8 @@ const BLOCK_WEIGHTS = {
 export default function Home() {
   const navigation = useNavigation();
   const t = useTheme();
+  // A ilha da barra de abas se esconde quando esta lista rola para baixo
+  const barraQueSeEsconde = useEsconderBarra();
   // A Home é uma pilha de blocos independentes — o caso mais direto de grade:
   // no desktop eles se dividem em duas colunas em vez de virar uma fita de
   // 1180 px de largura por três telas de altura
@@ -629,6 +635,7 @@ export default function Home() {
       />
 
       <ScrollView
+        {...barraQueSeEsconde}
         className="flex-1"
         contentContainerClassName="pb-10 pt-4"
         showsVerticalScrollIndicator={false}
@@ -1301,7 +1308,9 @@ export default function Home() {
                 <UpcomingBillsCard
                   overview={upcoming}
                   showValues={showBalance}
-                  riskLabel={riskMonth ? forecastPeriodLabel(riskMonth).short : null}
+                  riskLabel={
+                    riskMonth ? forecastPeriodLabel(riskMonth).short : null
+                  }
                   salaryLine={
                     committed?.salaryKnown && committed.salaryDate
                       ? describeSalaryTiming(
@@ -1671,11 +1680,32 @@ export default function Home() {
               </Animated.View>
             ),
 
-            /* Atalhos: só o que não está a um toque na tab bar */
+            /**
+             * Os SEIS atalhos, em grade (escolha 4 do dono em 16/09, e o
+             * "mais atalhos, aproveitando telas e funcionalidades que já
+             * existem" que ele pediu na mesma lista).
+             *
+             * <p>Eram três, em linha. A regra de quem entra continua a mesma —
+             * só o que NÃO está a um toque na barra de abas e o que não é
+             * bloco próprio desta tela: Cartões já é o destino da pastilha de
+             * crédito, Recorrências é o do bloco de compromissos, e Revisão
+             * tem bloco próprio quando há algo a revisar.
+             *
+             * <p>Os três novos preenchem buracos reais. **Previsão** é o mais
+             * grave: a Home não tinha um único link para ela, sendo que é a
+             * tela que responde "o que vem". **Categorias** é onde se corrige
+             * o motor que erra a classificação, e só era alcançável pelas
+             * Opções avançadas. **Desejos** era inalcançável a partir daqui.
+             *
+             * <p>Grade e não linha: `flexBasis: "30%"` com `flexGrow` deixa
+             * três por fileira a 390 px e preenche a sobra, sem número de
+             * colunas escrito à mão — a mesma pastilha serve o telefone e o
+             * desktop.
+             */
             <Animated.View
               key="atalhos"
               entering={listItemEntering(4)}
-              className="flex-row px-5 mb-5"
+              className="flex-row flex-wrap px-5 mb-5"
               style={{ gap: spacing[3] }}
             >
               <QuickAction
@@ -1692,6 +1722,21 @@ export default function Home() {
                 Icon={ChartPie}
                 label="Relatórios"
                 onPress={() => navigation.navigate("Relatórios" as never)}
+              />
+              <QuickAction
+                Icon={ChartLine}
+                label="Previsão"
+                onPress={() => navigation.navigate("Previsão" as never)}
+              />
+              <QuickAction
+                Icon={Tag}
+                label="Categorias"
+                onPress={() => navigation.navigate("Categorias" as never)}
+              />
+              <QuickAction
+                Icon={Target}
+                label="Desejos"
+                onPress={() => navigation.navigate("Desejos" as never)}
               />
             </Animated.View>,
 
@@ -1886,10 +1931,7 @@ export default function Home() {
       {/* A oferta do Plus decide sozinha se sobe (regras em utils/premiumOffer:
           nunca nas duas primeiras sessões, uma por sessão, 7 dias entre
           convites, 30 depois de um "tenho interesse") */}
-      <PremiumOfferSheet
-        visible={plusNaVez}
-        onClose={plusOffer.close}
-      />
+      <PremiumOfferSheet visible={plusNaVez} onClose={plusOffer.close} />
 
       {/* Detalhes do indicador: sheet canônico compartilhado com as listas */}
       <IndicatorDetailSheet
@@ -1927,7 +1969,11 @@ function QuickAction({
   const { pressStyle, onPressIn, onPressOut } = usePressScale();
 
   return (
-    <Animated.View style={[pressStyle, { flex: 1 }]}>
+    // `flexBasis` + `flexGrow` e não `flex: 1`: com seis pastilhas e
+    // `flex-wrap`, o `flex: 1` tentaria caber todas na MESMA fileira e cada
+    // rótulo perderia letras. A base de 30% põe três por fileira e o
+    // crescimento distribui a sobra
+    <Animated.View style={[pressStyle, { flexBasis: "30%", flexGrow: 1 }]}>
       <TouchableOpacity
         onPress={onPress}
         onPressIn={onPressIn}

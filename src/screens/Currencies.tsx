@@ -6,6 +6,7 @@ export default function Currencies() {
   const currencies = useIndicatorStore((state) => state.getCurrencies());
   return (
     <AssetListScreen
+      esconderBarraAoRolar
       data={currencies}
       emptyMessage="Nenhuma moeda encontrada."
       symbol="R$"

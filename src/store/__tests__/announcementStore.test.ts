@@ -36,6 +36,47 @@ describe("fila de anúncios", () => {
     expect(hasFloor(claims, "premium")).toBe(false);
   });
 
+  /**
+   * O defeito de 17/09/2026, relatado pelo dono: <i>"ao aparecer a tela de
+   * biometria, depois que o app se conecta à api ele abre na hora o modal de
+   * nova versão"</i>.
+   *
+   * <p>A tranca desenha as rotas por baixo dela de propósito — o app não
+   * recarrega tudo a cada desbloqueio —, e a folha de versão está entre elas.
+   * Ela montava, pedia a vez, e ganhava: o `BiometricGate` <b>não participava
+   * desta fila</b>. A fila existia desde 16/09 e resolveu três anúncios
+   * brigando entre si; o maior de todos nunca havia entrado nela.
+   */
+  it("com o app trancado, a versão nova não fala", () => {
+    const { claim } = useAnnouncementStore.getState();
+    claim("versao", ANNOUNCEMENT_PRIORITY.newVersion);
+    claim("biometricGate", ANNOUNCEMENT_PRIORITY.biometricGate);
+
+    const { claims } = useAnnouncementStore.getState();
+    expect(hasFloor(claims, "biometricGate")).toBe(true);
+    expect(hasFloor(claims, "versao")).toBe(false);
+  });
+
+  it("a tranca vem antes até da oferta de biometria", () => {
+    const { claim } = useAnnouncementStore.getState();
+    claim("biometria", ANNOUNCEMENT_PRIORITY.biometric);
+    claim("biometricGate", ANNOUNCEMENT_PRIORITY.biometricGate);
+
+    const { claims } = useAnnouncementStore.getState();
+    expect(hasFloor(claims, "biometricGate")).toBe(true);
+    expect(hasFloor(claims, "biometria")).toBe(false);
+  });
+
+  it("destrancado, a versão nova volta a ter a vez", () => {
+    const { claim, release } = useAnnouncementStore.getState();
+    claim("versao", ANNOUNCEMENT_PRIORITY.newVersion);
+    claim("biometricGate", ANNOUNCEMENT_PRIORITY.biometricGate);
+
+    release("biometricGate");
+
+    expect(hasFloor(useAnnouncementStore.getState().claims, "versao")).toBe(true);
+  });
+
   it("a ordem completa: biometria, versão, pote, oferta", () => {
     const { claim } = useAnnouncementStore.getState();
     claim("pote", ANNOUNCEMENT_PRIORITY.potStates);

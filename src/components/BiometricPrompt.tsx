@@ -1,11 +1,28 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import Animated, {
+  Easing,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import Check from "lucide-react-native/dist/esm/icons/check";
 import FingerprintPattern from "lucide-react-native/dist/esm/icons/fingerprint-pattern";
 
 import CustomModal from "./CustomModal";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
+
+/**
+ * Quanto dura o selo de sucesso antes de a folha descer.
+ *
+ * Exportado de proposito: quem chama precisa esperar ESTE tempo antes de sair
+ * da tela, senao a animacao e cortada no primeiro quadro. Numero unico, nos
+ * dois lados — duplicar 550 aqui e la e a forma classica de eles divergirem.
+ */
+export const DURACAO_SELO_MS = 620;
 
 interface Props {
   visible: boolean;
@@ -35,6 +52,50 @@ export default function BiometricPrompt({
   const t = useTheme();
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [working, setWorking] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+
+  /**
+   * A "animacaozinha ao liberar o acesso", pedida pelo dono em 16/09/2026.
+   *
+   * O que ela resolve: hoje a digital e aceita e a tela simplesmente troca. Nao
+   * ha instante nenhum que diga "deu certo" — e desbloqueio e exatamente o
+   * momento em que a pessoa quer confirmacao. O anel muda para verde, o icone
+   * vira um visto e o circulo da um pulo curto; so depois a folha desce.
+   *
+   * Escala e cor apenas: nada de deslocamento em animacao de entrada, pela
+   * mesma razao do resto do app na web.
+   */
+  // Dois valores, cada um com um trabalho: `escala` da o pulo, `verde` faz a
+  // travessia de cor. Um so exigiria remapear duas faixas diferentes a partir
+  // do mesmo numero, que e a origem classica de animacao que "pisca".
+  const escala = useSharedValue(1);
+  const verde = useSharedValue(0);
+  useEffect(() => {
+    if (!sucesso) {
+      escala.value = 1;
+      verde.value = 0;
+      return;
+    }
+    escala.value = withSequence(
+      withTiming(1.12, { duration: 220, easing: Easing.out(Easing.back(2)) }),
+      withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }),
+    );
+    verde.value = withTiming(1, { duration: 240, easing: Easing.out(Easing.quad) });
+  }, [sucesso, escala, verde]);
+
+  const estiloAnel = useAnimatedStyle(() => ({
+    transform: [{ scale: escala.value }],
+    borderColor: interpolateColor(
+      verde.value,
+      [0, 1],
+      [t.accent.neon, t.semantic.success],
+    ),
+    backgroundColor: interpolateColor(
+      verde.value,
+      [0, 1],
+      [t.accent.neonMuted, t.semantic.successMuted],
+    ),
+  }));
 
   // Reabrir é uma pergunta nova: o check marcado e abandonado numa sessão
   // anterior não pode voltar já respondido
@@ -42,6 +103,7 @@ export default function BiometricPrompt({
     if (visible) {
       setDontAskAgain(false);
       setWorking(false);
+      setSucesso(false);
     }
   }, [visible]);
 
@@ -51,7 +113,13 @@ export default function BiometricPrompt({
     const ok = await onEnable();
     // Só solta o botão se a folha continuar aberta — quando dá certo ela
     // fecha, e mexer no estado depois disso é atualizar componente desmontado
-    if (!ok) setWorking(false);
+    if (!ok) {
+      setWorking(false);
+      return;
+    }
+    // Deu certo: o selo aparece AQUI, e quem chama segura a saída da tela por
+    // DURACAO_SELO_MS para ele caber na tela antes de a folha descer
+    setSucesso(true);
   };
 
   return (
@@ -66,27 +134,31 @@ export default function BiometricPrompt({
           { alignItems: "center", paddingTop: spacing[5] },
         ]}
       >
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: radius.full,
-            backgroundColor: t.accent.neonMuted,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 2,
-            borderColor: t.accent.neon,
-            marginBottom: spacing[5],
-          }}
+        <Animated.View
+          style={[
+            {
+              width: 72,
+              height: 72,
+              borderRadius: radius.full,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 2,
+              marginBottom: spacing[5],
+            },
+            estiloAnel,
+          ]}
         >
-          <FingerprintPattern size={34} color={t.accent.neon} />
-        </View>
+          {sucesso ? (
+            <Check size={38} color={t.semantic.success} strokeWidth={3} />
+          ) : (
+            <FingerprintPattern size={34} color={t.accent.neon} />
+          )}
+        </Animated.View>
 
         <Text
           style={{
             color: t.text.primary,
-            fontSize: 18,
-            fontWeight: "700",
+            ...SHEET_TITLE,
             textAlign: "center",
             marginBottom: spacing[3],
           }}

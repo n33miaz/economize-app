@@ -32,11 +32,7 @@ export type TransactionRowVoice = "bank" | "card";
 export type AmountTone = "up" | "neutral" | "muted";
 
 export type RowBadgeKey =
-  | "pending"
-  | "ignored"
-  | "internal"
-  | "family"
-  | "refunded";
+  "pending" | "ignored" | "internal" | "family" | "refunded";
 
 /** Só `warning` para o que pede ação; procedência e marcas são neutras. */
 export type RowBadgeTone = "neutral" | "warning";
@@ -136,6 +132,12 @@ export interface SupportLineInput {
   account?: ConnectorAccount | null;
   /** Só quando a tela tem origem como dimensão real — mesma regra do Extrato. */
   showOrigin?: boolean;
+  /**
+   * Falso quando a tela já diz a data em cima (o cabeçalho de dia do Extrato).
+   * Padrão verdadeiro: nas telas sem cabeçalho de dia a data é a única
+   * referência temporal da linha.
+   */
+  showDate?: boolean;
 }
 
 /**
@@ -153,11 +155,17 @@ export function supportLineParts({
   showCategory = true,
   account,
   showOrigin = false,
+  showDate = true,
 }: SupportLineInput): string[] {
   const parts: string[] = [];
   if (showCategory) parts.push(categoryName?.trim() || "Sem categoria");
   if (showOrigin && account) parts.push(accountDisplayName(account));
-  parts.push(formatDayMonthShort(tx.date));
+  // A data sai quando a tela já a diz em cima. No Extrato, desde a escolha 8
+  // de 16/09, ela vive no cabeçalho do dia: repeti-la aqui escrevia "16 set"
+  // uma vez por linha e ocupava o lugar onde caberia algo que a pessoa ainda
+  // não sabe. Nas outras telas (Fatura, Revisão, folha de detalhe) não existe
+  // cabeçalho de dia, e ali a data continua sendo a única referência temporal
+  if (showDate) parts.push(formatDayMonthShort(tx.date));
   return parts;
 }
 
@@ -169,7 +177,11 @@ export function supportLineParts({
 export function rowBadges(
   tx: Pick<
     RowTransaction,
-    "reviewStatus" | "ignored" | "internalTransfer" | "familyTransfer" | "refunded"
+    | "reviewStatus"
+    | "ignored"
+    | "internalTransfer"
+    | "familyTransfer"
+    | "refunded"
   >,
 ): RowBadge[] {
   const badges: RowBadge[] = [];
@@ -182,7 +194,12 @@ export function rowBadges(
     });
   }
   if (tx.ignored) {
-    badges.push({ key: "ignored", label: "Ignorada", tone: "neutral", spoken: "ignorada" });
+    badges.push({
+      key: "ignored",
+      label: "Ignorada",
+      tone: "neutral",
+      spoken: "ignorada",
+    });
   }
   if (tx.internalTransfer) {
     badges.push({
@@ -193,10 +210,20 @@ export function rowBadges(
     });
   }
   if (tx.familyTransfer) {
-    badges.push({ key: "family", label: "Na casa", tone: "neutral", spoken: "na casa" });
+    badges.push({
+      key: "family",
+      label: "Na casa",
+      tone: "neutral",
+      spoken: "na casa",
+    });
   }
   if (tx.refunded) {
-    badges.push({ key: "refunded", label: "Estornada", tone: "neutral", spoken: "estornada" });
+    badges.push({
+      key: "refunded",
+      label: "Estornada",
+      tone: "neutral",
+      spoken: "estornada",
+    });
   }
   return badges;
 }
@@ -252,7 +279,9 @@ export function spokenLabel({
   }
   for (const badge of rowBadges(tx)) pieces.push(badge.spoken);
   if (member) {
-    pieces.push(member.isMe ? "lançamento seu" : `lançamento de ${member.memberName}`);
+    pieces.push(
+      member.isMe ? "lançamento seu" : `lançamento de ${member.memberName}`,
+    );
   }
   const sentence = pieces.join(", ");
   return interactive ? `${sentence}. Abrir detalhes e apelido` : sentence;

@@ -21,6 +21,7 @@ import Animated, {
 import BrandGradient from "./BrandGradient";
 import Card from "./Card";
 import { radius, spacing } from "../theme/ds";
+import { useServerStore } from "../store/serverStore";
 import { useTheme } from "../theme/ThemeProvider";
 
 interface SkeletonProps {
@@ -34,6 +35,19 @@ interface SkeletonProps {
 // ÚNICO relógio deste arquivo — os compostos abaixo e os pontos do assistente
 // batem no mesmo ritmo, para nada na tela pulsar em contratempo
 const SWEEP_DURATION_MS = 1200;
+
+/**
+ * A mesma varredura, no dobro do tempo, enquanto a API está subindo.
+ *
+ * <p>O plano free do Render hiberna depois de ~15 min sem tráfego e o primeiro
+ * acesso já custou 229 s medidos. A faixa rápida promete que o conteúdo chega
+ * no próximo segundo; quando ela desacelera, diz sem palavras que vai demorar
+ * mais — é a metade da escolha 12 do comparador que ainda não existia.
+ *
+ * <p>Derivado do período base de propósito: dois relógios literais no arquivo
+ * é exatamente o que o teste de movimento proíbe, e com razão.
+ */
+const SWEEP_DURATION_WAKING_MS = SWEEP_DURATION_MS * 2;
 
 // Compõe o alfa a partir do token hexa do accent. Os extremos do gradiente
 // precisam ser "o accent com alfa 0": a keyword "transparent" interpola a
@@ -54,6 +68,10 @@ export default function Skeleton({
 }: SkeletonProps) {
   const t = useTheme();
   const reducedMotion = useReducedMotion();
+  // O único estado de fora que muda o ritmo da faixa. Assinatura por seletor,
+  // e não o store inteiro: o `waitedSeconds` sobe de 3 em 3 segundos e
+  // re-renderizaria todo skeleton da tela junto com ele
+  const serverIsWaking = useServerStore((s) => s.isWaking);
   // O RN não anima translateX percentual: a largura real vem do onLayout e a
   // faixa varre de -largura (fora, à esquerda) até +largura (fora, à direita)
   const [trackWidth, setTrackWidth] = useState(0);
@@ -74,7 +92,12 @@ export default function Skeleton({
       );
     } else {
       progress.value = withRepeat(
-        withTiming(1, { duration: SWEEP_DURATION_MS, easing: Easing.linear }),
+        withTiming(1, {
+          duration: serverIsWaking
+            ? SWEEP_DURATION_WAKING_MS
+            : SWEEP_DURATION_MS,
+          easing: Easing.linear,
+        }),
         -1,
         false,
       );
@@ -83,7 +106,9 @@ export default function Skeleton({
       cancelAnimation(progress);
       cancelAnimation(pulse);
     };
-  }, [reducedMotion, progress, pulse]);
+    // `serverIsWaking` na lista: quando a API acorda no meio do carregamento a
+    // faixa precisa voltar ao ritmo rápido, e não terminar a tela devagar
+  }, [reducedMotion, serverIsWaking, progress, pulse]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     opacity: pulse.value,

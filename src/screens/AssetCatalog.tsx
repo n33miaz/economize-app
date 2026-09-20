@@ -15,6 +15,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { padRowsForColumns } from "../utils/layout";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
+import EdgeFade from "../components/EdgeFade";
 import IndicatorCard from "../components/IndicatorCard";
 import IndicatorDetailSheet from "../components/IndicatorDetailSheet";
 import PageContainer from "../components/PageContainer";
@@ -142,7 +143,11 @@ export default function AssetCatalog() {
           dos elementos está muito ruim"). A outra parte era a lista começar
           colada nos chips, sem nenhum respiro: o primeiro card aparecia
           cortado ao meio logo abaixo deles. */}
-      <View style={{ paddingVertical: spacing[3] }}>
+      {/* O desvanecimento nas pontas fecha a outra metade da escolha 10 ("chips
+          com 8 px de respiro e desvanecimento nas pontas"): o respiro de 8 já
+          estava aqui, e o corte seco na borda fazia a fileira parecer que
+          tinha acabado */}
+      <EdgeFade style={{ paddingVertical: spacing[3] }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -187,7 +192,7 @@ export default function AssetCatalog() {
             );
           })}
         </ScrollView>
-      </View>
+      </EdgeFade>
 
       {isLoading && items.length === 0 ? (
         <View style={{ paddingHorizontal: spacing[5] }}>
