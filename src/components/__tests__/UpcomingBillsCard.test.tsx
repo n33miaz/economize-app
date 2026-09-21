@@ -1,4 +1,5 @@
 import React from "react";
+import { Text } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import UpcomingBillsCard from "../UpcomingBillsCard";
@@ -139,6 +140,29 @@ describe("UpcomingBillsCard", () => {
     );
 
     expect(screen.getByText(/já dentro da fatura/)).toBeTruthy();
+  });
+
+  /**
+   * EC-237: a linha do melhor dia de compra entra por aqui, logo depois da
+   * frase do salário — `children` é o encaixe genérico para isso.
+   */
+  it("desenha o que vier em `children` logo após a frase do salário", () => {
+    render(
+      <UpcomingBillsCard
+        overview={overview({ soon: [item()], total: 800, count: 1 })}
+        showValues
+        salaryLine="O salário cai em 5 dias"
+        onPressItem={jest.fn()}
+        onPressAll={jest.fn()}
+      >
+        <Text>Melhor dia para as compras: sáb 03/10</Text>
+      </UpcomingBillsCard>,
+    );
+
+    expect(screen.getByText("O salário cai em 5 dias")).toBeTruthy();
+    expect(
+      screen.getByText("Melhor dia para as compras: sáb 03/10"),
+    ).toBeTruthy();
   });
 
   it("com o olhinho fechado, nem a tela nem o leitor falam o valor", () => {

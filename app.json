@@ -3,7 +3,7 @@
     "name": "Economize!",
     "slug": "economize",
     "scheme": "economize",
-    "version": "2.3.4",
+    "version": "2.3.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F0E0B"
       },
-      "versionCode": 10
+      "versionCode": 11
     },
     "web": {
       "bundler": "metro",
@@ -32,6 +32,12 @@
     "plugins": [
       "expo-font",
       "expo-local-authentication",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O Economize usa a câmera para fotografar os preços no carrinho de compras."
+        }
+      ],
       [
         "expo-build-properties",
         {

@@ -47,7 +47,16 @@ describe("mapa de destinos do trilho", () => {
       // EC-150: a casa é destino do trilho — no celular só o Perfil leva lá
       APP_ROUTES.familia,
       APP_ROUTES.avancado,
+      // O carrinho de compras: destino a que se volta no meio do mercado
+      APP_ROUTES.compras,
     ].forEach((rota) => expect(rotas).toContain(rota));
+  });
+
+  it("a tela de UMA compra acende Compras, de onde ela é aberta", () => {
+    // A compra é filha da lista e recebe o clientId por parâmetro; pílula
+    // apagada nela diria que a pessoa saiu do lugar
+    expect(railKeyForRoute(APP_ROUTES.compra)).toBe("compras");
+    expect(railKeyForRoute(APP_ROUTES.compras)).toBe("compras");
   });
 
   it("marca como aninhado exatamente o trio da barra inferior", () => {

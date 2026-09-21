@@ -6,6 +6,8 @@ import BalanceForecast from "../BalanceForecast";
 import { useBankStore } from "../../store/bankStore";
 import { usePlanStore } from "../../store/planStore";
 import { useRecurrenceStore } from "../../store/recurrenceStore";
+import { useWishStore } from "../../store/wishStore";
+import type { IncomePattern } from "../../services/api";
 
 // A linha do tempo (EC-226) busca os parcelamentos na entrada. Aqui ela
 // devolve vazio: o que estes testes cobrem e a previsao, e a linha tem
@@ -36,6 +38,12 @@ jest.mock("../../services/api", () => ({
     categories: [],
     pendingReviewCount: 0,
   }),
+  // Melhor dia de compra (EC-237): o padrão vem do store, não daqui — mas o
+  // jest.mock precisa existir para o servidor "antigo" (404) não sujar o
+  // console quando o store real chama a função de verdade
+  getIncomePattern: jest.fn().mockResolvedValue(null),
+  savePurchasePreference: jest.fn(),
+  clearPurchasePreference: jest.fn(),
 }));
 
 jest.mock("@react-navigation/native", () => ({
@@ -77,6 +85,32 @@ const PREVISAO = {
   ],
 };
 
+const PADRAO_READY: IncomePattern = {
+  status: "READY",
+  message: null,
+  today: "2026-09-15",
+  sources: [],
+  preference: null,
+  inferred: null,
+  advice: {
+    cadence: "MONTHLY",
+    cadenceOrigin: "MEASURED",
+    paymentMode: "CASH",
+    bestDay: "2026-10-03",
+    bestDayWeekday: "SATURDAY",
+    fundingSource: null,
+    fundingDate: null,
+    mustLastUntil: "2026-11-09",
+    daysToCover: 37,
+    card: null,
+    weeklyDay: null,
+    nextDates: [],
+    confidence: "MEDIUM",
+    explanation: { headline: "Melhor dia para as compras: sáb 03/10", lines: [] },
+    basis: { monthsObserved: 3, lastOccurrence: "2026-08-28" },
+  },
+};
+
 const montar = () =>
   render(
     <SafeAreaProvider initialMetrics={METRICAS}>
@@ -101,6 +135,10 @@ describe("Perspectiva de saldo", () => {
       fetchSeries: jest.fn().mockResolvedValue(undefined),
     } as never);
     usePlanStore.setState({ plan: "FREE", adsEnabled: true });
+    useWishStore.setState({
+      incomePattern: null,
+      fetchIncomePattern: jest.fn().mockResolvedValue(undefined),
+    } as never);
   });
 
   it("abre com a projeção carregada", async () => {
@@ -147,5 +185,58 @@ describe("Perspectiva de saldo", () => {
     montar();
 
     await waitFor(() => expect(fetchForecast).toHaveBeenCalled());
+  });
+
+  /**
+   * EC-237: o padrão de renda existe mesmo sem série de despesa nenhuma —
+   * por isso o card fica FORA do bloco `!hasProjection` e aparece assim que
+   * o store tem alguma coisa (qualquer status que não seja "sem renda
+   * nenhuma cadastrada").
+   */
+  it("busca o melhor dia de compra ao abrir", async () => {
+    const fetchIncomePattern = jest.fn().mockResolvedValue(undefined);
+    useWishStore.setState({ incomePattern: null, fetchIncomePattern } as never);
+
+    montar();
+
+    await waitFor(() => expect(fetchIncomePattern).toHaveBeenCalled());
+  });
+
+  it("mostra o card do melhor dia de compra quando o padrão está pronto", async () => {
+    useWishStore.setState({
+      incomePattern: PADRAO_READY,
+      fetchIncomePattern: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() =>
+      expect(getByText("Melhor dia para as compras")).toBeTruthy(),
+    );
+    expect(getByText("sáb 03/10")).toBeTruthy();
+  });
+
+  it("sem renda nenhuma cadastrada (NO_INCOME), o card não aparece nesta tela", async () => {
+    useWishStore.setState({
+      incomePattern: { ...PADRAO_READY, status: "NO_INCOME", advice: null },
+      fetchIncomePattern: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    const { queryByText, getByText } = montar();
+
+    await waitFor(() => expect(getByText("Perspectiva de saldo")).toBeTruthy());
+    expect(queryByText("Melhor dia para as compras")).toBeNull();
+  });
+
+  it("sem padrão nenhum no store (servidor antigo ou ainda não buscou), o card não aparece", async () => {
+    useWishStore.setState({
+      incomePattern: null,
+      fetchIncomePattern: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    const { queryByText, getByText } = montar();
+
+    await waitFor(() => expect(getByText("Perspectiva de saldo")).toBeTruthy());
+    expect(queryByText("Melhor dia para as compras")).toBeNull();
   });
 });

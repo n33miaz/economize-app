@@ -99,6 +99,8 @@ import RecurrenceForm from "../screens/RecurrenceForm";
 import BalanceForecast from "../screens/BalanceForecast";
 import Plan from "../screens/Plan";
 import Investments from "../screens/Investments";
+import Shopping from "../screens/Shopping";
+import ShoppingTrip from "../screens/ShoppingTrip";
 
 // Altura da barra inferior sem contar o inset da barra de gestos
 
@@ -476,6 +478,19 @@ function AppStack() {
       <Stack.Screen
         name={APP_ROUTES.relatorios}
         component={Reports}
+        options={ephemeralTransition}
+      />
+      {/* O carrinho de compras: a lista das idas ao mercado e a tela de uma
+          ida. Pilha como as irmãs — a segunda é aberta pela primeira (ou
+          pela linha "Compra em andamento" da Home) com o clientId nos params */}
+      <Stack.Screen
+        name={APP_ROUTES.compras}
+        component={Shopping}
+        options={ephemeralTransition}
+      />
+      <Stack.Screen
+        name={APP_ROUTES.compra}
+        component={ShoppingTrip}
         options={ephemeralTransition}
       />
       <Stack.Screen

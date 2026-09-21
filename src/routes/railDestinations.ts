@@ -5,6 +5,7 @@ import CreditCard from "lucide-react-native/dist/esm/icons/credit-card";
 import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 import ReceiptText from "lucide-react-native/dist/esm/icons/receipt-text";
 import Settings2 from "lucide-react-native/dist/esm/icons/settings-2";
+import ShoppingCart from "lucide-react-native/dist/esm/icons/shopping-cart";
 import Sparkles from "lucide-react-native/dist/esm/icons/sparkles";
 import Target from "lucide-react-native/dist/esm/icons/target";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
@@ -40,6 +41,7 @@ export type RailKey =
   | "financas"
   | "mercado"
   | "cartoes"
+  | "compras"
   | "extrato"
   | "investimentos"
   | "analise"
@@ -142,6 +144,16 @@ export const RAIL_GROUPS: RailGroup[] = [
         route: APP_ROUTES.cartoes,
         inMainTabs: false,
         Icon: CreditCard,
+        primary: false,
+      },
+      {
+        // O carrinho de compras é destino, não tarefa: a pessoa volta a ele
+        // no meio do mercado e depois, para conferir a nota e o extrato
+        key: "compras",
+        label: "Compras",
+        route: APP_ROUTES.compras,
+        inMainTabs: false,
+        Icon: ShoppingCart,
         primary: false,
       },
       {
@@ -305,6 +317,10 @@ const ROUTE_TO_RAIL_KEY: Record<LeafRouteName, RailKey | null> = {
   // Destino próprio: a tela abre do trilho sem cartão escolhido e do Extrato
   // com um cartão no parâmetro — nos dois casos a pílula certa é "Cartões"
   [APP_ROUTES.cartoes]: "cartoes",
+  // A tela de UMA compra é filha da lista: a pílula continua em "Compras"
+  // para a pessoa não perder de vista de onde veio
+  [APP_ROUTES.compras]: "compras",
+  [APP_ROUTES.compra]: "compras",
   [APP_ROUTES.relatorios]: "relatorios",
   [APP_ROUTES.previsao]: "previsao",
   [APP_ROUTES.categorias]: "categorias",

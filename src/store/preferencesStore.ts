@@ -55,6 +55,22 @@ export type RelockPolicy = "always" | "after" | "onClose";
 /** Os minutos oferecidos na opção `after`. */
 export const RELOCK_MINUTES = [1, 5, 15, 30, 60] as const;
 
+/**
+ * A última recomendação de dia de compra que a pessoa VIU (EC-237/EC-202).
+ *
+ * <p>O servidor deriva o melhor dia a cada leitura e não guarda o que disse
+ * antes — GET com efeito colateral é anti-padrão. Então quem presta contas é
+ * o app: guardando o dia sugerido e a última queda que o sustentou, o card
+ * consegue dizer "recalculado depois que o vale de 28/08 entrou: passou de
+ * sáb 27/09 para sáb 03/10" em vez de trocar a data em silêncio.
+ */
+export interface LastPurchaseAdvice {
+  bestDay: string;
+  basisLastOccurrence: string | null;
+  /** Quando foi vista, em ISO. */
+  seenAt: string;
+}
+
 interface PreferencesState {
   theme: ThemeMode;
   biometricLogin: boolean;
@@ -124,9 +140,12 @@ interface PreferencesState {
    * usuário para de fechar qualquer coisa.
    */
   dismissedHints: string[];
+  /** Ver {@link LastPurchaseAdvice}. `null` = nunca viu uma recomendação. */
+  lastPurchaseAdvice: LastPurchaseAdvice | null;
   hasHydrated: boolean;
 
   setTheme: (theme: ThemeMode) => void;
+  setLastPurchaseAdvice: (advice: LastPurchaseAdvice) => void;
   toggleBiometric: () => void;
   setBiometric: (enabled: boolean) => void;
   setRelockPolicy: (policy: RelockPolicy) => void;
@@ -179,6 +198,7 @@ const initialState = {
   sessionCount: 0,
   plusOfferLastShownAt: null as number | null,
   plusInterestAt: null as number | null,
+  lastPurchaseAdvice: null as LastPurchaseAdvice | null,
 };
 
 export const usePreferencesStore = create(
@@ -232,6 +252,7 @@ export const usePreferencesStore = create(
         set((state) => ({ sessionCount: state.sessionCount + 1 })),
       markPlusOfferShown: (at) => set({ plusOfferLastShownAt: at }),
       markPlusInterest: (at) => set({ plusInterestAt: at }),
+      setLastPurchaseAdvice: (lastPurchaseAdvice) => set({ lastPurchaseAdvice }),
       reset: () => set({ ...initialState }),
     }),
     {

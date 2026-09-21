@@ -1,4 +1,11 @@
-import React, { useEffect, useId, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   TouchableOpacity,
@@ -72,11 +79,23 @@ export default function CustomModal({
   const [showModal, setShowModal] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(500);
+  // O que `visible` diz AGORA. A animação de fechar dura 300 ms, e o
+  // callback dela chegava depois de a folha ter sido REABERTA nesse
+  // intervalo — e a escondia. Visto na folha do carrinho de compras, que se
+  // abre um toque depois de a tela montar: aparecia e sumia sozinha
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const jaMontou = useRef(false);
 
   const hostMounted = useOverlayStore((s) => s.hostMounted);
   const mountLayer = useOverlayStore((s) => s.mount);
   const unmountLayer = useOverlayStore((s) => s.unmount);
   const layerId = useId();
+
+  // Só esconde se ninguém pediu para abrir enquanto a saída animava
+  const esconderSeAindaFechada = useCallback(() => {
+    if (!visibleRef.current) setShowModal(false);
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -91,19 +110,29 @@ export default function CustomModal({
           ? withTiming(0, { duration: 0 })
           : withSpring(0, sheetSpring);
       });
-    } else {
+    } else if (jaMontou.current) {
+      // Nascer fechada não é fechar: a saída animada só existe para uma
+      // folha que estava aberta. Na montagem ela começava mesmo assim, e o
+      // callback dela derrubava a folha aberta logo em seguida
       backdropOpacity.value = withTiming(0, { duration: motion.duration.base });
       modalTranslateY.value = withTiming(
         reducedMotion ? 0 : 500,
         { duration: motion.duration.base },
         () => {
-          runOnJS(setShowModal)(false);
+          runOnJS(esconderSeAindaFechada)();
         },
       );
     }
+    jaMontou.current = true;
     // Os dois valores compartilhados são estáveis (useSharedValue); estão na
     // lista pelo lint, e não redisparam a coreografia
-  }, [visible, reducedMotion, backdropOpacity, modalTranslateY]);
+  }, [
+    visible,
+    reducedMotion,
+    backdropOpacity,
+    modalTranslateY,
+    esconderSeAindaFechada,
+  ]);
 
   useEffect(() => {
     const backAction = () => {
