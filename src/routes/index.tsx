@@ -28,6 +28,7 @@ import { useReducedMotion } from "react-native-reanimated";
 import { lightTheme } from "../theme/colors";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
+import { useArquivoRecebido } from "../hooks/useArquivoRecebido";
 import AppOpening from "../components/AppOpening";
 import OverlayHost from "../components/OverlayHost";
 import {
@@ -574,6 +575,10 @@ export default function Routes() {
   // estava aceso antes delas — é o que mantém a pílula em "Início" quando a
   // revisão foi aberta pelo card da Home
   const [activeKey, setActiveKey] = React.useState<RailKey | undefined>();
+
+  // "Abrir com › Economize!": o arquivo que o Android entrega fica parqueado
+  // até haver sessão, e então a pessoa chega no Extrato com ele já entrando
+  useArquivoRecebido(navigationRef, Boolean(token));
 
   // O trilho vive FORA do navigator (é layout, não navegação), então não tem
   // como ler a rota por hook — quem responde é o container, a cada troca
