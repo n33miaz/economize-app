@@ -863,7 +863,31 @@ export interface AccountInvoice {
    * tela — pode ser menor (cobre em parte) ou maior (a fatura ainda cresce).
    */
   reserve: InvoiceReserve | null;
+  /**
+   * A fatura que o BANCO fechou, quando o provedor a entrega. Nula quando ele
+   * não entrega ou quando nenhuma casa com este ciclo.
+   *
+   * Ela NÃO substitui `total`: os dois convivem de propósito, e é a DIFERENÇA
+   * entre eles que vale. `total` sai das compras que chegaram até nós; o de
+   * lá é o que o emissor fechou. Medido em 21/09/2026 na conta do dono:
+   * somávamos R$ 775,67 onde o banco fechou R$ 2.311,49, e a diferença eram
+   * compras que o conector não trouxe.
+   */
+  providerBill: ProviderBill | null;
   transactions: BankTransaction[];
+}
+
+/** O que o emissor informou sobre a fatura fechada. */
+export interface ProviderBill {
+  closingDate: string | null;
+  dueDate: string | null;
+  total: number | null;
+  /** Não existe em nenhum outro lugar do app: só o emissor tem este número. */
+  minimumPayment: number | null;
+  financeCharges: number | null;
+  allowsInstallments: boolean;
+  /** Quando NÓS lemos do provedor — permite dizer "lido há três semanas". */
+  syncedAt: string | null;
 }
 
 export interface InvoiceReserve {
@@ -3308,6 +3332,10 @@ export interface ShoppingTripDto {
   startedAt?: string;
   closedAt?: string | null;
   receiptTotal?: number | null;
+  /** A chave de 44 dígitos do cupom, quando a nota foi lida. */
+  receiptKey?: string | null;
+  /** O CNPJ de quem emitiu, que o servidor extrai da própria chave. */
+  receiptIssuerCnpj?: string | null;
   notes?: string | null;
   sharedWithFamily?: boolean;
   shareWithFamily?: boolean;
@@ -3347,6 +3375,8 @@ export interface ShoppingTripUpsert {
   startedAt: string;
   closedAt: string | null;
   receiptTotal: number | null;
+  /** Só sobe quando a nota foi lida; o servidor confere o dígito. */
+  receiptKey: string | null;
   notes: string | null;
   shareWithFamily: boolean;
   clientUpdatedAt: string;

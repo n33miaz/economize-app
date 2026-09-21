@@ -56,6 +56,13 @@ export interface ShoppingTrip {
   closedAt: string | null;
   /** O total da nota fiscal, digitado ao fechar — para conferir contra o carrinho. */
   receiptTotal: number | null;
+  /**
+   * A chave de 44 dígitos do cupom, lida do QR. Nula enquanto a nota não
+   * foi anexada — que é o estado de toda compra antes do caixa.
+   */
+  receiptKey: string | null;
+  /** O CNPJ de quem emitiu, que vem do servidor junto com a chave. */
+  receiptIssuerCnpj: string | null;
   notes: string | null;
   shareWithFamily: boolean;
   items: ShoppingItem[];
@@ -446,6 +453,8 @@ export function normalizeRemoteTrip(
     startedAt: asText(dto.startedAt) ?? EPOCH,
     closedAt: asText(dto.closedAt),
     receiptTotal: asNullableNumber(dto.receiptTotal),
+    receiptKey: asText(dto.receiptKey),
+    receiptIssuerCnpj: asText(dto.receiptIssuerCnpj),
     notes: asText(dto.notes),
     shareWithFamily: (dto.sharedWithFamily ?? dto.shareWithFamily) === true,
     items: (dto.items ?? []).map(normalizeRemoteItem),
@@ -640,6 +649,9 @@ export function upsertPayloadFrom(trip: ShoppingTrip): ShoppingTripUpsert {
     startedAt: trip.startedAt,
     closedAt: trip.closedAt,
     receiptTotal: trip.receiptTotal,
+    // Só sobe quando há nota: mandar nulo toda vez não apaga nada no
+    // servidor (ele ignora nulo), mas polui o corpo de toda sincronização
+    receiptKey: trip.receiptKey,
     notes: trip.notes,
     shareWithFamily: trip.shareWithFamily,
     clientUpdatedAt: trip.clientUpdatedAt,

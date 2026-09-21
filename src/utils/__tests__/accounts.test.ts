@@ -112,6 +112,8 @@ function invoice(overrides: Partial<AccountInvoice> = {}): AccountInvoice {
     transactionCount: 12,
     open: false,
     reserve: null,
+    // sem fatura do provedor: é o caso de todo cartão sem conector
+    providerBill: null,
     transactions: [],
     ...overrides,
   };
