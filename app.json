@@ -3,7 +3,7 @@
     "name": "Economize!",
     "slug": "economize",
     "scheme": "economize",
-    "version": "2.3.6",
+    "version": "2.3.7",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F0E0B"
       },
-      "versionCode": 12,
+      "versionCode": 13,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -90,6 +90,7 @@
           }
         }
       ],
+      "./plugins/withReleaseSigning",
       "./plugins/withGradleJvmArgs"
     ],
     "extra": {
