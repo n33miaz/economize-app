@@ -15,6 +15,7 @@ import Link from "lucide-react-native/dist/esm/icons/link";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Square from "lucide-react-native/dist/esm/icons/square";
 import SquareCheck from "lucide-react-native/dist/esm/icons/square-check";
+import QrCode from "lucide-react-native/dist/esm/icons/qr-code";
 import X from "lucide-react-native/dist/esm/icons/x";
 
 import type { ReconcileCandidate } from "../services/api";
@@ -28,6 +29,7 @@ import { useShoppingStore } from "../store/shoppingStore";
 import { useToastStore } from "../store/toastStore";
 import * as Haptics from "../utils/haptics";
 import { formatBRL, parseAmount } from "../utils/money";
+import { type NotaFiscal, descreverNota } from "../utils/notaFiscal";
 import {
   type ItemInput,
   type ShoppingItem,
@@ -56,6 +58,7 @@ import PageContainer from "../components/PageContainer";
 import PotEmptyState from "../components/PotEmptyState";
 import ScreenHeader from "../components/ScreenHeader";
 import ShoppingBudgetBar from "../components/ShoppingBudgetBar";
+import NotaFiscalSheet from "../components/NotaFiscalSheet";
 import ShoppingListSheet from "../components/ShoppingListSheet";
 import Skeleton, { SkeletonCard, SkeletonRow } from "../components/Skeleton";
 import SyncStatusLine from "../components/SyncStatusLine";
@@ -759,6 +762,11 @@ function CloseTripSheet({
 
   const [fase, setFase] = useState<FasePorFechar>("confirmar");
   const [nota, setNota] = useState("");
+  // A nota fiscal lida do QR. Fica na folha, e não no store, porque ela só
+  // existe entre abrir o fechamento e confirmar — depois disso quem guarda
+  // é a compra
+  const [notaFiscal, setNotaFiscal] = useState<NotaFiscal | null>(null);
+  const [folhaNota, setFolhaNota] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [candidatos, setCandidatos] = useState<ReconcileCandidate[]>([]);
   const [buscando, setBuscando] = useState(false);
@@ -806,7 +814,7 @@ function CloseTripSheet({
     }
     setFechando(true);
     setErro(null);
-    await closeTrip(trip.clientId, valor);
+    await closeTrip(trip.clientId, valor, notaFiscal?.chave ?? null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setFechando(false);
     setFase("conciliar");
@@ -830,6 +838,21 @@ function CloseTripSheet({
   const diferenca = receiptDifference(total, trip.receiptTotal);
 
   return (
+    <>
+    <NotaFiscalSheet
+      visible={folhaNota}
+      atual={trip.receiptKey}
+      onConfirm={(lida) => {
+        setNotaFiscal(lida);
+        setFolhaNota(false);
+        // Nota emitida em contingência traz o total no próprio QR: preencher
+        // poupa a digitação e é o número exato do papel
+        if (lida.total != null && !nota.trim()) {
+          setNota(lida.total.toFixed(2).replace(".", ","));
+        }
+      }}
+      onClose={() => setFolhaNota(false)}
+    />
     <CustomModal visible={visible} onClose={onClose}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={SHEET_PADDING}>
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: spacing[3] }}>
@@ -860,6 +883,37 @@ function CloseTripSheet({
             >
               Total da nota (opcional)
             </Text>
+            <Pressable
+              onPress={() => setFolhaNota(true)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                notaFiscal ? "Trocar a nota fiscal lida" : "Ler o QR da nota fiscal"
+              }
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing[2],
+                borderWidth: 1,
+                borderColor: notaFiscal ? t.chart.up : t.border.strong,
+                borderRadius: radius.lg,
+                paddingHorizontal: spacing[3],
+                paddingVertical: spacing[3],
+                marginTop: spacing[2],
+                marginBottom: spacing[2],
+              }}
+            >
+              <QrCode size={18} color={notaFiscal ? t.chart.up : t.text.secondary} />
+              <Text
+                style={{
+                  flex: 1,
+                  color: notaFiscal ? t.text.primary : t.text.secondary,
+                  fontSize: 13,
+                  fontWeight: "700",
+                }}
+              >
+                {notaFiscal ? descreverNota(notaFiscal) : "Ler o QR da nota fiscal"}
+              </Text>
+            </Pressable>
             <TextInput
               value={nota}
               onChangeText={(texto) => {
@@ -1032,5 +1086,6 @@ function CloseTripSheet({
         )}
       </ScrollView>
     </CustomModal>
+    </>
   );
 }

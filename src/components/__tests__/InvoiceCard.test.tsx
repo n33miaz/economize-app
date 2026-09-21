@@ -48,6 +48,8 @@ function invoice(overrides: Partial<AccountInvoice> = {}): AccountInvoice {
     transactionCount: 1,
     open: false,
     reserve: null,
+    // sem fatura do provedor: é o caso de todo cartão sem conector
+    providerBill: null,
     transactions: [tx()],
     ...overrides,
   };
@@ -230,5 +232,34 @@ describe("InvoiceCard", () => {
       invoice: invoice({ transactions: [] }),
     });
     expect(tela.getByText("Esta fatura não trouxe os lançamentos.")).toBeTruthy();
+  });
+  it("mostra a fatura que o BANCO fechou quando ela discorda da nossa", () => {
+    // O caso medido na conta do dono: somávamos 775,67 onde o banco fechou
+    // 2.311,49, e não havia como saber que faltava lançamento
+    const { tela } = renderCard({
+      invoice: invoice({
+        total: 775.67,
+        providerBill: {
+          closingDate: "2026-08-31",
+          dueDate: "2026-09-07",
+          total: 2311.49,
+          minimumPayment: 347.63,
+          financeCharges: null,
+          allowsInstallments: true,
+          syncedAt: "2026-09-21T10:00:00Z",
+        },
+      }),
+    });
+
+    expect(tela.getByText(/Faltam/)).toBeTruthy();
+    // o mínimo não existe em nenhum outro lugar do app
+    expect(tela.getByText(/mínimo/)).toBeTruthy();
+  });
+
+  it("sem fatura do banco o card fica exatamente como era", () => {
+    const { tela } = renderCard();
+
+    expect(tela.queryByText(/Faltam/)).toBeNull();
+    expect(tela.queryByText(/Confere com o banco/)).toBeNull();
   });
 });

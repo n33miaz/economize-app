@@ -39,6 +39,8 @@ const compra = (over: Partial<ShoppingTrip> = {}): ShoppingTrip => ({
   startedAt: new Date().toISOString(),
   closedAt: null,
   receiptTotal: null,
+  receiptKey: null,
+  receiptIssuerCnpj: null,
   notes: null,
   shareWithFamily: false,
   items: [

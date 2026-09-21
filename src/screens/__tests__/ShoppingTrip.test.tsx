@@ -91,6 +91,8 @@ describe("Compra (a tela do supermercado)", () => {
           startedAt: new Date().toISOString(),
           closedAt: null,
           receiptTotal: null,
+          receiptKey: null,
+          receiptIssuerCnpj: null,
           notes: null,
           shareWithFamily: false,
           items: [],
@@ -255,6 +257,22 @@ describe("Compra (a tela do supermercado)", () => {
     expect(getAllByText(/veio .* acima do carrinho/).length).toBeGreaterThan(0);
     // O rodapé de "+ item" some com a compra fechada
     expect(queryByLabelText("Adicionar item")).toBeNull();
+  });
+
+  it("o fechamento oferece ler o QR da nota fiscal", async () => {
+    const { getByLabelText, getByText, findByLabelText } = montar();
+
+    await waitFor(() => expect(getByText("Carrinho vazio")).toBeTruthy());
+    fireEvent.press(getByLabelText("Adicionar item"));
+    await waitFor(() => expect(getByLabelText("Nome do item")).toBeTruthy());
+    adicionar(getByLabelText, "Arroz", "24,90");
+    fireEvent.press(getByLabelText("Fechar"));
+    fireEvent.press(getByLabelText("Fechar compra"));
+
+    // O botão do QR fica ACIMA do total: ler a nota é o gesto que preenche o
+    // número, não o contrário
+    expect(await findByLabelText("Ler o QR da nota fiscal")).toBeTruthy();
+    expect(getByLabelText("Total da nota")).toBeTruthy();
   });
 
   it("compra que não existe neste aparelho não quebra a tela", async () => {
