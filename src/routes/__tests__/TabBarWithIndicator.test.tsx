@@ -34,6 +34,12 @@ const mockReducedMotion = useReducedMotion as jest.MockedFunction<
 const mockTiming = withTiming as jest.MockedFunction<typeof withTiming>;
 const mockSequence = withSequence as jest.MockedFunction<typeof withSequence>;
 
+// Espelham o componente. Ficam aqui como número literal de propósito: se o
+// respiro ou a altura da ilha mudarem sem querer, é ESTE teste que avisa —
+// importar as constantes faria o teste concordar com qualquer valor.
+const PILULA_MARGEM = 6;
+const ILHA_ALTURA = 64;
+
 const LARGURA = 390;
 
 function props(index: number, lateral = 0): BottomTabBarProps {
@@ -57,7 +63,7 @@ function montar(index: number, lateral = 0) {
   const resultado = render(<TabBarWithIndicator {...props(index, lateral)} />);
   act(() => {
     (resultado.toJSON() as any).props.onLayout({
-      nativeEvent: { layout: { x: 0, y: 0, width: LARGURA, height: 84 } },
+      nativeEvent: { layout: { x: 0, y: 0, width: LARGURA, height: ILHA_ALTURA } },
     });
   });
   return resultado;
@@ -77,10 +83,15 @@ describe("TabBarWithIndicator", () => {
   it("nasce em cima da aba ativa, sem deslizar nem esticar", () => {
     const resultado = montar(1);
 
+    // A marca da aba ativa deixou de ser um traço de 3 px no topo e virou uma
+    // PÍLULA atrás do item — a barra virou ilha flutuante em 16/09/2026 e um
+    // traço no topo apontaria para a borda de um bloco que flutua. O que o
+    // teste trava continua sendo o mesmo: a marca nasce com a geometria de UMA
+    // aba, descontado o respiro, e não recebe toque.
     const estilo = StyleSheet.flatten(indicador(resultado).props.style);
     expect(estilo).toMatchObject({
-      width: LARGURA / 3,
-      height: 3,
+      width: LARGURA / 3 - PILULA_MARGEM,
+      height: ILHA_ALTURA - PILULA_MARGEM * 2,
       pointerEvents: "none",
     });
     // A primeira medição só dá largura ao traço — o índice já era o certo
@@ -125,6 +136,6 @@ describe("TabBarWithIndicator", () => {
     const resultado = montar(1, 44);
 
     const estilo = StyleSheet.flatten(indicador(resultado).props.style);
-    expect(estilo.width).toBeCloseTo((LARGURA - 88) / 3);
+    expect(estilo.width).toBeCloseTo((LARGURA - 88) / 3 - PILULA_MARGEM);
   });
 });

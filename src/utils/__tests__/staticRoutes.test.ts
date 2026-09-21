@@ -23,7 +23,20 @@ import path from "path";
  */
 describe("Rotas das páginas estáticas no blueprint", () => {
   const RAIZ = path.resolve(__dirname, "..", "..", "..");
-  const blueprint = fs.readFileSync(path.join(RAIZ, "render.yaml"), "utf8");
+
+  /**
+   * Os DOIS blueprints, e por que os dois.
+   *
+   * <p>Em 17/09/2026 homologação foi aposentada — o Postgres gratuito do Render
+   * expira — e a definição dela saiu do `render.yaml` para o
+   * `render.homolog.yaml`, guardada e pronta para voltar. Se este teste
+   * passasse a olhar só a produção, o blueprint estacionado apodreceria sem
+   * ninguém ver: no dia em que alguém o sincronizasse, a página de download
+   * voltaria a responder a tela de login no ambiente novo.
+   *
+   * <p>Blueprint guardado é exatamente onde um defeito espera sem ser notado.
+   */
+  const BLUEPRINTS = ["render.yaml", "render.homolog.yaml"];
 
   /**
    * Cada página de `public/`, e se ela precisa responder SEM a extensão.
@@ -47,7 +60,17 @@ describe("Rotas das páginas estáticas no blueprint", () => {
    * de propósito: um parser de YAML seria dependência nova para conferir um
    * arquivo que é nosso e tem doze linhas.
    */
-  const fontes = [...blueprint.matchAll(/^\s*source:\s*(\S+)/gm)].map((m) => m[1]);
+  // Lidos e casados arquivo por arquivo, sem concatenar os textos: juntar os
+  // dois blueprints num só string exigiria um separador, e um separador errado
+  // colaria a última linha de um na primeira do outro — defeito que só
+  // apareceria quando a última linha fosse justamente um `source:`.
+  const fontes = BLUEPRINTS.flatMap((nome) =>
+    [
+      ...fs
+        .readFileSync(path.join(RAIZ, nome), "utf8")
+        .matchAll(/^\s*source:\s*(\S+)/gm),
+    ].map((m) => m[1]),
+  );
   const publicos = fs
     .readdirSync(path.join(RAIZ, "public"))
     .filter((f) => f.endsWith(".html") && f !== "index.html");
@@ -75,14 +98,15 @@ describe("Rotas das páginas estáticas no blueprint", () => {
     expect(propria).toBeLessThan(geral);
   });
 
-  it("produção e homologação têm a mesma proteção", () => {
+  it("produção e o blueprint guardado de homologação têm a mesma proteção", () => {
     const sites = fontes.filter((f) => f === "/*").length;
     const proprias = fontes.filter((f) => f !== "/*").length;
 
-    // Homologação existe para a tela ser vista antes de chegar ao dono;
-    // proteger só a produção faria o defeito estrear justamente no ambiente
-    // que deveria pegá-lo
-    expect(sites).toBe(2);
+    // Um site por blueprint: produção no `render.yaml`, homologação no
+    // `render.homolog.yaml`. Proteger só a produção faria o defeito estrear
+    // justamente no ambiente que deveria pegá-lo — e, pior agora, num
+    // ambiente recém-criado, em que ninguém desconfia de nada.
+    expect(sites).toBe(BLUEPRINTS.length);
     expect(proprias).toBe(comEndereco.length * sites);
   });
 });

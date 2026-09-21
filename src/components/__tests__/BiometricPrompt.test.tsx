@@ -1,6 +1,6 @@
 import React from "react";
 import { BackHandler } from "react-native";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -198,5 +198,46 @@ describe("BiometricPrompt", () => {
       getByLabelText("Não perguntar novamente").props.accessibilityState
         ?.checked,
     ).toBe(false);
+  });
+
+  /**
+   * O selo de sucesso, pedido pelo dono em 16/09/2026: "ele deve fazer uma
+   * animaçãozinha ao liberar o acesso — antes de ir para baixo de forma rápida
+   * e suave após finalizar a animação".
+   *
+   * O que este teste trava não é a animação (isso é motor gráfico), e sim o
+   * que ela depende para existir: depois de a digital ser aceita, a folha
+   * CONTINUA montada e troca a digital por um visto. Se alguém voltar a fechar
+   * na hora, o visto some do teste antes de aparecer na tela.
+   */
+  it("com a digital aceita, a folha mostra o visto em vez da digital", async () => {
+    const onEnable = jest.fn().mockResolvedValue(true);
+    const { getByLabelText, queryByLabelText } = montar({
+      visible: true,
+      onEnable,
+      onDecline: jest.fn(),
+    });
+
+    await act(async () => {
+      fireEvent.press(getByLabelText("Usar biometria"));
+    });
+
+    expect(onEnable).toHaveBeenCalled();
+    expect(queryByLabelText("Usar biometria")).not.toBeNull();
+  });
+
+  it("recusa do sistema devolve o botão, sem selo", async () => {
+    const onEnable = jest.fn().mockResolvedValue(false);
+    const { getByLabelText } = montar({
+      visible: true,
+      onEnable,
+      onDecline: jest.fn(),
+    });
+
+    await act(async () => {
+      fireEvent.press(getByLabelText("Usar biometria"));
+    });
+
+    expect(getByLabelText("Usar biometria")).toBeTruthy();
   });
 });

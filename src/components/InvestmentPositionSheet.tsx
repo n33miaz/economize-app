@@ -18,7 +18,7 @@ import { getApiErrorDetail, getApiErrorStatus } from "../services/api";
 import { useInvestmentStore } from "../store/investmentStore";
 import { useToastStore } from "../store/toastStore";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
 import {
   DEFAULT_FOREIGN_MARKET,
@@ -198,7 +198,7 @@ export default function InvestmentPositionSheet({
         >
           <View style={{ flex: 1, marginRight: spacing[3] }}>
             <Text
-              style={{ color: t.text.primary, fontSize: 18, fontWeight: "700" }}
+              style={{ color: t.text.primary, ...SHEET_TITLE }}
             >
               {isEditing ? "Editar posição" : "Cadastrar investimento"}
             </Text>

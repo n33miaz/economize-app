@@ -15,6 +15,8 @@ import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { useAuthStore } from "../store/authStore";
 import { usePreferencesStore } from "../store/preferencesStore";
+import { ANNOUNCEMENT_PRIORITY } from "../store/announcementStore";
+import { useAnnouncement } from "../hooks/useAnnouncement";
 import {
   biometricSupport,
   forgetBiometrics,
@@ -58,6 +60,16 @@ function graceMs(
  * moldura e com o mínimo de texto: o ícone, uma linha dizendo por que a tela
  * existe, um botão em destaque e uma saída discreta pela senha.
  */
+/**
+ * Quanto a tranca continua ocupando a vez na fila de anúncios depois de o app
+ * ser desbloqueado.
+ *
+ * <p>Existe por causa de uma palavra do pedido: a folha de versão deve aparecer
+ * depois de a tela de biometria sair <b>completamente</b>. Soltar a vez no mesmo
+ * quadro em que a tranca cai faria as duas se cruzarem.
+ */
+const CARENCIA_APOS_DESBLOQUEIO_MS = 420;
+
 export default function BiometricGate({ children }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -180,6 +192,48 @@ export default function BiometricGate({ children }: Props) {
   }, [relockPolicy, relockAfterMinutes]);
 
   const locked = hasHydrated && gateRequired && !authorized;
+
+  /**
+   * ENQUANTO TRANCADO, NINGUÉM ANUNCIA NADA.
+   *
+   * <p><b>O defeito, relatado pelo dono em 17/09/2026:</b> <i>"ao aparecer a
+   * tela de biometria, depois que o app se conecta à api ele abre na hora o
+   * modal de nova versão, e ela deve só aparecer depois da tela de biometria
+   * sair completamente"</i>.
+   *
+   * <p><b>A causa.</b> Este gate desenha os filhos e põe a tranca por cima —
+   * as rotas ficam montadas atrás dela de propósito, para o app não recarregar
+   * tudo a cada desbloqueio. Só que a folha de versão nova está entre esses
+   * filhos: ela montava, pedia a vez, e como o gate <b>não participava da
+   * fila</b> o piso estava livre. A fila existia desde 16/09 e resolveu três
+   * anúncios brigando entre si; o que ninguém tinha notado é que o maior deles
+   * — a tranca — nunca tinha entrado nela.
+   *
+   * <p><b>Por que a carência.</b> Soltar a vez no mesmo quadro em que
+   * `locked` cai faria o anúncio nascer enquanto a tela de bloqueio ainda está
+   * desmontando — e "depois que ela sair completamente" foi exatamente o pedido.
+   * A carência dá esse intervalo.
+   */
+  const [carenciaDoDesbloqueio, setCarenciaDoDesbloqueio] = useState(false);
+  useEffect(() => {
+    if (locked) {
+      setCarenciaDoDesbloqueio(true);
+      return;
+    }
+    const id = setTimeout(
+      () => setCarenciaDoDesbloqueio(false),
+      CARENCIA_APOS_DESBLOQUEIO_MS,
+    );
+    return () => clearTimeout(id);
+  }, [locked]);
+
+  // O retorno não interessa: o gate não é um anúncio, ele só OCUPA a vez para
+  // que nenhum outro fale. Ver `ANNOUNCEMENT_PRIORITY.biometricGate`.
+  useAnnouncement(
+    "biometricGate",
+    ANNOUNCEMENT_PRIORITY.biometricGate,
+    locked || carenciaDoDesbloqueio,
+  );
 
   // Com as rotas montadas por baixo da tela de bloqueio, o voltar do Android
   // continuaria navegando às cegas atrás dela

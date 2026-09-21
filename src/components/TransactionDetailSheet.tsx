@@ -27,7 +27,7 @@ import { useCategoriesStore } from "../store/categoriesStore";
 import { useToastStore } from "../store/toastStore";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import * as Haptics from "../utils/haptics";
 import {
@@ -305,7 +305,7 @@ export default function TransactionDetailSheet({
           <View style={{ flex: 1, marginRight: spacing[3] }}>
             <Text
               numberOfLines={2}
-              style={{ color: t.text.primary, fontSize: 18, fontWeight: "700" }}
+              style={{ color: t.text.primary, ...SHEET_TITLE }}
             >
               {displayName}
             </Text>

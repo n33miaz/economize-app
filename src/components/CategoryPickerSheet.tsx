@@ -18,7 +18,7 @@ import type { Category } from "../services/api";
 import { useCategoriesStore } from "../store/categoriesStore";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import {
   buildCategoryTree,
   categoryPath,
@@ -180,12 +180,7 @@ export default function CategoryPickerSheet({
           )}
           <Text
             numberOfLines={1}
-            style={{
-              flex: 1,
-              color: t.text.primary,
-              fontSize: 20,
-              fontWeight: "700",
-            }}
+            style={{ flex: 1, color: t.text.primary, ...SHEET_TITLE }}
           >
             {title}
           </Text>

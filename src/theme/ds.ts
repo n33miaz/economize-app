@@ -35,6 +35,26 @@ export const SHEET_PADDING = {
   paddingBottom: spacing[6],
 } as const;
 
+/**
+ * Título de uma folha ou diálogo.
+ *
+ * <p>Escolha 11 do comparador de 16/09: **18/700**. Antes deste token as
+ * folhas tinham títulos de 16, 18 e 20 — CategoryPicker, CycleAnchor,
+ * NewVersion, PremiumOffer e ReportDetail em 20, sete outras em 18. Todas
+ * abrem pelo mesmo gesto e se empilham na mesma superfície, então a diferença
+ * não lia como hierarquia: lia como descuido.
+ *
+ * <p>18 e não 20 porque a folha já é o foco da tela — ela não disputa
+ * atenção com nada atrás dela, e um título grande só rouba altura do conteúdo
+ * que a pessoa abriu a folha para ver. A `lineHeight` é explícita para a soma
+ * das alturas fechar igual em todas as plataformas.
+ */
+export const SHEET_TITLE = {
+  fontSize: 18,
+  lineHeight: 24,
+  fontWeight: "700",
+} as const;
+
 // Raios um nível mais generosos que o padrão de mercado — parte da
 // identidade (geometria arredondada, moderna)
 export const radius = {
@@ -107,6 +127,7 @@ export const motion = {
 export const ds = {
   spacing,
   sheetPadding: SHEET_PADDING,
+  sheetTitle: SHEET_TITLE,
   radius,
   shadow,
   typography,

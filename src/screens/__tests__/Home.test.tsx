@@ -1,9 +1,6 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
-import {
-  SafeAreaProvider,
-  type Metrics,
-} from "react-native-safe-area-context";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import Home from "../Home";
 import { useAnalyticsStore } from "../../store/analyticsStore";
@@ -27,15 +24,25 @@ jest.mock("../../services/api", () => ({
   getDailyTotals: jest.fn().mockResolvedValue([]),
   getInstallments: jest
     .fn()
-    .mockResolvedValue({ totalSeries: 0, openSeries: 0, remainingTotal: 0, series: [] }),
+    .mockResolvedValue({
+      totalSeries: 0,
+      openSeries: 0,
+      remainingTotal: 0,
+      series: [],
+    }),
 }));
 
 // Trocável por teste: o anúncio do pote depende de a Home estar na frente
 const mockUseIsFocused = jest.fn(() => true);
 
+// Estável entre chamadas de `useNavigation`: com um `jest.fn()` criado dentro
+// da fábrica, cada chamada devolvia um espião novo e nenhum atalho podia ser
+// conferido. Mesmo padrão do `mockUseIsFocused` acima
+const mockNavigate = jest.fn();
+
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
-    navigate: jest.fn(),
+    navigate: mockNavigate,
     goBack: jest.fn(),
     canGoBack: () => false,
     getState: () => ({ index: 0, routes: [{ name: "Principal" }] }),
@@ -134,6 +141,46 @@ describe("Início", () => {
     jest.clearAllMocks();
     mockUseIsFocused.mockReturnValue(true);
     prepararStores();
+  });
+
+  /**
+   * Escolha 4 do dono em 16/09 — "seis atalhos em grade" — e o "mais atalhos,
+   * aproveitando telas e funcionalidades que já existem" da mesma lista.
+   *
+   * <p>A regra de quem entra: só o que NÃO está a um toque na barra de abas e
+   * não é bloco próprio da Home. Cartões já é o destino da pastilha de
+   * crédito, Recorrências é o do bloco de compromissos, e Revisão tem bloco
+   * próprio quando há algo a revisar — nenhum dos três vira atalho.
+   */
+  it("tem os seis atalhos, e nenhum deles repete um destino da tela", async () => {
+    const { getAllByText, queryByText } = montar();
+
+    // `getAllByText`: "Importar" também é o botão do estado vazio do extrato
+    // na mesma tela — o atalho não é a única porta com esse nome
+    await waitFor(() =>
+      expect(getAllByText("Importar").length).toBeGreaterThan(0),
+    );
+    ["Análise", "Relatórios", "Previsão", "Categorias", "Desejos"].forEach(
+      (rotulo) => expect(getAllByText(rotulo).length).toBeGreaterThan(0),
+    );
+
+    // O que NÃO pode estar entre os atalhos, porque já é destino na tela
+    expect(queryByText("Cartões")).toBeNull();
+    expect(queryByText("Recorrências")).toBeNull();
+  });
+
+  /**
+   * O buraco que este teste fecha: a Home não tinha <b>um único link</b> para
+   * a Previsão, sendo que é a tela que responde "o que vem". Estava alcançável
+   * só pelo trilho lateral (desktop) — no telefone, por nada.
+   */
+  it("a Previsão passou a ser alcançável da Home", async () => {
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Previsão")).toBeTruthy());
+    fireEvent.press(getByText("Previsão"));
+
+    expect(mockNavigate).toHaveBeenCalledWith("Previsão");
   });
 
   it("o anúncio do pote abre uma vez, com a Home na frente e um ciclo para mostrar", async () => {

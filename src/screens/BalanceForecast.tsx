@@ -43,15 +43,23 @@ import ErrorState from "../components/ErrorState";
 import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
 import AssistantFAB from "../components/AssistantFAB";
-import { getInstallments } from "../services/api";
+import { getInstallments, getMonthlyAnalytics } from "../services/api";
+import BalanceRuler, { BalanceRulerHeadline } from "../components/BalanceRuler";
 import CommitmentTimeline from "../components/CommitmentTimeline";
 import { buildCommitmentTimeline } from "../utils/commitmentTimeline";
+import {
+  contratados as contratadosDaRegua,
+  montarRegua,
+  somasContratadas,
+  tresCenarios,
+} from "../utils/balanceRuler";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import ScreenHeader from "../components/ScreenHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
 import { cashPositionFrom } from "../utils/cashPosition";
+import { monthKeyOf, shiftMonthKey, todayIso } from "../utils/cycleWindow";
 import { declaredCaveat, forecastOrigin } from "../utils/forecastOrigin";
 import { formatBRL, formatBRLCompact } from "../utils/money";
 import {
@@ -619,6 +627,82 @@ export default function BalanceForecast() {
   }, [months]);
 
   const hasProjection = months.some((month) => month.items.length > 0);
+
+  /**
+   * A RÉGUA DE 30 DIAS (escolha 9 do dono em 16/09).
+   *
+   * <p>Os itens vêm de TODOS os meses da resposta, não só do primeiro: com
+   * ciclo ancorado (o de 12/08 a 11/09, por exemplo), os dias dos próximos 30
+   * caem em dois períodos, e olhar só o primeiro perderia metade da janela.
+   * Quem recorta por data é a própria `montarRegua`.
+   */
+  const regua = useMemo(
+    () =>
+      montarRegua({
+        saldoInicial: startingBalance,
+        itens: months.flatMap((mes) => mes.items),
+        hoje: todayIso(),
+      }),
+    [months, startingBalance],
+  );
+  const listaContratada = useMemo(() => contratadosDaRegua(regua), [regua]);
+  const somas = useMemo(() => somasContratadas(regua), [regua]);
+
+  /**
+   * Os três cenários precisam de gasto REAL passado, que a previsão não tem —
+   * ela só sabe do que está contratado.
+   *
+   * <p>Três meses de CALENDÁRIO FECHADOS, e não os últimos 90 dias: o mês
+   * corrente está no meio, e incluí-lo puxaria a média para baixo só porque
+   * ele ainda não acabou — a "média" viraria um número que sempre parece
+   * melhor do que a vida. Falha aqui não é erro de tela: sem histórico, a
+   * seção mostra só o cenário "folgado", que não depende de estimativa.
+   */
+  const [gastoPassado, setGastoPassado] = useState<{
+    media: number | null;
+    pior: number | null;
+  }>({ media: null, pior: null });
+
+  useEffect(() => {
+    let vivo = true;
+    const mesAtual = monthKeyOf(todayIso());
+    const fechados = [1, 2, 3].map((atras) => shiftMonthKey(mesAtual, -atras));
+
+    Promise.all(
+      fechados.map((month) =>
+        getMonthlyAnalytics({ kind: "month", month }).catch(() => null),
+      ),
+    ).then((respostas) => {
+      if (!vivo) return;
+      const gastos = respostas
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+        .map((r) => Math.abs(r.totalExpense))
+        // Mês sem gasto nenhum é mês sem extrato importado, não um mês barato:
+        // incluí-lo como zero afundaria a média e mentiria para o lado otimista
+        .filter((valor) => valor > 0);
+      if (gastos.length === 0) return;
+      setGastoPassado({
+        media: gastos.reduce((soma, v) => soma + v, 0) / gastos.length,
+        pior: Math.max(...gastos),
+      });
+    });
+
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const cenarios = useMemo(
+    () =>
+      tresCenarios({
+        saldoInicial: startingBalance,
+        receitaContratada: somas.receita,
+        despesaContratada: somas.despesa,
+        despesaMedia: gastoPassado.media,
+        despesaPiorMes: gastoPassado.pior,
+      }),
+    [startingBalance, somas, gastoPassado],
+  );
   const showSkeleton = !hasLoadedForecastOnce || !baselineReady;
 
   if (forecastError && !forecast) {
@@ -803,6 +887,45 @@ export default function BalanceForecast() {
             <EmptyForecast onBack={() => navigation.goBack()} />
           ) : (
             <>
+              {/**
+               * A RÉGUA DE 30 DIAS vem PRIMEIRO, e é a única parte da tela que
+               * não estima nada (escolha 9 do dono em 16/09: "só com o que está
+               * escrito em algum lugar (...) Nenhum número inventado").
+               *
+               * <p>Ela termina com a faixa "daqui para frente eu não sei". O
+               * que vem depois dela nesta tela — os seis meses de projeção — é
+               * estimativa, e agora está do lado certo daquela faixa. O dono
+               * escolheu "a tela pára" ali; deixei os meses abaixo porque
+               * apagá-los é irreversível e é decisão dele, não minha.
+               */}
+              {regua.dias.length > 0 ? (
+                <Animated.View
+                  entering={cardEntering}
+                  style={{
+                    backgroundColor: t.background.surface,
+                    borderRadius: radius["2xl"],
+                    borderWidth: 1,
+                    borderColor: t.border.subtle,
+                    padding: spacing[5],
+                    marginTop: spacing[4],
+                  }}
+                >
+                  {saldoConhecido ? (
+                    <BalanceRulerHeadline
+                      saldoInicial={regua.saldoInicial}
+                      saldoNoFim={regua.saldoNoFimDoConhecido}
+                    />
+                  ) : null}
+                  <View style={{ marginTop: spacing[4] }}>
+                    <BalanceRuler
+                      regua={regua}
+                      contratados={listaContratada}
+                      cenarios={cenarios}
+                    />
+                  </View>
+                </Animated.View>
+              ) : null}
+
               {/* Comparativo da janela: duas séries, legenda obrigatória */}
               <Animated.View
                 entering={cardEntering}

@@ -15,7 +15,7 @@ import type { InvestmentInterest } from "../services/api";
 import { getApiErrorStatus } from "../services/api";
 import { useInvestmentStore } from "../store/investmentStore";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
 import {
   DEFAULT_FOREIGN_MARKET,
@@ -116,7 +116,7 @@ export default function InvestmentInterestSheet({
           }}
         >
           <View style={{ flex: 1, marginRight: spacing[3] }}>
-            <Text style={{ color: t.text.primary, fontSize: 18, fontWeight: "700" }}>
+            <Text style={{ color: t.text.primary, ...SHEET_TITLE }}>
               Acompanhar indicador
             </Text>
             <Text style={{ color: t.text.secondary, fontSize: 12, marginTop: 2 }}>

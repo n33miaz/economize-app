@@ -18,6 +18,7 @@ export default function Indexes() {
 
   return (
     <AssetListScreen
+      esconderBarraAoRolar
       data={filteredIndexes}
       emptyMessage="Nenhum índice disponível no momento."
       tab="indexes"

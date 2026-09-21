@@ -4,7 +4,10 @@ import {
   createBottomTabNavigator,
   type BottomTabBarProps,
 } from "@react-navigation/bottom-tabs";
-import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
+import {
+  createMaterialTopTabNavigator,
+  type MaterialTopTabBarProps,
+} from "@react-navigation/material-top-tabs";
 import {
   DarkTheme,
   DefaultTheme,
@@ -24,11 +27,14 @@ import { useReducedMotion } from "react-native-reanimated";
 
 import { lightTheme } from "../theme/colors";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
 import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import AppOpening from "../components/AppOpening";
 import OverlayHost from "../components/OverlayHost";
-import { BOTTOM_BAR_HEIGHT, TabBarHeightContext } from "./tabBarHeight";
+import {
+  BOTTOM_BAR_HEIGHT,
+  ILHA_ALTURA,
+  TabBarHeightContext,
+} from "./tabBarHeight";
 import { useAuthStore } from "../store/authStore";
 import ScreenHeader from "../components/ScreenHeader";
 import MarketNewsTicker from "../components/MarketNewsTicker";
@@ -43,6 +49,7 @@ import {
   modalLikeTransition,
   slideRightTransition,
 } from "./transitions";
+import SegmentedTopTabBar from "./SegmentedTopTabBar";
 import TabBarWithIndicator from "./TabBarWithIndicator";
 import AnimatedTabIcon from "./AnimatedTabIcon";
 import SideRail from "./SideRail";
@@ -106,9 +113,33 @@ const renderTabBar = (props: BottomTabBarProps) => (
 );
 const renderNoTabBar = () => null;
 
+/**
+ * As abas de cima, como controle segmentado (escolha 7 do dono em 16/09).
+ *
+ * <p>Fora do componente pelo mesmo motivo da barra de baixo: como arrow
+ * inline, cada render entregaria uma função nova ao navigator e remontaria a
+ * régua inteira.
+ *
+ * <p><b>O aviso que este `tabBar` torna obsoleto, guardado porque custou
+ * caro.</b> Enquanto a régua era a da biblioteca, era PROIBIDO pôr
+ * `width: "auto"` + `alignSelf: "center"` no `tabBarStyle`: no Android a barra
+ * esticava para a altura inteira do navegador, os rótulos ficavam centrados
+ * verticalmente no meio da tela, o indicador ia para a borda de baixo e o
+ * paginador ficava com altura ZERO — a tela abria em branco. Na web o mesmo
+ * estilo se comportava, e foi por isso que o defeito sobreviveu a várias
+ * rodadas: quem conferia no navegador via tudo certo. Reproduzido e corrigido
+ * no emulador em 15/09/2026.
+ *
+ * <p>Com um `tabBar` próprio a biblioteca não desenha mais régua nenhuma, e o
+ * `tabBarStyle` deixa de existir como superfície de erro. O registro fica para
+ * quem algum dia pensar em voltar para a régua da lib.
+ */
+const renderSegmented = (props: MaterialTopTabBarProps) => (
+  <SegmentedTopTabBar {...props} />
+);
+
 // Moedas e Índices
 function IndicatorsTabs() {
-  const t = useTheme();
   const reducedMotion = useReducedMotion();
   // A largura de entrada do pager. Sem ela o react-native-tab-view mede a
   // cena DEPOIS do primeiro quadro, e ate a medida chegar a cena tem largura
@@ -129,45 +160,13 @@ function IndicatorsTabs() {
       <MarketNewsTicker />
       <TopTab.Navigator
         initialLayout={{ width: larguraDaJanela }}
+        tabBar={renderSegmented}
         screenOptions={{
           // Deslizar entre Moedas e Índices é parte da navegação: o gesto
           // fica explícito e a troca por toque no rótulo anima o deslize —
           // salvo quando o sistema pede menos movimento (troca seca)
           swipeEnabled: true,
           animationEnabled: !reducedMotion,
-          tabBarPressColor: "transparent",
-          tabBarActiveTintColor: t.accent.neon,
-          tabBarInactiveTintColor: t.text.tertiary,
-          tabBarIndicatorStyle: { backgroundColor: t.accent.neon, height: 3 },
-          // NÃO voltar a pôr `width: "auto"` + `alignSelf: "center"` aqui.
-          // Era o ajuste que deixava as abas com largura natural no protótipo,
-          // e no ANDROID ele fazia a barra esticar para a altura inteira do
-          // navegador: os rótulos ficavam centrados verticalmente no meio da
-          // tela, o indicador ia para a borda de baixo da barra e o paginador
-          // ficava com altura zero -- a tela abria em branco. Na web o mesmo
-          // estilo se comporta, e foi por isso que o defeito sobreviveu a
-          // várias rodadas: quem conferia no navegador via tudo certo.
-          // Reproduzido e corrigido no emulador em 15/09/2026.
-          tabBarStyle: {
-            backgroundColor: "transparent",
-            elevation: 0,
-            shadowOpacity: 0,
-            // a lib impõe um boxShadow próprio na web mesmo com sombra zerada
-            ...(Platform.OS === "web" ? { boxShadow: "none" } : null),
-          },
-          // width auto + padding 0 por item: o indicador de 3px herda a
-          // largura medida do rótulo, em vez de esticar por meia tela
-          tabBarItemStyle: { paddingHorizontal: 0 },
-          tabBarGap: spacing[6],
-          tabBarLabelStyle: {
-            fontFamily: "Roboto_700Bold",
-            // 11 e não 12: com quatro abas num telefone de 412 pontos cada
-            // item fica com ~103, e "Investimentos" a 12 px quebrava em duas
-            // linhas. Rótulo que quebra empurra o indicador e desalinha a
-            // régua inteira por causa de uma palavra
-            fontSize: 11,
-            textTransform: "capitalize",
-          },
         }}
       >
         <TopTab.Screen name={MARKET_TAB_ROUTES.moedas} component={Currencies} />
@@ -186,7 +185,6 @@ function IndicatorsTabs() {
 
 // Carteira e Extrato (Open Finance)
 function FinanceTabs() {
-  const t = useTheme();
   const reducedMotion = useReducedMotion();
   // Mesma largura de entrada do bloco de Mercado -- ver a explicacao la
   const { width: larguraDaJanela } = useWindowDimensions();
@@ -197,37 +195,12 @@ function FinanceTabs() {
       <ScreenHeader title="Finanças" subtitle="Gestão de Patrimônio" />
       <TopTab.Navigator
         initialLayout={{ width: larguraDaJanela }}
+        tabBar={renderSegmented}
         screenOptions={{
           // Mesmo gate do bloco de Mercado: com "reduzir movimento" ativo a
           // troca de aba é seca em todo o app
           swipeEnabled: true,
           animationEnabled: !reducedMotion,
-          tabBarPressColor: "transparent",
-          tabBarActiveTintColor: t.accent.neon,
-          tabBarInactiveTintColor: t.text.tertiary,
-          tabBarIndicatorStyle: { backgroundColor: t.accent.neon, height: 3 },
-          // Mesma regra do bloco de Mercado -- ver o aviso lá em cima sobre
-          // `width: "auto"` na barra de abas
-          tabBarStyle: {
-            backgroundColor: "transparent",
-            elevation: 0,
-            shadowOpacity: 0,
-            // a lib impõe um boxShadow próprio na web mesmo com sombra zerada
-            ...(Platform.OS === "web" ? { boxShadow: "none" } : null),
-          },
-          // width auto + padding 0 por item: o indicador de 3px herda a
-          // largura medida do rótulo, em vez de esticar por meia tela
-          tabBarItemStyle: { paddingHorizontal: 0 },
-          tabBarGap: spacing[6],
-          tabBarLabelStyle: {
-            fontFamily: "Roboto_700Bold",
-            // 11 e não 12: com quatro abas num telefone de 412 pontos cada
-            // item fica com ~103, e "Investimentos" a 12 px quebrava em duas
-            // linhas. Rótulo que quebra empurra o indicador e desalinha a
-            // régua inteira por causa de uma palavra
-            fontSize: 11,
-            textTransform: "capitalize",
-          },
         }}
       >
         <TopTab.Screen name={FINANCE_TAB_ROUTES.carteira} component={Wallet} />
@@ -301,22 +274,17 @@ function MainTabs() {
         // abaixo é do celular. A versão anterior desta tela mandava a MESMA
         // barra para a esquerda no desktop; virava uma segunda navegação, de
         // três destinos, encostada no trilho de doze.
+        // A ILHA mora no `TabBarWithIndicator`: é lá que ficam posição, raio,
+        // fundo e sombra. Aqui a barra interna é só o conteúdo dela, e precisa
+        // ser TRANSPARENTE — fundo opaco cobriria a pílula que marca a aba
+        // ativa, desenhada atrás dos ícones.
         tabBarStyle: {
-          backgroundColor: t.background.surface,
-          // 84 dá folga para o ícone da Home (28, ~30 no pico do pop) +
-          // rótulo dentro do `overflow: hidden` da barra. Com 70 o rótulo
-          // era cortado sempre que não havia inset de barra de gestos
-          height: BOTTOM_BAR_HEIGHT + bottomInset,
-          paddingBottom: bottomInset > 0 ? bottomInset : 10,
-          paddingTop: 8,
-          // No dark, sombra é invisível — a borda superior faz a separação
-          borderTopWidth: 1,
-          borderTopColor: t.border.default,
-          // Cantos superiores arredondados: o fundo do navigator (base) fica
-          // visível atrás e a barra ganha a mesma geometria dos cards
-          borderTopLeftRadius: radius["2xl"],
-          borderTopRightRadius: radius["2xl"],
-          overflow: "hidden",
+          backgroundColor: "transparent",
+          height: ILHA_ALTURA,
+          // o inset da borda do aparelho já é pago pelo `bottom` da ilha
+          paddingBottom: 6,
+          paddingTop: 6,
+          borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
         },
