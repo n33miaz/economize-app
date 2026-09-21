@@ -285,10 +285,19 @@ export function formatProfit(profit: Profit): string {
 // --- Agrupamento ---
 
 export interface PositionGroup {
-  type: InvestmentType;
+  /** Chave estável de lista: o tipo, ou o nome da instituição. */
+  key: string;
+  /** Só no corte por tipo — a instituição não tem enum. */
+  type?: InvestmentType;
   label: string;
   positions: InvestmentPosition[];
 }
+
+/** Os dois jeitos de olhar a carteira. */
+export type PositionCut = "type" | "institution";
+
+/** Quando a posição não diz de onde é — manual antiga, ou emissor sem nome. */
+export const SEM_INSTITUICAO = "Sem instituição";
 
 /**
  * Grupos na ordem fixa de `INVESTMENT_TYPE_ORDER`, sem grupo vazio; dentro do
@@ -311,6 +320,7 @@ export function groupPositionsByType(
 
   return INVESTMENT_TYPE_ORDER.filter((type) => buckets.has(type)).map(
     (type) => ({
+      key: type,
       type,
       label: TYPE_LABELS[type],
       positions: [...(buckets.get(type) ?? [])].sort(
@@ -318,6 +328,60 @@ export function groupPositionsByType(
       ),
     }),
   );
+}
+
+/**
+ * A mesma carteira, cortada por onde o dinheiro está.
+ *
+ * <p>"Quanto eu tenho no Inter?" é uma pergunta diferente de "quanto eu tenho
+ * em renda fixa?", e até aqui só a segunda tinha resposta na tela — a
+ * instituição aparecia solta no subtítulo de cada linha, sem somar com nada.
+ *
+ * <p>A ordem aqui não é fixa como a dos tipos: ela é pelo TOTAL de cada
+ * instituição, maior primeiro. Tipo é taxonomia e cabe numa ordem escrita à
+ * mão; instituição é a carteira de cada pessoa, e quem manda é o tamanho. Sem
+ * instituição fica por último, sempre — é ausência de dado, não um emissor.
+ */
+export function groupPositionsByInstitution(
+  positions: InvestmentPosition[],
+): PositionGroup[] {
+  const valueOf = (position: InvestmentPosition) =>
+    isFinite_(position.currentValue) ? position.currentValue : -Infinity;
+  const somaDe = (lista: InvestmentPosition[]) =>
+    lista.reduce(
+      (total, p) => total + (isFinite_(p.currentValue) ? p.currentValue : 0),
+      0,
+    );
+
+  const buckets = new Map<string, InvestmentPosition[]>();
+  positions.forEach((position) => {
+    const nome = (position.institution ?? "").trim() || SEM_INSTITUICAO;
+    const bucket = buckets.get(nome) ?? [];
+    bucket.push(position);
+    buckets.set(nome, bucket);
+  });
+
+  return [...buckets.entries()]
+    .map(([nome, lista]) => ({
+      key: nome,
+      label: nome,
+      positions: [...lista].sort((a, b) => valueOf(b) - valueOf(a)),
+    }))
+    .sort((a, b) => {
+      if (a.key === SEM_INSTITUICAO) return 1;
+      if (b.key === SEM_INSTITUICAO) return -1;
+      return somaDe(b.positions) - somaDe(a.positions);
+    });
+}
+
+/** O corte pedido, com a mesma forma de saída nos dois casos. */
+export function groupPositions(
+  positions: InvestmentPosition[],
+  cut: PositionCut,
+): PositionGroup[] {
+  return cut === "institution"
+    ? groupPositionsByInstitution(positions)
+    : groupPositionsByType(positions);
 }
 
 // --- Indicadores acompanhados ---

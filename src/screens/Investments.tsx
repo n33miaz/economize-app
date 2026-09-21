@@ -52,7 +52,9 @@ import {
   formatProfit,
   formatRelativeTime,
   formatShortDate,
-  groupPositionsByType,
+  groupPositions,
+  SEM_INSTITUICAO,
+  type PositionCut,
   hasTreasuryInterest,
   investmentSourceLabel,
   maturityLabel,
@@ -77,6 +79,7 @@ import InvestmentPositionSheet from "../components/InvestmentPositionSheet";
 import AssistantFAB from "../components/AssistantFAB";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
+import SegmentedControl from "../components/SegmentedControl";
 import Skeleton from "../components/Skeleton";
 import { APP_ROUTES, FINANCE_TAB_ROUTES } from "../routes/routeNames";
 
@@ -197,9 +200,22 @@ export default function Investments() {
     [profile.data, macro.data, quotes],
   );
 
+  // "Quanto eu tenho no Inter?" é outra pergunta que "quanto eu tenho em renda
+  // fixa?", e a instituição já vinha em toda posição sem somar com nada
+  const [corte, setCorte] = useState<PositionCut>("type");
+  // O seletor só aparece quando há o que separar: com tudo no mesmo banco ele
+  // seria um controle que não muda nada, ocupando a linha acima da carteira
+  const podeCortar = useMemo(() => {
+    const lista = positions.data ?? [];
+    if (lista.length < 2) return false;
+    const nomes = new Set(
+      lista.map((p) => (p.institution ?? "").trim() || SEM_INSTITUICAO),
+    );
+    return nomes.size > 1;
+  }, [positions.data]);
   const groups = useMemo(
-    () => groupPositionsByType(positions.data ?? []),
-    [positions.data],
+    () => groupPositions(positions.data ?? [], corte),
+    [positions.data, corte],
   );
 
   const treasuryInterest = hasTreasuryInterest(profile.data);
@@ -554,8 +570,21 @@ export default function Investments() {
             onRetry={() => fetchPositions(true)}
           />
         ) : (
-          groups.map((group) => (
-            <View key={group.type} style={{ marginBottom: spacing[3] }}>
+          <>
+            {podeCortar && (
+              <View style={{ marginBottom: spacing[3] }}>
+                <SegmentedControl<PositionCut>
+                  options={[
+                    { label: "Por tipo", value: "type" },
+                    { label: "Por instituição", value: "institution" },
+                  ]}
+                  value={corte}
+                  onChange={setCorte}
+                />
+              </View>
+            )}
+            {groups.map((group) => (
+            <View key={group.key} style={{ marginBottom: spacing[3] }}>
               <Text
                 accessibilityRole="header"
                 style={{
@@ -580,7 +609,8 @@ export default function Investments() {
                 />
               ))}
             </View>
-          ))
+            ))}
+          </>
         )}
       </Animated.View>
     );
