@@ -1,6 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 
 import { getBankTransactions, uploadBankStatement } from "../../services/api";
+import { copiarParaCache, lerInicioEmBase64 } from "../../services/arquivoLocal";
 import { useBankStore } from "../bankStore";
 
 import type { BankTransaction } from "../../services/api";
@@ -14,10 +15,21 @@ jest.mock("expo-document-picker", () => ({
   getDocumentAsync: jest.fn(),
 }));
 
+// O disco é do aparelho: aqui interessa o que o store FAZ com o que ele lê
+jest.mock("../../services/arquivoLocal", () => ({
+  BYTES_PARA_RECONHECER: 512,
+  copiarParaCache: jest.fn(),
+  lerInicioEmBase64: jest.fn(),
+}));
+
 const mockGet = getBankTransactions as jest.MockedFunction<typeof getBankTransactions>;
 const mockUpload = uploadBankStatement as jest.MockedFunction<typeof uploadBankStatement>;
 const mockPicker = DocumentPicker.getDocumentAsync as jest.MockedFunction<
   typeof DocumentPicker.getDocumentAsync
+>;
+const mockCopiar = copiarParaCache as jest.MockedFunction<typeof copiarParaCache>;
+const mockLerInicio = lerInicioEmBase64 as jest.MockedFunction<
+  typeof lerInicioEmBase64
 >;
 
 const tx = (id: string, valor: number): BankTransaction =>
@@ -44,6 +56,7 @@ describe("bankStore", () => {
       // sem zerar a marca de tempo, a janela de cache do teste anterior
       // engoliria a busca deste
       fetchedAt: null,
+      arquivoRecebido: null,
     });
   });
 
@@ -165,5 +178,107 @@ describe("bankStore", () => {
     expect(metricas.income).toBe(1000);
     expect(metricas.expense).toBe(300);
     expect(metricas.total).toBe(700);
+  });
+  describe("arquivo que chega de fora (\"Abrir com\")", () => {
+    it("sem arquivo parqueado não faz nada", async () => {
+      const resultado = await useBankStore.getState().importarArquivoRecebido();
+
+      expect(resultado).toBeNull();
+      expect(mockUpload).not.toHaveBeenCalled();
+    });
+
+    it("envia com o nome que a URI entregou, sem precisar ler bytes", async () => {
+      const uri =
+        "content://com.android.providers.downloads.documents/document/raw%3A%2Fstorage%2Femulated%2F0%2FDownload%2Fextrato-agosto.ofx";
+      mockCopiar.mockResolvedValue("file:///cache/copia");
+      mockUpload.mockResolvedValue({ transactionsImported: 4 } as never);
+      mockGet.mockResolvedValue([tx("t1", -10)]);
+
+      useBankStore.getState().receberArquivo(uri);
+      const resultado = await useBankStore.getState().importarArquivoRecebido();
+
+      expect(resultado?.transactionsImported).toBe(4);
+      // A URI já disse o formato: ler os primeiros bytes seria trabalho à toa
+      expect(mockLerInicio).not.toHaveBeenCalled();
+      expect(mockUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uri: "file:///cache/copia",
+          name: "extrato-agosto.ofx",
+          mimeType: "application/x-ofx",
+        }),
+      );
+      // A lista tem que refletir o que entrou, como na importação manual
+      expect(mockGet).toHaveBeenCalled();
+      expect(useBankStore.getState().isImporting).toBe(false);
+    });
+
+    it("quando a URI não diz nada, o formato sai dos primeiros bytes", async () => {
+      mockCopiar.mockResolvedValue("file:///cache/copia");
+      // "OFXHEADER:100" em base64
+      mockLerInicio.mockResolvedValue("T0ZYSEVBREVSOjEwMAo=");
+      mockUpload.mockResolvedValue({ transactionsImported: 1 } as never);
+      mockGet.mockResolvedValue([]);
+
+      useBankStore.getState().receberArquivo("content://media/external/file/42");
+      await useBankStore.getState().importarArquivoRecebido();
+
+      expect(mockUpload).toHaveBeenCalledWith(
+        expect.objectContaining({ mimeType: "application/x-ofx" }),
+      );
+      expect(mockUpload.mock.calls[0][0].name).toMatch(/^extrato-\d{4}-\d{2}-\d{2}\.ofx$/);
+    });
+
+    it("se a cópia falhar, envia a URI original em vez de desistir", async () => {
+      mockCopiar.mockRejectedValue(new Error("permissão revogada"));
+      mockUpload.mockResolvedValue({ transactionsImported: 2 } as never);
+      mockGet.mockResolvedValue([]);
+
+      useBankStore.getState().receberArquivo("file:///sdcard/extrato.csv");
+      await useBankStore.getState().importarArquivoRecebido();
+
+      expect(mockUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uri: "file:///sdcard/extrato.csv",
+          name: "extrato.csv",
+        }),
+      );
+    });
+
+    it("formato irreconhecível vira mensagem daqui, sem gastar upload", async () => {
+      mockCopiar.mockResolvedValue("file:///cache/copia");
+      // assinatura de PNG: não é nenhum formato de extrato
+      mockLerInicio.mockResolvedValue("iVBORw0KGgo=");
+
+      useBankStore.getState().receberArquivo("content://media/external/file/7");
+
+      await expect(
+        useBankStore.getState().importarArquivoRecebido(),
+      ).rejects.toThrow(/não reconheci o formato/i);
+      // Dizer isso ANTES de subir o arquivo poupa a rede e é mais rápido
+      expect(mockUpload).not.toHaveBeenCalled();
+      expect(useBankStore.getState().isImporting).toBe(false);
+      expect(useBankStore.getState().error).toMatch(/não reconheci/i);
+    });
+
+    it("o arquivo sai da fila antes do envio, mesmo quando o envio falha", async () => {
+      mockCopiar.mockResolvedValue("file:///cache/copia");
+      mockUpload.mockRejectedValue(new Error("sem rede"));
+
+      useBankStore.getState().receberArquivo("file:///sdcard/extrato.ofx");
+      await expect(
+        useBankStore.getState().importarArquivoRecebido(),
+      ).rejects.toThrow();
+
+      // Deixar parqueado faria a tela tentar de novo a cada foco — o jeito
+      // mais rápido de transformar um arquivo problemático num laço
+      expect(useBankStore.getState().arquivoRecebido).toBeNull();
+    });
+
+    it("descartar esquece o arquivo", () => {
+      useBankStore.getState().receberArquivo("file:///sdcard/extrato.ofx");
+      useBankStore.getState().descartarArquivoRecebido();
+
+      expect(useBankStore.getState().arquivoRecebido).toBeNull();
+    });
   });
 });
