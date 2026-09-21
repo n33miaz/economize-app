@@ -1,6 +1,6 @@
 {
   "name": "economize",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
