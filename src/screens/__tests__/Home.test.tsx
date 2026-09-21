@@ -12,9 +12,11 @@ import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useRecurrenceStore } from "../../store/recurrenceStore";
 import { useReviewStore } from "../../store/reviewStore";
+import { useShoppingStore } from "../../store/shoppingStore";
 import { useUserStore } from "../../store/userStore";
 import { useWalletStore } from "../../store/walletStore";
 import { useWishStore } from "../../store/wishStore";
+import { formatBRL } from "../../utils/money";
 
 jest.mock("../../services/api", () => ({
   __esModule: true,
@@ -135,6 +137,8 @@ function prepararStores() {
   useUserStore.setState({ me: null } as never);
   usePlanStore.setState({ plan: "FREE", adsEnabled: true });
   useNewsStore.getState().reset();
+  // O carrinho lê do aparelho: sem compra aberta, a linha não aparece
+  useShoppingStore.getState().reset();
 }
 
 const montar = () =>
@@ -168,13 +172,69 @@ describe("Início", () => {
     await waitFor(() =>
       expect(getAllByText("Importar").length).toBeGreaterThan(0),
     );
-    ["Análise", "Relatórios", "Previsão", "Categorias", "Desejos"].forEach(
+    // Compras entrou no lugar de Relatórios: é o que o dono usa no mercado,
+    // e Relatórios continua a um toque no Perfil
+    ["Análise", "Compras", "Previsão", "Categorias", "Desejos"].forEach(
       (rotulo) => expect(getAllByText(rotulo).length).toBeGreaterThan(0),
     );
 
     // O que NÃO pode estar entre os atalhos, porque já é destino na tela
     expect(queryByText("Cartões")).toBeNull();
     expect(queryByText("Recorrências")).toBeNull();
+    expect(queryByText("Relatórios")).toBeNull();
+  });
+
+  it("o atalho Compras abre a lista de compras", async () => {
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Compras")).toBeTruthy());
+    fireEvent.press(getByText("Compras"));
+
+    expect(mockNavigate).toHaveBeenCalledWith("Compras");
+  });
+
+  it("com uma compra aberta, a Home anuncia o total e abre a compra", async () => {
+    useShoppingStore.setState({
+      hasHydrated: true,
+      trips: [
+        {
+          clientId: "t1",
+          storeName: "Carrefour",
+          status: "OPEN",
+          budget: null,
+          startedAt: new Date().toISOString(),
+          closedAt: null,
+          receiptTotal: null,
+          notes: null,
+          shareWithFamily: false,
+          items: [
+            { clientId: "a", name: "Arroz", quantity: 1, unitPrice: 100, promoNote: null, checked: true, photoRef: null, deleted: false, addedByName: null, clientUpdatedAt: "2026-09-21T10:00:00.000Z" },
+            { clientId: "b", name: "Feijão", quantity: 2, unitPrice: 106.2, promoNote: null, checked: true, photoRef: null, deleted: false, addedByName: null, clientUpdatedAt: "2026-09-21T10:00:00.000Z" },
+          ],
+          clientUpdatedAt: "2026-09-21T10:00:00.000Z",
+          dirty: true,
+          mine: true,
+          ownerName: null,
+          transactionId: null,
+        },
+      ],
+    } as never);
+
+    const { getByText } = montar();
+
+    const linha = await waitFor(() =>
+      getByText(`Compra em andamento: ${formatBRL(312.4)} · 2 itens`),
+    );
+    fireEvent.press(linha);
+
+    expect(mockNavigate).toHaveBeenCalledWith("Compra", { clientId: "t1" });
+  });
+
+  it("sem compra aberta, a linha não ocupa espaço", async () => {
+    const { queryByText, getByText } = montar();
+
+    await waitFor(() => expect(getByText(/Olá/)).toBeTruthy());
+    expect(queryByText(/Compra em andamento/)).toBeNull();
   });
 
   /**

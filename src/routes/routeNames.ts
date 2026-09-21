@@ -45,6 +45,11 @@ export const APP_ROUTES = {
   // Gratuito × Plus. Alcançada pelo Perfil e pela oferta do Plus — não entra
   // no trilho, porque não é destino do dia a dia: ninguém "volta ao plano"
   plano: "Plano",
+  // O carrinho de compras: a lista das idas ao mercado e a tela de UMA ida.
+  // A segunda é filha da primeira e recebe o `clientId` da compra por
+  // parâmetro — no trilho as duas acendem "Compras"
+  compras: "Compras",
+  compra: "Compra",
 } as const;
 
 /** Abas da barra inferior (o container "Main"). */
