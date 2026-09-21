@@ -3,7 +3,7 @@ import { Text, TouchableOpacity, View } from "react-native";
 import X from "lucide-react-native/dist/esm/icons/x";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, spacing } from "../theme/ds";
+import { radius, spacing, touchArea } from "../theme/ds";
 import { usePreferencesStore } from "../store/preferencesStore";
 
 interface Props {
@@ -73,8 +73,9 @@ export default function FirstTimeCard({ id, title, body }: Props) {
         onPress={() => dismiss(id)}
         accessibilityLabel={`Dispensar explicação: ${title}`}
         accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        style={{ minHeight: 24, minWidth: 24, alignItems: "center" }}
+        // A conta é sobre o ÍCONE (16), não sobre o mínimo antigo de 24: o
+        // padding cresce a partir do conteúdo, e partir de 24 parava em 36
+        style={{ alignItems: "center", ...touchArea(16) }}
       >
         <X size={16} color={t.text.tertiary} />
       </TouchableOpacity>
