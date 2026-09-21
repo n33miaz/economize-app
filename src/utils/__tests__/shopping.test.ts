@@ -18,6 +18,11 @@ import {
   localAhead,
   localPriceSummary,
   makeClientId,
+  namesNotOnTrip,
+  parseListNames,
+  pendingLabel,
+  pendingMatch,
+  tripSections,
   mergeItems,
   mergeTrip,
   mergeTripLists,
@@ -105,6 +110,13 @@ describe("totais", () => {
     });
     expect(tripHeadline(compra)).toBe(`${formatBRL(312.4)} · 2 itens`);
     expect(tripHeadline(trip({ items: [item()] }))).toBe(`${formatBRL(10)} · 1 item`);
+    // O que falta decide se dá para ir ao caixa, então viaja na manchete —
+    // quem olha a lista de compras de relance quer saber sem abrir
+    expect(
+      tripHeadline(
+        trip({ items: [item(), item({ name: "Feijão", checked: false })] }),
+      ),
+    ).toBe(`${formatBRL(10)} · 1 item · faltam 1`);
   });
 
   it("item sem preço não soma nem some", () => {
@@ -381,6 +393,135 @@ describe("sugestões", () => {
     ];
     expect(lastTripDefaults(lista)).toEqual({ storeName: "Dia", budget: 300 });
     expect(lastTripDefaults([])).toEqual({ storeName: "", budget: null });
+  });
+});
+
+describe("a lista de compras — o mesmo item visto antes de existir", () => {
+  it("o que foi anotado no corredor CUMPRE o item da lista", () => {
+    // O pedido do dono: "a lista ir dando check para eu não esquecer de nada"
+    const compra = trip({
+      items: [
+        item({ clientId: "i1", name: "arroz tio joao 5KG", checked: false, unitPrice: 0 }),
+        item({ clientId: "i2", name: "Feijão", checked: false, unitPrice: 0 }),
+      ],
+    });
+
+    const achado = pendingMatch(compra, "Arroz Tio João 5kg");
+
+    // mesma chave do histórico de preços: caixa e acento não separam produtos
+    expect(achado?.clientId).toBe("i1");
+  });
+
+  it("item JÁ pego não é cumprido de novo", () => {
+    const compra = trip({
+      items: [item({ clientId: "i1", name: "Arroz", checked: true })],
+    });
+
+    // senão, pegar dois pacotes de arroz sobrescreveria o primeiro em vez de
+    // virar uma segunda linha
+    expect(pendingMatch(compra, "Arroz")).toBeNull();
+  });
+
+  it("lápide não conta como item da lista", () => {
+    const compra = trip({
+      items: [item({ clientId: "i1", name: "Arroz", checked: false, deleted: true })],
+    });
+
+    expect(pendingMatch(compra, "Arroz")).toBeNull();
+  });
+
+  it("nome em branco não cumpre nada", () => {
+    const compra = trip({
+      items: [item({ clientId: "i1", name: "Arroz", checked: false })],
+    });
+
+    expect(pendingMatch(compra, "   ")).toBeNull();
+  });
+
+  it("a tela lê primeiro o que falta, e mantém a ordem em que foi escrito", () => {
+    const compra = trip({
+      items: [
+        item({ clientId: "a", name: "Arroz", checked: true }),
+        item({ clientId: "b", name: "Feijão", checked: false }),
+        item({ clientId: "c", name: "Café", checked: false }),
+        item({ clientId: "d", name: "Leite", checked: true }),
+        item({ clientId: "z", name: "Apagado", deleted: true, checked: false }),
+      ],
+    });
+
+    const { pending, picked } = tripSections(compra);
+
+    // a ordem da lista costuma ser a ordem em que a pessoa anda pelo mercado:
+    // reordenar por nome ou preço destruiria isso
+    expect(pending.map((i) => i.clientId)).toEqual(["b", "c"]);
+    expect(picked.map((i) => i.clientId)).toEqual(["a", "d"]);
+  });
+});
+
+describe("escrever a lista de uma vez", () => {
+  it("aceita uma por linha, por vírgula e por ponto e vírgula", () => {
+    expect(parseListNames("Arroz\nFeijão, Café; Leite")).toEqual([
+      "Arroz",
+      "Feijão",
+      "Café",
+      "Leite",
+    ]);
+  });
+
+  it("tira a marca de lista, que é do texto e não do produto", () => {
+    expect(parseListNames("- Arroz\n* Feijão\n1. Café\n2) Leite")).toEqual([
+      "Arroz",
+      "Feijão",
+      "Café",
+      "Leite",
+    ]);
+  });
+
+  it("nome repetido entra uma vez só, mesmo escrito diferente", () => {
+    expect(parseListNames("Arroz\narroz\nARROZ  ")).toEqual(["Arroz"]);
+  });
+
+  it("linha vazia e só pontuação somem", () => {
+    expect(parseListNames("\n\n,,;\n  \nArroz\n")).toEqual(["Arroz"]);
+  });
+
+  it("corta nome absurdo no limite do servidor em vez de levar 400 no mercado", () => {
+    const enorme = "x".repeat(200);
+
+    const [nome] = parseListNames(enorme);
+
+    expect(nome).toHaveLength(120);
+  });
+
+  it("o que já está na compra não entra de novo, pego ou não", () => {
+    const compra = trip({
+      items: [
+        item({ name: "Arroz", checked: true }),
+        item({ name: "feijao", checked: false }),
+      ],
+    });
+
+    expect(namesNotOnTrip(compra, ["arroz", "Feijão", "Café"])).toEqual(["Café"]);
+  });
+
+  it("nome repetido dentro do mesmo pedido entra uma vez", () => {
+    expect(namesNotOnTrip(trip(), ["Café", "cafe"])).toEqual(["Café"]);
+  });
+});
+
+describe("o que a tela diz sobre a lista", () => {
+  it("conta o que falta, no singular e no plural", () => {
+    expect(pendingLabel(0)).toBe("Nada na lista");
+    expect(pendingLabel(1)).toBe("Falta 1 item");
+    expect(pendingLabel(3)).toBe("Faltam 3 itens");
+  });
+
+  it("item da lista diz 'a pegar', e item pego sem preço diz 'sem preço'", () => {
+    // "sem preço" num item que ninguém foi buscar ainda soa a dado faltando,
+    // quando é só a ordem natural das coisas
+    expect(describeItemLine({ quantity: 1, unitPrice: 0, checked: false })).toBe("1 un · a pegar");
+    expect(describeItemLine({ quantity: 2, unitPrice: 0, checked: true })).toBe("2 un · sem preço");
+    expect(describeItemLine({ quantity: 2, unitPrice: 0 })).toBe("2 un · sem preço");
   });
 });
 

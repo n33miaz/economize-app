@@ -41,8 +41,10 @@ import {
   itemCountLabel,
   itemNameSuggestions,
   itemSubtotal,
+  pendingLabel,
   receiptDifference,
   tripItemCount,
+  tripSections,
   tripTotal,
   tripUncheckedCount,
 } from "../utils/shopping";
@@ -54,6 +56,7 @@ import PageContainer from "../components/PageContainer";
 import PotEmptyState from "../components/PotEmptyState";
 import ScreenHeader from "../components/ScreenHeader";
 import ShoppingBudgetBar from "../components/ShoppingBudgetBar";
+import ShoppingListSheet from "../components/ShoppingListSheet";
 import Skeleton, { SkeletonCard, SkeletonRow } from "../components/Skeleton";
 import SyncStatusLine from "../components/SyncStatusLine";
 
@@ -87,6 +90,7 @@ export default function ShoppingTrip() {
   const syncFailed = useShoppingStore((s) => s.syncFailed);
   const lastSyncAt = useShoppingStore((s) => s.lastSyncAt);
   const addItem = useShoppingStore((s) => s.addItem);
+  const addListItems = useShoppingStore((s) => s.addListItems);
   const updateItem = useShoppingStore((s) => s.updateItem);
   const removeItem = useShoppingStore((s) => s.removeItem);
   const toggleItemChecked = useShoppingStore((s) => s.toggleItemChecked);
@@ -99,6 +103,7 @@ export default function ShoppingTrip() {
   const [folhaItem, setFolhaItem] = useState(false);
   const [editando, setEditando] = useState<ShoppingItem | null>(null);
   const [folhaFechar, setFolhaFechar] = useState(false);
+  const [folhaLista, setFolhaLista] = useState(false);
 
   const suggestionsFor = useCallback(
     (query: string) => itemNameSuggestions(trips, query),
@@ -114,6 +119,12 @@ export default function ShoppingTrip() {
   );
 
   const itens = useMemo(() => (trip ? activeItems(trip) : []), [trip]);
+  // A lista primeiro, o carrinho depois: quem está no mercado lê de cima para
+  // baixo o que ainda falta, e é para isso que a lista existe
+  const secoes = useMemo(
+    () => (trip ? tripSections(trip) : { pending: [], picked: [] }),
+    [trip],
+  );
   // A linha "da última vez" de cada item, do que o aparelho já sabe. Não
   // consulta o servidor por item: quarenta pedidos por tela seria o oposto
   // de rápido, e a folha do item já alimentou o cache ao digitar o nome
@@ -175,6 +186,8 @@ export default function ShoppingTrip() {
     setEditando(null);
     setFolhaItem(true);
   };
+
+  const abrirLista = () => setFolhaLista(true);
 
   const editar = (item: ShoppingItem) => {
     if (!aberta) return;
@@ -345,39 +358,51 @@ export default function ShoppingTrip() {
               title="Carrinho vazio"
               body={
                 aberta
-                  ? "Toque em + item e anote o que pegar: quantidade, preço da etiqueta e, se quiser, uma foto."
+                  ? "Escreva a lista do que não pode faltar — ela vai sendo marcada sozinha conforme você anota o que pegou. Ou toque em + item e anote direto: quantidade, preço da etiqueta e, se quiser, uma foto."
                   : "Esta compra fechou sem itens anotados."
               }
-              actionLabel={aberta ? "+ item" : undefined}
-              onAction={aberta ? abrirNovo : undefined}
+              actionLabel={aberta ? "Escrever a lista" : undefined}
+              onAction={aberta ? abrirLista : undefined}
             />
           ) : (
-            <View
-              style={{
-                backgroundColor: t.background.surface,
-                borderWidth: 1,
-                borderColor: t.border.subtle,
-                borderRadius: radius["2xl"],
-                paddingHorizontal: spacing[4],
-              }}
-            >
-              {itens.map((item, index) => (
-                <Animated.View key={item.clientId} entering={listItemEntering(index)}>
-                  <ItemRow
-                    item={item}
-                    hint={dicas.get(item.clientId) ?? null}
-                    divider={index < itens.length - 1}
-                    readOnly={!aberta}
-                    onPress={() => editar(item)}
-                    onLongPress={() => tirarDoCarrinho(item)}
-                    onToggle={() => {
-                      toggleItemChecked(trip.clientId, item.clientId);
-                      Haptics.selectionAsync();
-                    }}
-                  />
-                </Animated.View>
-              ))}
-            </View>
+            <>
+              {(secoes.pending.length > 0 || aberta) && (
+                <SecaoDeItens
+                  titulo={pendingLabel(secoes.pending.length)}
+                  acao={aberta ? { rotulo: "+ lista", onPress: abrirLista } : undefined}
+                  vazio={
+                    aberta
+                      ? "Escreva o que não pode faltar. Conforme você anota as compras, cada um vai sendo marcado."
+                      : undefined
+                  }
+                  itens={secoes.pending}
+                  dicas={dicas}
+                  readOnly={!aberta}
+                  listItemEntering={listItemEntering}
+                  onPress={editar}
+                  onLongPress={tirarDoCarrinho}
+                  onToggle={(item) => {
+                    toggleItemChecked(trip.clientId, item.clientId);
+                    Haptics.selectionAsync();
+                  }}
+                />
+              )}
+              {secoes.picked.length > 0 && (
+                <SecaoDeItens
+                  titulo={`No carrinho · ${itemCountLabel(secoes.picked.length)}`}
+                  itens={secoes.picked}
+                  dicas={dicas}
+                  readOnly={!aberta}
+                  listItemEntering={listItemEntering}
+                  onPress={editar}
+                  onLongPress={tirarDoCarrinho}
+                  onToggle={(item) => {
+                    toggleItemChecked(trip.clientId, item.clientId);
+                    Haptics.selectionAsync();
+                  }}
+                />
+              )}
+            </>
           )}
         </ScrollView>
       </PageContainer>
@@ -445,6 +470,13 @@ export default function ShoppingTrip() {
         </View>
       ) : null}
 
+      <ShoppingListSheet
+        visible={folhaLista}
+        pending={secoes.pending}
+        onAdd={(nomes) => addListItems(trip.clientId, nomes)}
+        onClose={() => setFolhaLista(false)}
+      />
+
       <AddItemSheet
         visible={folhaItem}
         storeName={trip.storeName}
@@ -463,6 +495,118 @@ export default function ShoppingTrip() {
         onClose={() => setFolhaFechar(false)}
         onReconciled={(mensagem) => showToast(mensagem, "success")}
       />
+    </View>
+  );
+}
+
+/**
+ * Um bloco da tela: "falta pegar" ou "no carrinho".
+ *
+ * <p>A separação é o que transforma o carrinho numa lista de conferência. Numa
+ * lista única, o item que falta fica no meio do que já foi pego e some da
+ * vista justamente quando importa — que é o esquecimento que a lista existe
+ * para evitar.
+ */
+function SecaoDeItens({
+  titulo,
+  acao,
+  vazio,
+  itens,
+  dicas,
+  readOnly,
+  listItemEntering,
+  onPress,
+  onLongPress,
+  onToggle,
+}: {
+  titulo: string;
+  acao?: { rotulo: string; onPress: () => void };
+  vazio?: string;
+  itens: ShoppingItem[];
+  dicas: Map<string, string | null>;
+  readOnly: boolean;
+  listItemEntering: ReturnType<typeof useMotionPresets>["listItemEntering"];
+  onPress: (item: ShoppingItem) => void;
+  onLongPress: (item: ShoppingItem) => void;
+  onToggle: (item: ShoppingItem) => void;
+}) {
+  const t = useTheme();
+  return (
+    <View style={{ marginBottom: spacing[4] }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: spacing[2],
+        }}
+      >
+        <Text
+          accessibilityRole="header"
+          style={{
+            flex: 1,
+            color: t.text.tertiary,
+            fontSize: 11,
+            fontWeight: "700",
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
+          }}
+        >
+          {titulo}
+        </Text>
+        {acao ? (
+          <Pressable
+            onPress={acao.onPress}
+            accessibilityRole="button"
+            accessibilityLabel="Escrever a lista de compras"
+            hitSlop={8}
+          >
+            <Text
+              style={{ color: t.accent.neon, fontSize: 13, fontWeight: "700" }}
+            >
+              {acao.rotulo}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {itens.length === 0 ? (
+        vazio ? (
+          <Text
+            style={{
+              color: t.text.tertiary,
+              fontSize: 13,
+              lineHeight: 19,
+              marginBottom: spacing[1],
+            }}
+          >
+            {vazio}
+          </Text>
+        ) : null
+      ) : (
+        <View
+          style={{
+            backgroundColor: t.background.surface,
+            borderWidth: 1,
+            borderColor: t.border.subtle,
+            borderRadius: radius["2xl"],
+            paddingHorizontal: spacing[4],
+          }}
+        >
+          {itens.map((item, index) => (
+            <Animated.View key={item.clientId} entering={listItemEntering(index)}>
+              <ItemRow
+                item={item}
+                hint={dicas.get(item.clientId) ?? null}
+                divider={index < itens.length - 1}
+                readOnly={readOnly}
+                onPress={() => onPress(item)}
+                onLongPress={() => onLongPress(item)}
+                onToggle={() => onToggle(item)}
+              />
+            </Animated.View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

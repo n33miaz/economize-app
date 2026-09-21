@@ -89,7 +89,13 @@ import { installmentsSummary } from "../utils/installments";
 import { buildUpcoming, type UpcomingItem } from "../utils/upcoming";
 import { useInstallmentsStore } from "../store/installmentsStore";
 import { useShoppingStore } from "../store/shoppingStore";
-import { currentOpenTrip, itemCountLabel, tripItemCount, tripTotal } from "../utils/shopping";
+import {
+  currentOpenTrip,
+  itemCountLabel,
+  tripItemCount,
+  tripTotal,
+  tripUncheckedCount,
+} from "../utils/shopping";
 import { APP_ROUTES } from "../routes/routeNames";
 import InstallmentsCard from "../components/InstallmentsCard";
 import UpcomingBillsCard from "../components/UpcomingBillsCard";
@@ -1392,7 +1398,11 @@ export default function Home() {
                     >
                       {`Compra em andamento: ${
                         showBalance ? formatBRL(tripTotal(compraAberta)) : HIDDEN
-                      } · ${itemCountLabel(tripItemCount(compraAberta))}`}
+                      } · ${itemCountLabel(tripItemCount(compraAberta))}${
+                        tripUncheckedCount(compraAberta) > 0
+                          ? ` · faltam ${tripUncheckedCount(compraAberta)}`
+                          : ""
+                      }`}
                     </Text>
                     {compraAberta.storeName ? (
                       <Text
