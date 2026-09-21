@@ -90,6 +90,7 @@ import { buildUpcoming, type UpcomingItem } from "../utils/upcoming";
 import { useInstallmentsStore } from "../store/installmentsStore";
 import InstallmentsCard from "../components/InstallmentsCard";
 import UpcomingBillsCard from "../components/UpcomingBillsCard";
+import PurchaseDayLine from "../components/PurchaseDayLine";
 import {
   formatBRL,
   formatBRLCompact,
@@ -253,6 +254,9 @@ export default function Home() {
   // perguntar. Chamada leve, e é a mesma que a tela de Renda já usa
   const incomeSources = useWishStore((s) => s.income?.sources);
   const fetchIncome = useWishStore((s) => s.fetchIncome);
+  // EC-237: a linha do melhor dia de compra lê o mesmo store sozinha
+  // (PurchaseDayLine); aqui só dispara a busca, best-effort, no mesmo foco
+  const fetchIncomePattern = useWishStore((s) => s.fetchIncomePattern);
 
   // EC-137: o VR cai antes do salário e é gasto antes de o mês fechar. O app
   // pergunta no momento em que a compra provavelmente aconteceu — depois, a
@@ -385,6 +389,9 @@ export default function Home() {
       // adicional, não a resposta principal da tela. O store decide se a
       // chamada vale (TTL de 5 min)
       fetchInstallments();
+      // Melhor dia de compra (EC-237): best-effort, o store já engole o 404
+      // do servidor antigo — sem padrão, a linha simplesmente não aparece
+      fetchIncomePattern();
     }, [
       fetchPendingCount,
       fetchHomeMonthly,
@@ -392,6 +399,7 @@ export default function Home() {
       fetchCommitted,
       fetchIncome,
       fetchInstallments,
+      fetchIncomePattern,
       recorteDiario,
     ]),
   );
@@ -1321,7 +1329,12 @@ export default function Home() {
                   }
                   onPressItem={abrirCompromisso}
                   onPressAll={goToRecurrences}
-                />
+                >
+                  {/* EC-237: mesma pergunta ("quando o dinheiro chega"), vista
+                      pelo lado de quem vai gastá-lo — por isso mora aqui,
+                      logo depois da frase do salário, e não num card à parte */}
+                  <PurchaseDayLine />
+                </UpcomingBillsCard>
               </Animated.View>
             ),
 

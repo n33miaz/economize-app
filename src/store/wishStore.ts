@@ -4,19 +4,24 @@ import {
   type CommittedOverview,
   type CreateWishPayload,
   type IncomeOverview,
+  type IncomePattern,
   type IncomeSourceKind,
+  type PurchasePreferencePayload,
   type UpdateWishPayload,
   type Wish,
   type WishBaseline,
   acceptIncomeSuggestion,
+  clearPurchasePreference,
   createIncomeSource,
   createWish,
   deleteIncomeSource,
   deleteWish,
   getCommittedOverview,
   getIncomeOverview,
+  getIncomePattern,
   getWishes,
   purchaseWish,
+  savePurchasePreference,
   saveWorkProfile,
   updateIncomeSource,
   updateWish,
@@ -36,6 +41,13 @@ interface WishState {
   income: IncomeOverview | null;
   /** O que já tem dono do próximo salário (EC-136). */
   committed: CommittedOverview | null;
+  /**
+   * Quando cada renda cai, em dias úteis, e o melhor dia para as compras
+   * (EC-237). `null` enquanto não carregou — e também quando o servidor é
+   * de uma versão anterior ao endpoint: as telas tratam os dois casos como
+   * "não há o que mostrar", nunca como erro na cara.
+   */
+  incomePattern: IncomePattern | null;
 
   isLoading: boolean;
   hasLoadedOnce: boolean;
@@ -44,14 +56,22 @@ interface WishState {
   hasLoadedIncomeOnce: boolean;
   isCommittedLoading: boolean;
   hasLoadedCommittedOnce: boolean;
+  isPatternLoading: boolean;
+  hasLoadedPatternOnce: boolean;
 
   error: string | null;
   incomeError: string | null;
   committedError: string | null;
+  patternError: string | null;
 
   fetch: () => Promise<void>;
   fetchIncome: () => Promise<void>;
   fetchCommitted: () => Promise<void>;
+  fetchIncomePattern: () => Promise<void>;
+  savePurchasePreference: (
+    payload: PurchasePreferencePayload,
+  ) => Promise<WishOutcome>;
+  clearPurchasePreference: () => Promise<WishOutcome>;
 
   create: (payload: CreateWishPayload) => Promise<WishOutcome>;
   update: (id: string, payload: UpdateWishPayload) => Promise<WishOutcome>;
@@ -92,6 +112,7 @@ const EMPTY = {
   wishes: [],
   income: null,
   committed: null,
+  incomePattern: null,
   isLoading: false,
   hasLoadedOnce: false,
   isSaving: false,
@@ -99,9 +120,12 @@ const EMPTY = {
   hasLoadedIncomeOnce: false,
   isCommittedLoading: false,
   hasLoadedCommittedOnce: false,
+  isPatternLoading: false,
+  hasLoadedPatternOnce: false,
   error: null,
   incomeError: null,
   committedError: null,
+  patternError: null,
 };
 
 export const useWishStore = create<WishState>((set, get) => ({
@@ -166,6 +190,74 @@ export const useWishStore = create<WishState>((set, get) => ({
         ),
         isCommittedLoading: false,
       });
+    }
+  },
+
+  fetchIncomePattern: async () => {
+    // Home e Previsão pedem o padrão no mesmo foco; a Previsão ainda pede de
+    // novo quando a fonte muda. Uma busca em voo por vez — o cálculo do
+    // servidor lê as datas de todas as quedas, e é caro na instância gratuita
+    if (get().isPatternLoading) return;
+    set({ isPatternLoading: true, patternError: null });
+    try {
+      const data = await getIncomePattern();
+      set({
+        incomePattern: data,
+        isPatternLoading: false,
+        hasLoadedPatternOnce: true,
+      });
+    } catch (e) {
+      // Servidor de versão anterior responde 404: não é falha da tela, é
+      // ausência da funcionalidade. Fica registrado, mas o padrão anterior
+      // (se houver) continua de pé e nada vermelho aparece por causa disto
+      set({
+        patternError: translateWishError(
+          e,
+          "Não foi possível calcular o melhor dia para as compras.",
+        ),
+        isPatternLoading: false,
+        hasLoadedPatternOnce: true,
+      });
+    }
+  },
+
+  savePurchasePreference: async (payload) => {
+    set({ isSaving: true });
+    try {
+      await savePurchasePreference(payload);
+      // A preferência muda o dia recomendado: sem recarregar, o card ficaria
+      // dizendo "mensal" com a pessoa tendo acabado de escolher "semanal"
+      await get().fetchIncomePattern();
+      set({ isSaving: false });
+      return { ok: true, message: "Preferência de compra salva." };
+    } catch (e) {
+      set({ isSaving: false });
+      return {
+        ok: false,
+        message: translateWishError(
+          e,
+          "Não foi possível salvar como você compra.",
+        ),
+      };
+    }
+  },
+
+  clearPurchasePreference: async () => {
+    set({ isSaving: true });
+    try {
+      await clearPurchasePreference();
+      await get().fetchIncomePattern();
+      set({ isSaving: false });
+      return { ok: true, message: "O app volta a deduzir do seu extrato." };
+    } catch (e) {
+      set({ isSaving: false });
+      return {
+        ok: false,
+        message: translateWishError(
+          e,
+          "Não foi possível voltar a deduzir do extrato.",
+        ),
+      };
     }
   },
 
@@ -345,4 +437,8 @@ async function refreshAfterIncomeChange(get: () => WishState): Promise<void> {
   // A âncora e o valor do salário decidem "quando cai" e "quanto sobra": sem
   // esta terceira recarga, o cartão do salário ficaria falando da fonte antiga
   if (get().hasLoadedCommittedOnce) await get().fetchCommitted();
+  // E o melhor dia de compra nasce das mesmas fontes: cadastrar o vale é o
+  // que faz o card sair de "não sei" para uma data. Só se alguém já pediu —
+  // quem nunca abriu a Previsão não paga o cálculo
+  if (get().hasLoadedPatternOnce) await get().fetchIncomePattern();
 }

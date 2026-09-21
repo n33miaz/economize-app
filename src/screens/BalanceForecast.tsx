@@ -17,7 +17,7 @@ import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
 import CircleCheck from "lucide-react-native/dist/esm/icons/circle-check";
 import Info from "lucide-react-native/dist/esm/icons/info";
 import TriangleAlert from "lucide-react-native/dist/esm/icons/triangle-alert";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import * as Haptics from "../utils/haptics";
@@ -31,6 +31,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets } from "../theme/motionPresets";
+import { APP_ROUTES } from "../routes/routeNames";
 import { useAccountsStore } from "../store/accountsStore";
 import { useBankStore } from "../store/bankStore";
 import {
@@ -38,10 +39,12 @@ import {
   type ForecastWindow,
   useRecurrenceStore,
 } from "../store/recurrenceStore";
+import { useWishStore } from "../store/wishStore";
 import ChartLegend from "../components/ChartLegend";
 import ErrorState from "../components/ErrorState";
 import FirstTimeCard from "../components/FirstTimeCard";
 import PotEmptyState from "../components/PotEmptyState";
+import PurchaseDayCard from "../components/PurchaseDayCard";
 import AssistantFAB from "../components/AssistantFAB";
 import { getInstallments, getMonthlyAnalytics } from "../services/api";
 import BalanceRuler, { BalanceRulerHeadline } from "../components/BalanceRuler";
@@ -516,6 +519,12 @@ export default function BalanceForecast() {
   const forecastError = useRecurrenceStore((s) => s.forecastError);
   const fetchForecast = useRecurrenceStore((s) => s.fetchForecast);
 
+  // Melhor dia de compra (EC-237): mora no mesmo store da renda porque nasce
+  // das mesmas fontes. `null` cobre tanto "ainda não buscou" quanto "servidor
+  // antigo sem o endpoint" — as duas situações renderizam o card como ausente
+  const incomePattern = useWishStore((s) => s.incomePattern);
+  const fetchIncomePattern = useWishStore((s) => s.fetchIncomePattern);
+
   const [window, setWindow] = useState<ForecastWindow>(3);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const [baselineReady, setBaselineReady] = useState(transactions.length > 0);
@@ -579,6 +588,15 @@ export default function BalanceForecast() {
       .then(setParcelamentos)
       .catch(() => setParcelamentos(null));
   }, []);
+
+  // Melhor dia de compra: revalida a cada foco, como a renda (a fonte muda em
+  // outra tela). Best-effort — o store já engole o 404 do servidor antigo e
+  // qualquer outro erro sem sujar a tela; se falhar, o card some sozinho
+  useFocusEffect(
+    useCallback(() => {
+      fetchIncomePattern();
+    }, [fetchIncomePattern]),
+  );
 
   const handleWindowChange = useCallback((next: string) => {
     setWindow(Number(next) as ForecastWindow);
@@ -882,6 +900,31 @@ export default function BalanceForecast() {
               )}
             </Text>
           </View>
+
+          {/* Melhor dia de compra (EC-237): o padrão de renda existe mesmo
+              sem série de despesa nenhuma, então este card fica FORA do
+              `!hasProjection` — quem não tem projeção de gastos ainda pode
+              muito bem já ter salário e vale detectados.
+              NO_INCOME fica de fora daqui: "cadastre uma renda" já é a
+              conversa do bloco de baixo (`EmptyForecast`/o próprio card de
+              saldo) quando não há nada para projetar — duplicar o convite
+              aqui em cima seria a mesma pergunta feita duas vezes na tela */}
+          {incomePattern && incomePattern.status !== "NO_INCOME" ? (
+            <Animated.View
+              entering={cardEntering}
+              style={{ marginTop: spacing[4] }}
+            >
+              <PurchaseDayCard
+                pattern={incomePattern}
+                onAdjust={() =>
+                  navigation.navigate(APP_ROUTES.renda as never)
+                }
+                onRegisterIncome={() =>
+                  navigation.navigate(APP_ROUTES.renda as never)
+                }
+              />
+            </Animated.View>
+          ) : null}
 
           {!hasProjection ? (
             <EmptyForecast onBack={() => navigation.goBack()} />

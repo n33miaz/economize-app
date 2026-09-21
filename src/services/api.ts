@@ -2070,6 +2070,206 @@ export const getCommittedOverview = async (): Promise<CommittedOverview> => {
   return response.data;
 };
 
+// ------------------------------------ Padrão de entradas e melhor dia (EC-237)
+
+/**
+ * `READY` tem recomendação. Os outros três são respostas honestas, não erros:
+ * `INSUFFICIENT_HISTORY` viu menos de três quedas, `NO_INCOME` não tem fonte
+ * de renda nenhuma e `CARD_CYCLE_UNKNOWN` sabe que a pessoa paga no cartão
+ * mas não sabe quando ele fecha. Em todos eles `message` diz o porquê.
+ */
+export type IncomePatternStatus =
+  | "READY"
+  | "INSUFFICIENT_HISTORY"
+  | "NO_INCOME"
+  | "CARD_CYCLE_UNKNOWN";
+
+/**
+ * `MEASURED` saiu das datas reais do extrato; `INFORMED` é o dia que a pessoa
+ * digitou ao cadastrar a fonte, ainda sem histórico. É a mesma distinção do
+ * EC-206 na previsão, e a tela veste os mesmos selos.
+ */
+export type PatternOrigin = "MEASURED" | "INFORMED";
+
+export type PatternConfidence = "HIGH" | "MEDIUM" | "LOW";
+
+/** Como a data de uma queda se repete: pelo dia útil ou pelo dia do calendário. */
+export type AnchorRule =
+  | "BUSINESS_DAY_FROM_START"
+  | "BUSINESS_DAY_FROM_END"
+  | "CALENDAR_DAY";
+
+export type PurchaseCadence = "MONTHLY" | "WEEKLY";
+
+export type PurchasePaymentMode = "CASH" | "CARD";
+
+/** A estatística de uma fonte; `null` quando ainda não há padrão. */
+export interface IncomeSourcePatternStats {
+  rule: AnchorRule;
+  median: number;
+  min: number;
+  max: number;
+  monthsObserved: number;
+  firstOccurrence: string | null;
+  lastOccurrence: string | null;
+  expectedAmount: number | null;
+  confidence: PatternConfidence | null;
+  /** "por volta do 5º dia útil" — a frase já pronta do servidor. */
+  label: string | null;
+}
+
+export interface IncomeOccurrence {
+  date: string;
+  businessDayFromStart: number;
+  businessDayFromEnd: number;
+  weekday: string;
+  amount: number;
+}
+
+/**
+ * Uma queda futura, sempre com FAIXA: `expected` é a mediana, `earliest` e
+ * `latest` os extremos observados. Comprar no `expected` com o dinheiro
+ * caindo no `latest` é a regra que dá saldo negativo — por isso a
+ * recomendação parte do `latest`.
+ */
+export interface IncomeUpcoming {
+  month: string;
+  expected: string;
+  earliest: string;
+  latest: string;
+  /** Dia do calendário que caiu em fim de semana e recuou para o dia útil. */
+  adjusted: boolean;
+}
+
+/** "O vale cai 5 dias úteis antes do salário", quando as duas fontes existem. */
+export interface IncomeSourceRelation {
+  to: IncomeSourceKind;
+  offsetBusinessDays: {
+    median: number;
+    min: number;
+    max: number;
+    pairs: number;
+  };
+  linked: boolean;
+  label: string | null;
+}
+
+export interface IncomeSourcePattern {
+  incomeSourceId: string | null;
+  seriesId: string | null;
+  kind: IncomeSourceKind;
+  name: string;
+  confirmed: boolean;
+  origin: PatternOrigin;
+  pattern: IncomeSourcePatternStats | null;
+  occurrences?: IncomeOccurrence[];
+  relation?: IncomeSourceRelation | null;
+  upcoming: IncomeUpcoming[];
+}
+
+/** O que a pessoa declarou sobre como compra; `null` quando nunca salvou. */
+export interface PurchasePreference {
+  cadence: PurchaseCadence;
+  weekendPreferred: boolean;
+  /** `null` = deixar o app decidir entre conta e cartão. */
+  paymentMode: PurchasePaymentMode | null;
+  cardAccountId: string | null;
+  updatedAt: string | null;
+}
+
+/** O que o app deduziu do extrato; é o que vale enquanto não há preferência. */
+export interface PurchaseInference {
+  cadence: PurchaseCadence;
+  purchasesPerMonth: number | null;
+  weekendShare: number | null;
+  daysAfterLanding: number | null;
+  monthsObserved: number;
+  confidence: PatternConfidence | null;
+  origin: PatternOrigin;
+}
+
+export interface PurchaseCardAdvice {
+  accountId: string;
+  name: string;
+  closingDay: number | null;
+  nextClosing: string | null;
+  invoiceDue: string | null;
+  paidBySalaryOn: string | null;
+  /** "a fatura vence antes do salário cair", quando for o caso. */
+  warning: string | null;
+}
+
+export interface PurchaseAdvice {
+  cadence: PurchaseCadence;
+  /** `INFORMED` veio da preferência salva; `MEASURED` foi inferida do extrato. */
+  cadenceOrigin: PatternOrigin;
+  paymentMode: PurchasePaymentMode;
+  bestDay: string;
+  bestDayWeekday: string;
+  /** Qual fonte paga o mercado (vale antes de salário). */
+  fundingSource: IncomeSourceKind | null;
+  /** O `latest` da primeira queda futura dessa fonte. */
+  fundingDate: string | null;
+  mustLastUntil: string | null;
+  daysToCover: number | null;
+  card: PurchaseCardAdvice | null;
+  weeklyDay: string | null;
+  nextDates: string[];
+  confidence: PatternConfidence | null;
+  explanation: { headline: string; lines: string[] };
+  /**
+   * O que sustentou a recomendação. O app guarda e compara com a próxima
+   * resposta para prestar contas: "recalculado depois que o vale de 28/08
+   * entrou" (EC-202).
+   */
+  basis: { monthsObserved: number; lastOccurrence: string | null };
+}
+
+export interface IncomePattern {
+  status: IncomePatternStatus;
+  message: string | null;
+  today: string;
+  sources: IncomeSourcePattern[];
+  preference: PurchasePreference | null;
+  inferred: PurchaseInference | null;
+  advice: PurchaseAdvice | null;
+}
+
+export interface PurchasePreferencePayload {
+  cadence: PurchaseCadence;
+  weekendPreferred?: boolean;
+  paymentMode?: PurchasePaymentMode | null;
+  cardAccountId?: string | null;
+  fundingKind?: IncomeSourceKind | null;
+}
+
+/**
+ * Quando cada renda cai (em dias úteis) e o melhor dia para as compras.
+ *
+ * O padrão é DERIVADO a cada leitura a partir das datas reais do extrato —
+ * o servidor não escreve nada na fonte de renda (EC-205: o app propõe, não
+ * move). Servidor antigo responde 404: quem chama trata como "sem padrão".
+ */
+export const getIncomePattern = async (): Promise<IncomePattern> => {
+  const response = await api.get<IncomePattern>("/analytics/income-pattern");
+  return response.data;
+};
+
+export const savePurchasePreference = async (
+  payload: PurchasePreferencePayload,
+): Promise<PurchasePreference> => {
+  const response = await api.put<PurchasePreference>(
+    "/analytics/income-pattern/preference",
+    payload,
+  );
+  return response.data;
+};
+
+/** Volta a deixar o app deduzir a cadência do extrato. */
+export const clearPurchasePreference = async (): Promise<void> => {
+  await api.delete("/analytics/income-pattern/preference");
+};
+
 // ---------------------------------------------------------- Grupo familiar
 
 /**

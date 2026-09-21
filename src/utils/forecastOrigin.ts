@@ -35,7 +35,13 @@ export interface ForecastOriginLabel {
   spoken: string;
 }
 
-const ROTULOS: Record<ForecastOrigin, Omit<ForecastOriginLabel, "kind">> = {
+/**
+ * Exportado porque o padrão de renda (EC-237) veste os MESMOS selos: um dia
+ * de pagamento medido no extrato e um dia informado no cadastro são a mesma
+ * distinção que esta previsão já faz, e dois vocabulários para uma ideia só
+ * ensinariam a pessoa a desconfiar dos dois.
+ */
+export const ROTULOS: Record<ForecastOrigin, Omit<ForecastOriginLabel, "kind">> = {
   settled: {
     badge: "já entrou",
     spoken: "já aconteceu neste período; não é previsão",

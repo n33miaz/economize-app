@@ -30,6 +30,12 @@ jest.mock("../../services/api", () => ({
       remainingTotal: 0,
       series: [],
     }),
+  // Melhor dia de compra (EC-237): a Home só dispara a busca — quem lê o
+  // resultado é o PurchaseDayLine, direto do store. Explícito aqui porque o
+  // jest.mock deste arquivo já não devolve `undefined` por padrão
+  getIncomePattern: jest.fn().mockResolvedValue(null),
+  savePurchasePreference: jest.fn(),
+  clearPurchasePreference: jest.fn(),
 }));
 
 // Trocável por teste: o anúncio do pote depende de a Home estar na frente
@@ -113,8 +119,10 @@ function prepararStores() {
   useWishStore.setState({
     committed: null,
     income: null,
+    incomePattern: null,
     fetchCommitted: jest.fn().mockResolvedValue(undefined),
     fetchIncome: jest.fn().mockResolvedValue(undefined),
+    fetchIncomePattern: jest.fn().mockResolvedValue(undefined),
   } as never);
   usePreferencesStore.setState({
     hideBalance: false,
@@ -264,5 +272,106 @@ describe("Início", () => {
 
     // Falar o número que a tela esconde seria furar a própria preferência
     await waitFor(() => expect(queryByText("R$ 5.423,68")).toBeNull());
+  });
+
+  it("busca o melhor dia de compra ao ganhar foco, best-effort como o resto", async () => {
+    const fetchIncomePattern = jest.fn().mockResolvedValue(undefined);
+    useWishStore.setState({ fetchIncomePattern } as never);
+
+    montar();
+
+    await waitFor(() => expect(fetchIncomePattern).toHaveBeenCalled());
+  });
+
+  /**
+   * EC-237: a linha mora dentro do card "A vencer" — só desenha algo com
+   * `upcoming.count > 0`, então o fixture da recorrência é o que faz o bloco
+   * existir. A data fica sempre a 5 dias de "agora": o teste não pode
+   * depender de que dia é hoje de verdade.
+   */
+  const RECORRENCIA_A_VENCER = () => {
+    const emCincoDias = new Date();
+    emCincoDias.setDate(emCincoDias.getDate() + 5);
+    return [
+      {
+        id: "s1",
+        merchantKey: "netflix",
+        displayName: "Netflix",
+        categoryId: null,
+        flow: "EXPENSE",
+        cadence: "MONTHLY",
+        anchorDay: 20,
+        dayTolerance: 2,
+        amountType: "FIXED",
+        expectedAmount: 55.9,
+        occurrences: 6,
+        firstSeenAt: "2026-03-20",
+        lastSeenAt: "2026-08-20",
+        active: true,
+        dismissed: false,
+        source: "DETECTED",
+        startsAt: null,
+        endsAt: null,
+        nextDueDate: emCincoDias.toISOString().slice(0, 10),
+      },
+    ];
+  };
+
+  const PADRAO_READY = {
+    status: "READY",
+    message: null,
+    today: "2026-09-15",
+    sources: [],
+    preference: null,
+    inferred: null,
+    advice: {
+      cadence: "MONTHLY",
+      cadenceOrigin: "MEASURED",
+      paymentMode: "CASH",
+      bestDay: "2026-10-03",
+      bestDayWeekday: "SATURDAY",
+      fundingSource: null,
+      fundingDate: null,
+      mustLastUntil: "2026-11-09",
+      daysToCover: 37,
+      card: null,
+      weeklyDay: null,
+      nextDates: [],
+      confidence: "MEDIUM",
+      explanation: { headline: "Melhor dia para as compras: sáb 03/10", lines: [] },
+      basis: { monthsObserved: 3, lastOccurrence: "2026-08-28" },
+    },
+  };
+
+  it("com o padrão pronto, a linha do melhor dia aparece e leva à Previsão", async () => {
+    useRecurrenceStore.setState({
+      series: RECORRENCIA_A_VENCER(),
+      fetchSeries: jest.fn().mockResolvedValue(undefined),
+    } as never);
+    useWishStore.setState({ incomePattern: PADRAO_READY } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() =>
+      expect(getByText(/Melhor dia para as compras/)).toBeTruthy(),
+    );
+    fireEvent.press(getByText(/Melhor dia para as compras/));
+
+    expect(mockNavigate).toHaveBeenCalledWith("Previsão");
+  });
+
+  it("sem o padrão pronto (ainda não READY), a linha não ocupa espaço mesmo com contas a vencer", async () => {
+    useRecurrenceStore.setState({
+      series: RECORRENCIA_A_VENCER(),
+      fetchSeries: jest.fn().mockResolvedValue(undefined),
+    } as never);
+    useWishStore.setState({
+      incomePattern: { ...PADRAO_READY, status: "INSUFFICIENT_HISTORY", advice: null },
+    } as never);
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText("Netflix")).toBeTruthy());
+    expect(queryByText(/Melhor dia para as compras/)).toBeNull();
   });
 });

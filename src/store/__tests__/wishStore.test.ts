@@ -13,6 +13,9 @@ jest.mock("../../services/api", () => ({
   acceptIncomeSuggestion: jest.fn(),
   saveWorkProfile: jest.fn(),
   getCommittedOverview: jest.fn(),
+  getIncomePattern: jest.fn(),
+  savePurchasePreference: jest.fn(),
+  clearPurchasePreference: jest.fn(),
 }));
 
 const api = jest.requireMock("../../services/api");
@@ -339,5 +342,166 @@ describe("o que já tem dono", () => {
 
     expect(useWishStore.getState().committed).toBeNull();
     expect(useWishStore.getState().hasLoadedCommittedOnce).toBe(false);
+  });
+});
+
+/**
+ * Melhor dia de compra (EC-237). Nasce das mesmas fontes da renda — por isso
+ * mora neste store, e por isso `refreshAfterIncomeChange` também o recarrega.
+ */
+describe("melhor dia de compra", () => {
+  const padrao = (over = {}) => ({
+    status: "READY",
+    message: null,
+    today: "2026-09-15",
+    sources: [],
+    preference: null,
+    inferred: null,
+    advice: {
+      cadence: "MONTHLY",
+      cadenceOrigin: "MEASURED",
+      paymentMode: "CASH",
+      bestDay: "2026-10-03",
+      bestDayWeekday: "SATURDAY",
+      fundingSource: null,
+      fundingDate: null,
+      mustLastUntil: "2026-11-09",
+      daysToCover: 37,
+      card: null,
+      weeklyDay: null,
+      nextDates: [],
+      confidence: "MEDIUM",
+      explanation: { headline: "x", lines: [] },
+      basis: { monthsObserved: 3, lastOccurrence: "2026-08-28" },
+    },
+    ...over,
+  });
+
+  it("guarda o padrão calculado pelo servidor", async () => {
+    api.getIncomePattern.mockResolvedValue(padrao());
+
+    await useWishStore.getState().fetchIncomePattern();
+
+    const state = useWishStore.getState();
+    expect(state.incomePattern?.advice?.bestDay).toBe("2026-10-03");
+    expect(state.hasLoadedPatternOnce).toBe(true);
+    expect(state.patternError).toBeNull();
+  });
+
+  it("servidor antigo (404) vira mensagem, sem derrubar a tela", async () => {
+    api.getIncomePattern.mockRejectedValue({ response: { status: 404 } });
+
+    await useWishStore.getState().fetchIncomePattern();
+
+    const state = useWishStore.getState();
+    expect(state.patternError).not.toBeNull();
+    expect(state.hasLoadedPatternOnce).toBe(true);
+    // sem padrão nenhum: quem lê o store trata igual a "servidor sem o recurso"
+    expect(state.incomePattern).toBeNull();
+  });
+
+  it("não deixa duas buscas em voo ao mesmo tempo", async () => {
+    let resolver: (v: unknown) => void = () => {};
+    api.getIncomePattern.mockReturnValue(
+      new Promise((resolve) => {
+        resolver = resolve;
+      }),
+    );
+
+    const primeira = useWishStore.getState().fetchIncomePattern();
+    const segunda = useWishStore.getState().fetchIncomePattern();
+    resolver(padrao());
+    await Promise.all([primeira, segunda]);
+
+    expect(api.getIncomePattern).toHaveBeenCalledTimes(1);
+  });
+
+  it("salvar a preferência recarrega o padrão — senão o card ficaria com o dia antigo", async () => {
+    api.savePurchasePreference.mockResolvedValue({
+      cadence: "WEEKLY",
+      weekendPreferred: true,
+      paymentMode: "CASH",
+      cardAccountId: null,
+      updatedAt: "2026-09-15T00:00:00Z",
+    });
+    api.getIncomePattern.mockResolvedValue(padrao({ preference: { cadence: "WEEKLY" } }));
+
+    const result = await useWishStore.getState().savePurchasePreference({
+      cadence: "WEEKLY",
+      weekendPreferred: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(api.getIncomePattern).toHaveBeenCalledTimes(1);
+    expect(useWishStore.getState().incomePattern?.preference?.cadence).toBe(
+      "WEEKLY",
+    );
+    expect(useWishStore.getState().isSaving).toBe(false);
+  });
+
+  it("falha ao salvar a preferência não recarrega nada", async () => {
+    api.savePurchasePreference.mockRejectedValue({
+      response: { status: 400, data: { detail: "Escolha um cartão" } },
+    });
+
+    const result = await useWishStore
+      .getState()
+      .savePurchasePreference({ cadence: "MONTHLY" });
+
+    expect(result.ok).toBe(false);
+    expect(api.getIncomePattern).not.toHaveBeenCalled();
+    expect(useWishStore.getState().isSaving).toBe(false);
+  });
+
+  it("'deixar o app deduzir' chama o DELETE e recarrega o padrão", async () => {
+    api.clearPurchasePreference.mockResolvedValue(undefined);
+    api.getIncomePattern.mockResolvedValue(padrao({ preference: null }));
+
+    const result = await useWishStore.getState().clearPurchasePreference();
+
+    expect(result.ok).toBe(true);
+    expect(api.clearPurchasePreference).toHaveBeenCalled();
+    expect(api.getIncomePattern).toHaveBeenCalledTimes(1);
+  });
+
+  it("mudar a renda recalcula o melhor dia — só para quem já pediu antes", async () => {
+    api.getIncomePattern.mockResolvedValue(padrao());
+    await useWishStore.getState().fetchIncomePattern();
+    jest.clearAllMocks();
+    api.createIncomeSource.mockResolvedValue({});
+    api.getIncomeOverview.mockResolvedValue({
+      sources: [],
+      workProfile: null,
+      suggestions: [],
+    });
+    api.getWishes.mockResolvedValue({ baseline: baseline(), wishes: [] });
+    api.getIncomePattern.mockResolvedValue(padrao({ today: "2026-09-16" }));
+
+    await useWishStore
+      .getState()
+      .addIncome({ kind: "MEAL_VOUCHER", name: "Flash" });
+
+    expect(api.getIncomePattern).toHaveBeenCalledTimes(1);
+  });
+
+  it("quem nunca pediu o melhor dia não paga por ele ao mexer na renda", async () => {
+    api.createIncomeSource.mockResolvedValue({});
+
+    await useWishStore
+      .getState()
+      .addIncome({ kind: "SALARY", name: "Salário" });
+
+    expect(api.getIncomePattern).not.toHaveBeenCalled();
+  });
+
+  it("reset apaga também o padrão de compra", async () => {
+    api.getIncomePattern.mockResolvedValue(padrao());
+    await useWishStore.getState().fetchIncomePattern();
+
+    useWishStore.getState().reset();
+
+    const state = useWishStore.getState();
+    expect(state.incomePattern).toBeNull();
+    expect(state.hasLoadedPatternOnce).toBe(false);
   });
 });
