@@ -14,11 +14,11 @@ import Bitcoin from "lucide-react-native/dist/esm/icons/bitcoin";
 import CalendarRange from "lucide-react-native/dist/esm/icons/calendar-range";
 import ChartColumn from "lucide-react-native/dist/esm/icons/chart-column";
 import ChartLine from "lucide-react-native/dist/esm/icons/chart-line";
-import ChartPie from "lucide-react-native/dist/esm/icons/chart-pie";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import Eye from "lucide-react-native/dist/esm/icons/eye";
 import EyeOff from "lucide-react-native/dist/esm/icons/eye-off";
 import ListChecks from "lucide-react-native/dist/esm/icons/list-checks";
+import ShoppingCart from "lucide-react-native/dist/esm/icons/shopping-cart";
 import Star from "lucide-react-native/dist/esm/icons/star";
 import Tag from "lucide-react-native/dist/esm/icons/tag";
 import Target from "lucide-react-native/dist/esm/icons/target";
@@ -88,8 +88,12 @@ import { cashPositionFrom, creditPositionFrom } from "../utils/cashPosition";
 import { installmentsSummary } from "../utils/installments";
 import { buildUpcoming, type UpcomingItem } from "../utils/upcoming";
 import { useInstallmentsStore } from "../store/installmentsStore";
+import { useShoppingStore } from "../store/shoppingStore";
+import { currentOpenTrip, itemCountLabel, tripItemCount, tripTotal } from "../utils/shopping";
+import { APP_ROUTES } from "../routes/routeNames";
 import InstallmentsCard from "../components/InstallmentsCard";
 import UpcomingBillsCard from "../components/UpcomingBillsCard";
+import PurchaseDayLine from "../components/PurchaseDayLine";
 import {
   formatBRL,
   formatBRLCompact,
@@ -131,6 +135,7 @@ const BLOCK_WEIGHTS = {
   vale: 1,
   revisao: 1,
   compromisso: 3,
+  compra: 1,
   parcelamentos: 3,
   calendario: 5,
   destino: 5,
@@ -172,6 +177,13 @@ export default function Home() {
   );
   const showBalance = !hideBalance;
   const { userName } = useAuthStore();
+  // O carrinho aberto, lido do aparelho: a Home não sincroniza nada — quem
+  // fala com o servidor é a tela de Compras, e a linha aqui só anuncia
+  const comprasLocais = useShoppingStore((s) => s.trips);
+  const compraAberta = useMemo(
+    () => currentOpenTrip(comprasLocais),
+    [comprasLocais],
+  );
 
   const {
     indicators,
@@ -253,6 +265,9 @@ export default function Home() {
   // perguntar. Chamada leve, e é a mesma que a tela de Renda já usa
   const incomeSources = useWishStore((s) => s.income?.sources);
   const fetchIncome = useWishStore((s) => s.fetchIncome);
+  // EC-237: a linha do melhor dia de compra lê o mesmo store sozinha
+  // (PurchaseDayLine); aqui só dispara a busca, best-effort, no mesmo foco
+  const fetchIncomePattern = useWishStore((s) => s.fetchIncomePattern);
 
   // EC-137: o VR cai antes do salário e é gasto antes de o mês fechar. O app
   // pergunta no momento em que a compra provavelmente aconteceu — depois, a
@@ -385,6 +400,9 @@ export default function Home() {
       // adicional, não a resposta principal da tela. O store decide se a
       // chamada vale (TTL de 5 min)
       fetchInstallments();
+      // Melhor dia de compra (EC-237): best-effort, o store já engole o 404
+      // do servidor antigo — sem padrão, a linha simplesmente não aparece
+      fetchIncomePattern();
     }, [
       fetchPendingCount,
       fetchHomeMonthly,
@@ -392,6 +410,7 @@ export default function Home() {
       fetchCommitted,
       fetchIncome,
       fetchInstallments,
+      fetchIncomePattern,
       recorteDiario,
     ]),
   );
@@ -1321,7 +1340,71 @@ export default function Home() {
                   }
                   onPressItem={abrirCompromisso}
                   onPressAll={goToRecurrences}
-                />
+                >
+                  {/* EC-237: mesma pergunta ("quando o dinheiro chega"), vista
+                      pelo lado de quem vai gastá-lo — por isso mora aqui,
+                      logo depois da frase do salário, e não num card à parte */}
+                  <PurchaseDayLine />
+                </UpcomingBillsCard>
+              </Animated.View>
+            ),
+
+            /* A COMPRA EM ANDAMENTO. Quem está no mercado com o carrinho
+               aberto volta à Home pelo caminho mais curto do app — e a linha
+               é o atalho de volta ao corredor, com o total corrente para não
+               precisar abrir a tela só para saber quanto já foi */
+            compraAberta && (
+              <Animated.View
+                key="compra"
+                entering={listItemEntering(2)}
+                className="px-5 mb-5"
+              >
+                <TouchableOpacity
+                  onPress={() =>
+                    (navigation as any).navigate(APP_ROUTES.compra, {
+                      clientId: compraAberta.clientId,
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Compra em andamento${
+                    compraAberta.storeName ? ` no ${compraAberta.storeName}` : ""
+                  }: ${
+                    showBalance ? formatBRL(tripTotal(compraAberta)) : HIDDEN_SPOKEN
+                  }, ${itemCountLabel(tripItemCount(compraAberta))}. Abrir`}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    minHeight: 52,
+                    borderRadius: radius.xl,
+                    paddingHorizontal: spacing[4],
+                    paddingVertical: spacing[3],
+                    backgroundColor: t.background.surface,
+                    borderWidth: 1,
+                    borderColor: t.border.subtle,
+                  }}
+                >
+                  <ShoppingCart size={18} color={t.accent.neon} />
+                  <View style={{ flex: 1, marginLeft: spacing[3] }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: t.text.primary, fontSize: 13, fontWeight: "700" }}
+                    >
+                      {`Compra em andamento: ${
+                        showBalance ? formatBRL(tripTotal(compraAberta)) : HIDDEN
+                      } · ${itemCountLabel(tripItemCount(compraAberta))}`}
+                    </Text>
+                    {compraAberta.storeName ? (
+                      <Text
+                        numberOfLines={1}
+                        style={{ color: t.text.tertiary, fontSize: 11, marginTop: 2 }}
+                      >
+                        {compraAberta.storeName}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <ChevronRight size={18} color={t.text.tertiary} />
+                </TouchableOpacity>
               </Animated.View>
             ),
 
@@ -1718,10 +1801,13 @@ export default function Home() {
                 label="Análise"
                 onPress={goToAnalytics}
               />
+              {/* Compras entrou no lugar de Relatórios: é o que o dono usa
+                  no mercado, HOJE; Relatórios continua a um toque no Perfil
+                  e no trilho do desktop */}
               <QuickAction
-                Icon={ChartPie}
-                label="Relatórios"
-                onPress={() => navigation.navigate("Relatórios" as never)}
+                Icon={ShoppingCart}
+                label="Compras"
+                onPress={() => navigation.navigate(APP_ROUTES.compras as never)}
               />
               <QuickAction
                 Icon={ChartLine}

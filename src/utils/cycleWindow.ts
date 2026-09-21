@@ -313,6 +313,44 @@ export function formatDayMonth(iso: string): string {
   return `${pad2(parsed.day)}/${pad2(parsed.month)}`;
 }
 
+/**
+ * Dias da semana em UTC, indexados por `getUTCDay()` (0 = domingo). Tabela
+ * própria, e não `Intl` com `weekday: "short"`: o Intl pt-BR devolve "sáb."
+ * com ponto e varia entre motores, e o dia precisa sair igual no teste, no
+ * aparelho e no navegador.
+ */
+const WEEKDAY_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"] as const;
+const WEEKDAY_LONG = [
+  "domingo",
+  "segunda-feira",
+  "terça-feira",
+  "quarta-feira",
+  "quinta-feira",
+  "sexta-feira",
+  "sábado",
+] as const;
+
+function utcWeekday(parsed: { year: number; month: number; day: number }): number {
+  return new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day)).getUTCDay();
+}
+
+/**
+ * "2026-10-03" → "sáb 03/10". O dia da semana é a informação que decide se a
+ * compra cabe (fim de semana ou não), então ele vem antes da data.
+ */
+export function formatWeekdayDayMonth(iso: string): string {
+  const parsed = parseIsoDate(iso);
+  if (!parsed) return iso;
+  return `${WEEKDAY_SHORT[utcWeekday(parsed)]} ${formatDayMonth(iso)}`;
+}
+
+/** "2026-10-03" → "sábado, 3 de outubro". Versão falada de `formatWeekdayDayMonth`. */
+export function describeWeekdayDate(iso: string): string {
+  const parsed = parseIsoDate(iso);
+  if (!parsed) return iso;
+  return `${WEEKDAY_LONG[utcWeekday(parsed)]}, ${describeDate(iso)}`;
+}
+
 /** "2026-08-01T00:00:00Z" → "01 ago". Formato das listas de transação. */
 export function formatDayMonthShort(iso: string): string {
   const parsed = parseIsoDate(iso);

@@ -2,8 +2,10 @@ import {
   analysisRangeForMonth,
   clampAnchorDay,
   cycleChipLabel,
+  describeWeekdayDate,
   formatDayMonthShort,
   formatLongDate,
+  formatWeekdayDayMonth,
   cycleMonthKeyContaining,
   cycleMonthKeys,
   cycleWindowContaining,
@@ -357,5 +359,44 @@ describe("todayIso", () => {
   it("usa os componentes UTC, e não o fuso do aparelho", () => {
     // 23h de 31/12 em UTC-3 já é 1º de janeiro em UTC
     expect(todayIso(new Date("2027-01-01T02:00:00Z"))).toBe("2027-01-01");
+  });
+});
+
+/**
+ * EC-237: o dia da semana decide se a compra recomendada cabe no fim de
+ * semana, então ele precisa sair do mesmo lugar dos outros formatadores —
+ * `getUTCDay`, nunca `Intl` (que devolve "sáb." com ponto e varia entre
+ * motores) nem o fuso do aparelho.
+ */
+describe("formatWeekdayDayMonth", () => {
+  it("'2026-10-03' (sábado) -> 'sáb 03/10'", () => {
+    expect(formatWeekdayDayMonth("2026-10-03")).toBe("sáb 03/10");
+  });
+
+  it("domingo sai por extenso curto, sem ponto", () => {
+    expect(formatWeekdayDayMonth("2026-10-04")).toBe("dom 04/10");
+  });
+
+  it("atravessa a virada do ano sem trocar de dia", () => {
+    // 2027-01-01 é uma sexta-feira
+    expect(formatWeekdayDayMonth("2027-01-01")).toBe("sex 01/01");
+  });
+
+  it("texto que não é data volta inteiro", () => {
+    expect(formatWeekdayDayMonth("não é data")).toBe("não é data");
+  });
+});
+
+describe("describeWeekdayDate", () => {
+  it("'2026-10-03' -> 'sábado, 3 de outubro'", () => {
+    expect(describeWeekdayDate("2026-10-03")).toBe("sábado, 3 de outubro");
+  });
+
+  it("domingo por extenso", () => {
+    expect(describeWeekdayDate("2026-10-04")).toBe("domingo, 4 de outubro");
+  });
+
+  it("texto que não é data volta inteiro", () => {
+    expect(describeWeekdayDate("")).toBe("");
   });
 });

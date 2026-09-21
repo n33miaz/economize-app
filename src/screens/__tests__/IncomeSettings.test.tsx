@@ -1,11 +1,12 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
 } from "react-native-safe-area-context";
 
 import IncomeSettings from "../IncomeSettings";
+import { useAccountsStore } from "../../store/accountsStore";
 import { useWishStore } from "../../store/wishStore";
 
 jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
@@ -52,13 +53,16 @@ const RENDA = {
 const BASE = {
   income: RENDA,
   committed: null,
+  incomePattern: null,
   isIncomeLoading: false,
   hasLoadedIncomeOnce: true,
   incomeError: null,
   hasLoadedCommittedOnce: true,
+  hasLoadedPatternOnce: true,
   isSaving: false,
   fetchIncome: jest.fn().mockResolvedValue(undefined),
   fetchCommitted: jest.fn().mockResolvedValue(undefined),
+  fetchIncomePattern: jest.fn().mockResolvedValue(undefined),
   addIncome: jest.fn(),
   editIncome: jest.fn(),
   removeIncome: jest.fn(),
@@ -76,6 +80,10 @@ const montar = () =>
 describe("Renda e jornada", () => {
   beforeEach(() => {
     useWishStore.setState(BASE as never);
+    useAccountsStore.setState({
+      accounts: [],
+      fetchAccounts: jest.fn().mockResolvedValue(undefined),
+    } as never);
   });
 
   it("abre com a fonte de renda cadastrada", async () => {
@@ -106,5 +114,108 @@ describe("Renda e jornada", () => {
     montar();
 
     await waitFor(() => expect(fetchIncome).toHaveBeenCalled());
+  });
+
+  it("busca o padrão de compra ao abrir, best-effort como o resto", async () => {
+    const fetchIncomePattern = jest.fn().mockResolvedValue(undefined);
+    useWishStore.setState({
+      ...BASE,
+      hasLoadedPatternOnce: false,
+      fetchIncomePattern,
+    } as never);
+
+    montar();
+
+    await waitFor(() => expect(fetchIncomePattern).toHaveBeenCalled());
+  });
+
+  /**
+   * EC-237: o card "Como você faz as compras" mora logo depois do card da
+   * jornada e resume o que o app SABE — declarado, ou deduzido do extrato
+   * quando ninguém declarou nada ainda.
+   */
+  it("card de compras mostra o que foi deduzido do extrato, sem preferência salva", async () => {
+    useWishStore.setState({
+      ...BASE,
+      incomePattern: {
+        status: "READY",
+        message: null,
+        today: "2026-09-15",
+        sources: [],
+        preference: null,
+        inferred: {
+          cadence: "MONTHLY",
+          purchasesPerMonth: 1.1,
+          weekendShare: 0.83,
+          daysAfterLanding: 2,
+          monthsObserved: 3,
+          confidence: "MEDIUM",
+          origin: "MEASURED",
+        },
+        advice: null,
+      },
+    } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Como você faz as compras")).toBeTruthy());
+    expect(
+      getByText("Deduzido do extrato: mensal · fim de semana (3 meses de extrato)"),
+    ).toBeTruthy();
+  });
+
+  it("card de compras mostra a preferência declarada, com o nome do cartão", async () => {
+    useAccountsStore.setState({
+      accounts: [
+        {
+          id: "acc-1",
+          name: "Nubank",
+          type: "CREDIT_CARD",
+          institution: "Nubank",
+          statementClosingDay: 10,
+          statementDueDay: 17,
+          linked: true,
+          reportedBalance: -100,
+          reportedBalanceAt: "2026-09-16T09:00:00Z",
+          creditLimit: 3000,
+          creditLimitSharedWith: null,
+        },
+      ],
+      fetchAccounts: jest.fn().mockResolvedValue(undefined),
+    } as never);
+    useWishStore.setState({
+      ...BASE,
+      incomePattern: {
+        status: "READY",
+        message: null,
+        today: "2026-09-15",
+        sources: [],
+        preference: {
+          cadence: "MONTHLY",
+          weekendPreferred: false,
+          paymentMode: "CARD",
+          cardAccountId: "acc-1",
+          updatedAt: "2026-09-01T00:00:00Z",
+        },
+        inferred: null,
+        advice: null,
+      },
+    } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() =>
+      expect(getByText("Mensal · no Nubank")).toBeTruthy(),
+    );
+  });
+
+  it("tocar o card de compras abre a folha de preferência", async () => {
+    const { getByLabelText, getByText } = montar();
+
+    await waitFor(() => expect(getByText("Renda e jornada")).toBeTruthy());
+    fireEvent.press(getByLabelText("Ajustar como você faz as compras"));
+
+    // Marcador exclusivo da folha — o card de trás também tem o mesmo título
+    await waitFor(() => expect(getByText("Com que frequência")).toBeTruthy());
   });
 });

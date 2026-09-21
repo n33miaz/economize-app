@@ -249,6 +249,12 @@ export const useAuthStore = create(
         // acabou de ser jogado fora
         const { useNewsStore } = require("./newsStore");
         useNewsStore.getState().reset();
+
+        // O carrinho de compras é da conta: as idas ao mercado, os preços
+        // anotados e o que ainda não subiu. Sair apaga — e o que não
+        // sincronizou vai junto, como em todo store por conta
+        const { useShoppingStore } = require("./shoppingStore");
+        useShoppingStore.getState().reset();
       },
 
       clearError: () => set({ error: null }),

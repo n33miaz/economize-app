@@ -47,6 +47,7 @@ export default function UpcomingBillsCard({
   salaryLine,
   onPressItem,
   onPressAll,
+  children,
 }: {
   overview: UpcomingOverview;
   /** Respeita o olhinho da Home: valor escondido também não é falado. */
@@ -57,6 +58,12 @@ export default function UpcomingBillsCard({
   salaryLine?: string | null;
   onPressItem: (item: UpcomingItem) => void;
   onPressAll: () => void;
+  /**
+   * O que vem logo depois da frase do salário — hoje, a linha do melhor dia
+   * de compra (EC-237). É a mesma pergunta ("quando o dinheiro chega") vista
+   * pelo lado de quem vai gastá-lo, e por isso mora aqui e não num card só.
+   */
+  children?: React.ReactNode;
 }) {
   const t = useTheme();
 
@@ -260,6 +267,8 @@ export default function UpcomingBillsCard({
           {salaryLine}
         </Text>
       ) : null}
+
+      {children}
 
       {riskLabel ? (
         <View

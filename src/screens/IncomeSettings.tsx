@@ -5,14 +5,17 @@ import Banknote from "lucide-react-native/dist/esm/icons/banknote";
 import CalendarClock from "lucide-react-native/dist/esm/icons/calendar-clock";
 import Clock from "lucide-react-native/dist/esm/icons/clock";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
+import ShoppingCart from "lucide-react-native/dist/esm/icons/shopping-cart";
 import Trash from "lucide-react-native/dist/esm/icons/trash";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { SHEET_PADDING, spacing } from "../theme/ds";
+import { useAccountsStore } from "../store/accountsStore";
 import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
 import { formatBRL } from "../utils/money";
+import { preferenceSummary } from "../utils/purchaseDay";
 import {
   describeSalaryTiming,
   formatDueDate,
@@ -30,6 +33,7 @@ import PageContainer from "../components/PageContainer";
 import SectionTitle from "../components/SectionTitle";
 import CustomModal from "../components/CustomModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
+import PurchasePreferenceSheet from "../components/PurchasePreferenceSheet";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 
@@ -124,19 +128,24 @@ export default function IncomeSettings() {
   const {
     income,
     committed,
+    incomePattern,
     isIncomeLoading,
     hasLoadedIncomeOnce,
     hasLoadedCommittedOnce,
+    hasLoadedPatternOnce,
     isSaving,
     incomeError,
     fetchIncome,
     fetchCommitted,
+    fetchIncomePattern,
     addIncome,
     editIncome,
     removeIncome,
     acceptSuggestion,
     saveJourney,
   } = useWishStore();
+  const accounts = useAccountsStore((s) => s.accounts);
+  const fetchAccounts = useAccountsStore((s) => s.fetchAccounts);
 
   const [formOpen, setFormOpen] = useState(false);
   const [kind, setKind] = useState<IncomeSourceKind>("SALARY");
@@ -148,10 +157,26 @@ export default function IncomeSettings() {
   const [dias, setDias] = useState("5");
   const [horas, setHoras] = useState("8");
 
+  const [compraOpen, setCompraOpen] = useState(false);
+
   useEffect(() => {
     if (!hasLoadedIncomeOnce) fetchIncome();
     if (!hasLoadedCommittedOnce) fetchCommitted();
-  }, [hasLoadedIncomeOnce, fetchIncome, hasLoadedCommittedOnce, fetchCommitted]);
+    // Best-effort, como as outras duas: servidor antigo (404) não pode
+    // impedir o resto da tela de abrir
+    if (!hasLoadedPatternOnce) fetchIncomePattern();
+    // O nome do cartão no resumo de "como você compra" precisa das contas —
+    // o store devolve na hora quando outra tela já carregou
+    fetchAccounts();
+  }, [
+    hasLoadedIncomeOnce,
+    fetchIncome,
+    hasLoadedCommittedOnce,
+    fetchCommitted,
+    hasLoadedPatternOnce,
+    fetchIncomePattern,
+    fetchAccounts,
+  ]);
 
   // Abrir a jornada já preenchida com o que existe evita redigitar para mudar
   // meia hora — e deixa claro que é edição, não cadastro do zero
@@ -283,6 +308,47 @@ export default function IncomeSettings() {
                   style={{ color: t.accent.neon }}
                 >
                   {perfil ? "Editar" : "Informar"}
+                </Text>
+              </Pressable>
+
+              {/* --------------------------------- como você faz as compras
+                  EC-237: mesma anatomia do card da jornada, mas o ícone vai
+                  em `elevated` (não `accent.neonMuted`) — esta tela já é a
+                  mais densa de âmbar do app (catraca do orçamento de accent),
+                  e o selo aqui é informação de resumo, não uma ação nova */}
+              <Pressable
+                onPress={() => setCompraOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Ajustar como você faz as compras"
+                className="bg-cardBackground rounded-2xl p-4 border border-border flex-row items-center mt-3"
+              >
+                <View
+                  className="w-10 h-10 rounded-xl items-center justify-center"
+                  style={{ backgroundColor: t.background.elevated }}
+                >
+                  <ShoppingCart size={20} color={t.text.secondary} />
+                </View>
+                <View className="flex-1 ml-3">
+                  <Text className="text-sm font-bold text-textPrimary">
+                    Como você faz as compras
+                  </Text>
+                  <Text className="text-xs text-textSecondary mt-0.5">
+                    {preferenceSummary(
+                      incomePattern?.preference,
+                      incomePattern?.inferred,
+                      incomePattern?.preference?.paymentMode === "CARD"
+                        ? (accounts.find(
+                            (a) => a.id === incomePattern.preference?.cardAccountId,
+                          )?.name ?? null)
+                        : null,
+                    )}
+                  </Text>
+                </View>
+                <Text
+                  className="text-xs font-bold"
+                  style={{ color: t.accent.neon }}
+                >
+                  Ajustar
                 </Text>
               </Pressable>
 
@@ -588,6 +654,11 @@ export default function IncomeSettings() {
           </Pressable>
         </View>
       </CustomModal>
+
+      <PurchasePreferenceSheet
+        visible={compraOpen}
+        onClose={() => setCompraOpen(false)}
+      />
     </View>
   );
 }
