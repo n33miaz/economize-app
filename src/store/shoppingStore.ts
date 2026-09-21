@@ -100,7 +100,12 @@ interface ShoppingState {
   toggleItemChecked: (tripClientId: string, itemClientId: string) => void;
   removeItem: (tripClientId: string, itemClientId: string) => void;
   /** Fecha localmente e tenta subir na hora; offline fica na fila. */
-  closeTrip: (clientId: string, receiptTotal: number | null) => Promise<void>;
+  closeTrip: (
+    clientId: string,
+    receiptTotal: number | null,
+    /** A chave do cupom, quando a nota foi lida no caixa. */
+    receiptKey?: string | null,
+  ) => Promise<void>;
   /** Reabre uma compra fechada por engano. */
   reopenTrip: (clientId: string) => void;
   removeTrip: (clientId: string) => void;
@@ -161,6 +166,8 @@ export const useShoppingStore = create(
           startedAt: now,
           closedAt: null,
           receiptTotal: null,
+          receiptKey: null,
+          receiptIssuerCnpj: null,
           notes: null,
           shareWithFamily,
           items: [],
@@ -308,7 +315,7 @@ export const useShoppingStore = create(
         }));
       },
 
-      closeTrip: async (clientId, receiptTotal) => {
+      closeTrip: async (clientId, receiptTotal, receiptKey) => {
         const now = nowIso();
         set((state) => ({
           trips: sortTrips(
@@ -320,6 +327,8 @@ export const useShoppingStore = create(
                     closedAt: now,
                     receiptTotal:
                       receiptTotal != null && receiptTotal > 0 ? receiptTotal : null,
+                    // Nota já anexada não se apaga por fechar de novo sem ela
+                    receiptKey: receiptKey ?? trip.receiptKey,
                     clientUpdatedAt: now,
                     dirty: true,
                   }

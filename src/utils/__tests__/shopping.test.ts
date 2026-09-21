@@ -70,6 +70,8 @@ const trip = (over: Partial<ShoppingTrip> = {}): ShoppingTrip => ({
   startedAt: T0,
   closedAt: null,
   receiptTotal: null,
+  receiptKey: null,
+  receiptIssuerCnpj: null,
   notes: null,
   shareWithFamily: false,
   items: [],

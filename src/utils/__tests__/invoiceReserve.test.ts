@@ -14,6 +14,7 @@ const fatura = (total: number, open = false): AccountInvoice => ({
   transactionCount: 2,
   open,
   reserve: null,
+  providerBill: null,
   transactions: [],
 });
 

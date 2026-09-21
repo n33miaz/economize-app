@@ -79,6 +79,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "O Economize usa a câmera para ler o QR code da nota fiscal e fotografar preços no mercado."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

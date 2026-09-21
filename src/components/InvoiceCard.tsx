@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
 import ChevronDown from "lucide-react-native/dist/esm/icons/chevron-down";
+import Landmark from "lucide-react-native/dist/esm/icons/landmark";
 import PiggyBank from "lucide-react-native/dist/esm/icons/piggy-bank";
 
 import type { AccountInvoice, BankTransaction, Category } from "../services/api";
@@ -20,6 +21,7 @@ import {
 import { formatDayMonth } from "../utils/cycleWindow";
 import { formatBRL } from "../utils/money";
 import { describeCoverage, readReserve } from "../utils/invoiceReserve";
+import { compareInvoice, describeProviderBill } from "../utils/providerBill";
 import TransactionRow from "./TransactionRow";
 
 interface InvoiceCardProps {
@@ -72,6 +74,10 @@ export default function InvoiceCard({
   const due = invoiceDueLabel(invoice);
   const count = invoice.transactionCount;
   const reserve = invoice.reserve;
+  // O número do emissor ao lado do nosso. Nulo quando ele não entrega fatura
+  // fechada — que é o caso de todo cartão sem conector
+  const comparacao = compareInvoice(invoice);
+  const linhaDoBanco = describeProviderBill(invoice.providerBill);
   const reading = readReserve(invoice);
 
   return (
@@ -255,6 +261,70 @@ export default function InvoiceCard({
             </View>
           ))}
         </View>
+
+        {/* A fatura que o BANCO fechou. Entra ANTES da reserva porque ela
+            fala do mesmo número que o topo do card — e quando os dois
+            discordam, é porque falta lançamento aqui, não porque o banco
+            errou. Ver utils/providerBill.ts */}
+        {comparacao ? (
+          <View
+            accessible
+            accessibilityLabel={`${comparacao.headline}. ${comparacao.detail}`}
+            style={{
+              marginTop: spacing[2],
+              paddingHorizontal: spacing[3],
+              paddingVertical: spacing[2],
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor:
+                comparacao.agreement === "faltando" ? t.chart.down : t.border.subtle,
+              backgroundColor: t.background.elevated,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Landmark
+                size={14}
+                color={
+                  comparacao.agreement === "faltando" ? t.chart.down : t.text.tertiary
+                }
+              />
+              <Text
+                style={{
+                  color:
+                    comparacao.agreement === "faltando" ? t.chart.down : t.text.primary,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  marginLeft: spacing[2],
+                  flex: 1,
+                }}
+              >
+                {comparacao.headline}
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: t.text.tertiary,
+                fontSize: 11,
+                lineHeight: 15,
+                marginTop: 2,
+              }}
+            >
+              {comparacao.detail}
+            </Text>
+            {linhaDoBanco ? (
+              <Text
+                style={{
+                  color: t.text.secondary,
+                  fontSize: 11,
+                  fontWeight: "700",
+                  marginTop: 2,
+                }}
+              >
+                {linhaDoBanco}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Reserva (EC-181): dinheiro que JÁ está separado para esta fatura.
             Fica FORA da fileira de chips de propósito — aqueles três são do
