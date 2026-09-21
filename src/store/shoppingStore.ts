@@ -22,8 +22,10 @@ import {
   makeClientId,
   mergeTrip,
   mergeTripLists,
+  namesNotOnTrip,
   normalizeItemName,
   nowIso,
+  pendingMatch,
   preferNewerSummary,
   sortTrips,
   tripVersion,
@@ -85,6 +87,11 @@ interface ShoppingState {
     patch: Partial<Pick<ShoppingTrip, "storeName" | "budget" | "notes" | "shareWithFamily">>,
   ) => void;
   addItem: (tripClientId: string, input: ItemInput) => string;
+  /**
+   * Escreve a LISTA de uma vez: nomes que ainda não estão na compra entram
+   * desmarcados, na ordem em que foram escritos. Devolve quantos entraram.
+   */
+  addListItems: (tripClientId: string, names: string[]) => number;
   updateItem: (
     tripClientId: string,
     itemClientId: string,
@@ -180,15 +187,64 @@ export const useShoppingStore = create(
 
       addItem: (tripClientId, input) => {
         const now = nowIso();
+        const trip = get().trips.find((t) => t.clientId === tripClientId);
+
+        // A LISTA DÁ CHECK SOZINHA. Se o nome que acabou de ser anotado no
+        // corredor já estava na lista esperando, ele CUMPRE aquele item em vez
+        // de criar uma segunda linha do mesmo produto — que era exatamente o
+        // que faria a pessoa achar que ainda falta pegar o que já está no
+        // carrinho. Só vale para um item de verdade (pego): continuar
+        // escrevendo a lista não marca nada.
+        const pego = input.checked !== false;
+        const naLista = trip && pego ? pendingMatch(trip, input.name) : null;
+        if (naLista) {
+          get().updateItem(tripClientId, naLista.clientId, {
+            // o nome fica como a pessoa escreveu agora: quem está com o
+            // produto na mão viu a embalagem, quem escreveu a lista, não
+            name: input.name.trim(),
+            quantity: input.quantity > 0 ? input.quantity : 1,
+            unitPrice: input.unitPrice > 0 ? input.unitPrice : 0,
+            promoNote: input.promoNote?.trim() ? input.promoNote.trim() : null,
+            photoRef: input.photoRef ?? null,
+            checked: true,
+          });
+          return naLista.clientId;
+        }
+
         const item = itemFrom(input, now);
         set((state) => ({
-          trips: state.trips.map((trip) =>
-            trip.clientId === tripClientId
-              ? { ...trip, items: [...trip.items, item], dirty: true }
-              : trip,
+          trips: state.trips.map((t) =>
+            t.clientId === tripClientId
+              ? { ...t, items: [...t.items, item], dirty: true }
+              : t,
           ),
         }));
         return item.clientId;
+      },
+
+      addListItems: (tripClientId, names) => {
+        const now = nowIso();
+        const trip = get().trips.find((t) => t.clientId === tripClientId);
+        if (!trip) return 0;
+        // Nome que já está na compra não entra de novo, pego ou não: a lista
+        // serve para não esquecer, e repetir o que já está nela é ruído
+        const novos = namesNotOnTrip(trip, names);
+        if (novos.length === 0) return 0;
+
+        const itens = novos.map((name) =>
+          itemFrom(
+            { name, quantity: 1, unitPrice: 0, promoNote: null, photoRef: null, checked: false },
+            now,
+          ),
+        );
+        set((state) => ({
+          trips: state.trips.map((t) =>
+            t.clientId === tripClientId
+              ? { ...t, items: [...t.items, ...itens], dirty: true }
+              : t,
+          ),
+        }));
+        return itens.length;
       },
 
       updateItem: (tripClientId, itemClientId, patch) => {

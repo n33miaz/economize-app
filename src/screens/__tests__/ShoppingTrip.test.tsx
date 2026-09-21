@@ -6,6 +6,7 @@ import ShoppingTrip from "../ShoppingTrip";
 import { useConfirmStore } from "../../store/confirmStore";
 import { useShoppingStore } from "../../store/shoppingStore";
 import { formatBRL } from "../../utils/money";
+import { tripTotal } from "../../utils/shopping";
 
 jest.mock("../../services/api", () => ({
   __esModule: true,
@@ -123,6 +124,70 @@ describe("Compra (a tela do supermercado)", () => {
     // A rede falhou e nada quebrou: a linha diz que está salvo aqui
     expect(getByText("Ainda não sincronizado · salvo neste aparelho")).toBeTruthy();
     expect(useShoppingStore.getState().trips[0].items).toHaveLength(3);
+  });
+
+  it("escreve a lista e ela vai dando check conforme o que é anotado", async () => {
+    const { getByLabelText, getByText, findByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText("Carrinho vazio")).toBeTruthy());
+
+    // 1. Escrever a lista antes de entrar no mercado, de uma vez só
+    fireEvent.press(getByText("Escrever a lista"));
+    await waitFor(() => expect(getByLabelText("Item da lista")).toBeTruthy());
+    fireEvent.changeText(getByLabelText("Item da lista"), "Arroz\nFeijão\nCafé");
+    fireEvent.press(getByLabelText("Adicionar à lista"));
+
+    // A lista aparece como o que FALTA, e não custa nada ainda
+    expect(await findByText("Faltam 3 itens")).toBeTruthy();
+    expect(queryByText("No carrinho · 3 itens")).toBeNull();
+    expect(useShoppingStore.getState().trips[0].items).toHaveLength(3);
+    expect(tripTotal(useShoppingStore.getState().trips[0])).toBe(0);
+
+    // 2. No corredor: anotar o café com o preço da etiqueta
+    fireEvent.press(getByLabelText("Fechar"));
+    fireEvent.press(getByLabelText("Adicionar item"));
+    await waitFor(() => expect(getByLabelText("Nome do item")).toBeTruthy());
+    adicionar(getByLabelText, "café", "16,60");
+
+    // O item da lista foi CUMPRIDO: some do que falta, entra no carrinho, e
+    // não virou uma segunda linha de café
+    expect(await findByText("Faltam 2 itens")).toBeTruthy();
+    expect(getByText("No carrinho · 1 item")).toBeTruthy();
+    const compra = useShoppingStore.getState().trips[0];
+    expect(compra.items).toHaveLength(3);
+    expect(compra.items.filter((i) => i.checked)).toHaveLength(1);
+    expect(tripTotal(compra)).toBe(16.6);
+  });
+
+  it("item da lista diz 'a pegar' em vez de reclamar que falta preço", async () => {
+    const { getByLabelText, getByText, findByText } = montar();
+
+    await waitFor(() => expect(getByText("Carrinho vazio")).toBeTruthy());
+    fireEvent.press(getByText("Escrever a lista"));
+    await waitFor(() => expect(getByLabelText("Item da lista")).toBeTruthy());
+    fireEvent.changeText(getByLabelText("Item da lista"), "Arroz");
+    fireEvent.press(getByLabelText("Adicionar à lista"));
+
+    // Ninguém foi buscar o preço ainda — "sem preço" ali soaria a dado faltando
+    expect(await findByText("1 un · a pegar")).toBeTruthy();
+  });
+
+  it("o mesmo nome escrito duas vezes não entra duas vezes na lista", async () => {
+    const { getByLabelText, getByText, findByText } = montar();
+
+    await waitFor(() => expect(getByText("Carrinho vazio")).toBeTruthy());
+    fireEvent.press(getByText("Escrever a lista"));
+    await waitFor(() => expect(getByLabelText("Item da lista")).toBeTruthy());
+    fireEvent.changeText(getByLabelText("Item da lista"), "Arroz");
+    fireEvent.press(getByLabelText("Adicionar à lista"));
+    await findByText("Falta 1 item");
+
+    fireEvent.changeText(getByLabelText("Item da lista"), "arroz");
+    fireEvent.press(getByLabelText("Adicionar à lista"));
+
+    // Dizer o motivo é mais útil que um silêncio que parece falha
+    expect(await findByText("Esse já está na lista.")).toBeTruthy();
+    expect(useShoppingStore.getState().trips[0].items).toHaveLength(1);
   });
 
   it("passar do orçamento pinta o aviso", async () => {

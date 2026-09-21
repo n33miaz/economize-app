@@ -9,7 +9,7 @@ import Card from "./Card";
 import CategoryPickerSheet from "./CategoryPickerSheet";
 import { type BudgetStatus, getBudgetStatus } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacing } from "../theme/ds";
+import { spacing, touchArea } from "../theme/ds";
 import type { AnalysisRange } from "../utils/cycleWindow";
 
 interface Props {
@@ -74,9 +74,9 @@ export default function BudgetPanel({ range }: Props) {
           </Text>
           <TouchableOpacity
             onPress={() => setPicking(true)}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Pôr um teto numa categoria"
+            style={touchArea(18)}
           >
             <Plus size={18} color={t.accent.neon} />
           </TouchableOpacity>

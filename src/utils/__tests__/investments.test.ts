@@ -16,6 +16,7 @@ import {
   formatRate,
   formatRelativeTime,
   formatShortDate,
+  groupPositionsByInstitution,
   groupPositionsByType,
   hasTreasuryInterest,
   indexerLabel,
@@ -321,6 +322,48 @@ describe("groupPositionsByType", () => {
 
   it("lista vazia devolve nenhum grupo", () => {
     expect(groupPositionsByType([])).toEqual([]);
+  });
+});
+
+describe("groupPositionsByInstitution", () => {
+  it("ordena pelo TOTAL de cada instituição, não por uma ordem escrita à mão", () => {
+    // Tipo é taxonomia e cabe numa ordem fixa; instituição é a carteira de
+    // cada pessoa, e ali quem manda é o tamanho
+    const groups = groupPositionsByInstitution([
+      position({ id: "a", institution: "Banco Inter", currentValue: 100 }),
+      position({ id: "b", institution: "Nubank", currentValue: 900 }),
+      position({ id: "c", institution: "Banco Inter", currentValue: 300 }),
+    ]);
+
+    expect(groups.map((g) => g.label)).toEqual(["Nubank", "Banco Inter"]);
+    expect(groups[1].positions.map((p) => p.id)).toEqual(["c", "a"]);
+  });
+
+  it("sem instituição fica por último, mesmo sendo a maior soma", () => {
+    // Ausência de dado não é um emissor, e promovê-la ao topo da carteira por
+    // tamanho daria destaque justamente ao que não se sabe
+    const groups = groupPositionsByInstitution([
+      position({ id: "a", institution: null, currentValue: 5000 }),
+      position({ id: "b", institution: "Nubank", currentValue: 10 }),
+      position({ id: "c", institution: "   ", currentValue: 1 }),
+    ]);
+
+    expect(groups.map((g) => g.label)).toEqual(["Nubank", "Sem instituição"]);
+    // o nome em branco cai no mesmo balde do nulo
+    expect(groups[1].positions.map((p) => p.id)).toEqual(["a", "c"]);
+  });
+
+  it("posição sem valor não empurra a instituição para cima", () => {
+    const groups = groupPositionsByInstitution([
+      position({ id: "a", institution: "XP", currentValue: null }),
+      position({ id: "b", institution: "Nubank", currentValue: 10 }),
+    ]);
+
+    expect(groups.map((g) => g.label)).toEqual(["Nubank", "XP"]);
+  });
+
+  it("lista vazia devolve nenhum grupo", () => {
+    expect(groupPositionsByInstitution([])).toEqual([]);
   });
 });
 
