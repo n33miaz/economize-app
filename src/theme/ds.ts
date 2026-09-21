@@ -124,6 +124,48 @@ export const motion = {
   },
 } as const;
 
+/** O alvo de toque mínimo — 44 px, o piso das duas plataformas. */
+export const TOUCH_MIN = 44;
+
+/**
+ * Cresce o alvo de toque de um ícone SEM mover nada na tela.
+ *
+ * <p><b>Por que não `hitSlop`.</b> Ele resolve no Android e no iOS, e é o que
+ * o app usava em toda parte — mas no <b>navegador ele não faz nada</b>: o
+ * react-native-web não tem como estender a área de acerto de uma caixa, e
+ * quem decide o que recebe o clique é o modelo de caixas do CSS. Medido em
+ * 21/09/2026: um clique 8 px fora de um botão com `hitSlop` de 10 não
+ * disparou; o mesmo clique no centro disparou. E o navegador no iPhone é o
+ * foco declarado do dono — ali o olho que esconde os valores era um alvo de
+ * 18 × 18, do tamanho de uma unha.
+ *
+ * <p><b>Como isto funciona.</b> Cresce por dentro (padding) e devolve o mesmo
+ * tanto por fora (margem negativa). A caixa que recebe o toque fica maior; a
+ * caixa que ocupa espaço no layout continua exatamente do mesmo tamanho, e o
+ * ícone não anda um pixel. Vale nas duas plataformas, e por isso substitui o
+ * `hitSlop` em vez de conviver com ele.
+ *
+ * <p><b>Cuidado com vizinhos.</b> Dois ícones lado a lado crescem um na
+ * direção do outro: a folga entre eles tem de ser pelo menos o dobro do que
+ * cada um cresce, senão um passa a comer o toque do outro. Quando não houver
+ * espaço, é melhor afastar os dois do que fingir que cabe.
+ */
+export function touchArea(visualSize: number, min: number = TOUCH_MIN) {
+  const folga = Math.max(0, Math.ceil((min - visualSize) / 2));
+  return folga === 0 ? {} : { padding: folga, margin: -folga };
+}
+
+/**
+ * A mesma ideia, só na vertical: para link de texto, que já é largo o
+ * bastante e peca só na altura ("Ver o extrato inteiro" tinha 17 px).
+ */
+export function touchHeight(visualHeight: number, min: number = TOUCH_MIN) {
+  const folga = Math.max(0, Math.ceil((min - visualHeight) / 2));
+  return folga === 0
+    ? {}
+    : { paddingVertical: folga, marginVertical: -folga };
+}
+
 export const ds = {
   spacing,
   sheetPadding: SHEET_PADDING,
@@ -132,4 +174,7 @@ export const ds = {
   shadow,
   typography,
   motion,
+  touchMin: TOUCH_MIN,
+  touchArea,
+  touchHeight,
 } as const;

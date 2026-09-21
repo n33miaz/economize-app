@@ -91,6 +91,18 @@ export interface BudgetProgress {
 /** A partir daqui a barra avisa antes de estourar. */
 export const BUDGET_WARNING_RATIO = 0.85;
 
+/**
+ * Tamanho máximo de um nome de item — o mesmo do servidor.
+ *
+ * <p>Vale principalmente para a lista escrita de uma vez: quem cola a lista do
+ * bloco de notas manda frase inteira de vez em quando, e é melhor cortar aqui
+ * do que levar um 400 no meio da sincronização, já no mercado.
+ */
+export const ITEM_NAME_MAX = 120;
+
+/** Quantos itens uma lista escrita de uma vez pode trazer. */
+export const LIST_PASTE_LIMIT = 60;
+
 /** Quantas sugestões de nome a folha mostra. */
 export const SUGGESTION_LIMIT = 6;
 
@@ -174,9 +186,125 @@ export function itemCountLabel(count: number): string {
   return count === 1 ? "1 item" : `${count} itens`;
 }
 
-/** "R$ 312,40 · 14 itens" — a manchete da compra, igual na Home e na tela. */
+/**
+ * A LISTA DE COMPRAS, que é o mesmo item visto antes de ele existir.
+ *
+ * <p><b>O pedido do dono (21/09/2026):</b> <i>"quero também conseguir fazer
+ * uma lista de compras — quando eu estiver anotando/tirando foto das compras
+ * no mercado, a lista ir dando check para eu não esquecer de nada"</i>.
+ *
+ * <p>Não virou entidade nova, e isso é uma decisão. Um item da lista e um item
+ * do carrinho são <b>o mesmo produto em dois momentos</b>: "arroz" que eu
+ * pretendo pegar e "arroz" que eu peguei por R$ 24,90. Duas tabelas obrigariam
+ * a casar as duas o tempo todo — e casar errado é justamente o que faria a
+ * lista não dar check. O campo `checked` já dizia "está no carrinho"; quem não
+ * está, está na lista. De quebra, a lista já sincroniza com a casa e já entra
+ * na soma certa (item desmarcado não custa nada), sem uma linha de servidor.
+ */
+
+/**
+ * O item da LISTA que este nome vem cumprir, se houver.
+ *
+ * <p>A comparação é pelo nome normalizado, o mesmo que serve de chave ao
+ * histórico de preços: "Arroz Tio João 5kg" e "arroz tio joao 5KG" são a mesma
+ * coisa para quem está com o carrinho na mão.
+ */
+export function pendingMatch(
+  trip: Pick<ShoppingTrip, "items">,
+  name: string,
+): ShoppingItem | null {
+  const alvo = normalizeItemName(name);
+  if (!alvo) return null;
+  return (
+    activeItems(trip).find(
+      (item) => !item.checked && normalizeItemName(item.name) === alvo,
+    ) ?? null
+  );
+}
+
+/** O que falta pegar e o que já está no carrinho, nessa ordem de leitura. */
+export interface TripSections {
+  pending: ShoppingItem[];
+  picked: ShoppingItem[];
+}
+
+/**
+ * A tela lê de cima para baixo o que ainda falta.
+ *
+ * <p>Dentro de cada bloco a ordem de inserção é mantida de propósito: é a
+ * ordem em que a pessoa escreveu a lista, que costuma ser a ordem em que ela
+ * anda pelo mercado. Reordenar por nome ou por preço destruiria isso.
+ */
+export function tripSections(trip: Pick<ShoppingTrip, "items">): TripSections {
+  const vivos = activeItems(trip);
+  return {
+    pending: vivos.filter((item) => !item.checked),
+    picked: vivos.filter((item) => item.checked),
+  };
+}
+
+/**
+ * A lista escrita de uma vez vira nomes.
+ *
+ * <p>Aceita uma por linha e também separadas por vírgula ou ponto e vírgula,
+ * porque as três formas aparecem quando alguém cola do bloco de notas ou de
+ * uma mensagem. Numeração de lista ("1. arroz", "- arroz") sai fora: ela é
+ * marca do texto, não parte do nome do produto.
+ */
+export function parseListNames(raw: string): string[] {
+  const vistos = new Set<string>();
+  const nomes: string[] = [];
+  raw
+    .split(/[\r\n;,]+/)
+    .map((pedaco) =>
+      pedaco
+        .replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "")
+        .trim()
+        .slice(0, ITEM_NAME_MAX),
+    )
+    .filter(Boolean)
+    .forEach((nome) => {
+      const chave = normalizeItemName(nome);
+      if (!chave || vistos.has(chave)) return;
+      vistos.add(chave);
+      nomes.push(nome);
+    });
+  return nomes.slice(0, LIST_PASTE_LIMIT);
+}
+
+/** Os nomes que ainda NÃO estão nesta compra, pegos ou não. */
+export function namesNotOnTrip(
+  trip: Pick<ShoppingTrip, "items">,
+  names: string[],
+): string[] {
+  const jaTem = new Set(
+    activeItems(trip).map((item) => normalizeItemName(item.name)),
+  );
+  return names.filter((nome) => {
+    const chave = normalizeItemName(nome);
+    if (!chave || jaTem.has(chave)) return false;
+    jaTem.add(chave);
+    return true;
+  });
+}
+
+/** "Faltam 3 itens" — o que a tela precisa dizer para ninguém esquecer nada. */
+export function pendingLabel(count: number): string {
+  if (count === 0) return "Nada na lista";
+  return count === 1 ? "Falta 1 item" : `Faltam ${count} itens`;
+}
+
+/**
+ * "R$ 312,40 · 14 itens · faltam 3" — a manchete da compra.
+ *
+ * <p>O que falta entra aqui, e não só na tela da compra, porque é a informação
+ * que decide se dá para ir ao caixa. Quem olha a lista de compras de relance
+ * quer saber isso sem abrir.
+ */
 export function tripHeadline(trip: Pick<ShoppingTrip, "items">): string {
-  return `${formatBRL(tripTotal(trip))} · ${itemCountLabel(tripItemCount(trip))}`;
+  const base = `${formatBRL(tripTotal(trip))} · ${itemCountLabel(tripItemCount(trip))}`;
+  const faltam = tripUncheckedCount(trip);
+  return faltam > 0 ? `${base} · faltam ${faltam}` : base;
 }
 
 /** Nulo sem orçamento: a barra some em vez de desenhar um teto inventado. */
@@ -216,9 +344,16 @@ export function formatQuantity(quantity: number): string {
 
 /** "2 × R$ 5,49", ou "2 un · sem preço" enquanto o preço não foi olhado. */
 export function describeItemLine(
-  item: Pick<ShoppingItem, "quantity" | "unitPrice">,
+  item: Pick<ShoppingItem, "quantity" | "unitPrice"> &
+    Partial<Pick<ShoppingItem, "checked">>,
 ): string {
-  if (item.unitPrice <= 0) return `${formatQuantity(item.quantity)} un · sem preço`;
+  if (item.unitPrice <= 0) {
+    // Item da lista ainda não pego não tem preço porque ninguém olhou a
+    // etiqueta — dizer "sem preço" ali soa a dado faltando, quando é só a
+    // ordem natural das coisas. Já um item PEGO sem preço é de fato um branco
+    const unidades = `${formatQuantity(item.quantity)} un`;
+    return item.checked === false ? `${unidades} · a pegar` : `${unidades} · sem preço`;
+  }
   return `${formatQuantity(item.quantity)} × ${formatBRL(item.unitPrice)}`;
 }
 

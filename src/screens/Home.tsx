@@ -38,7 +38,7 @@ import type { DailyTotal } from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { useEsconderBarra } from "../hooks/useEsconderBarra";
-import { radius, spacing } from "../theme/ds";
+import { radius, spacing, touchArea, touchHeight } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import useNewsData from "../hooks/useNewsData";
@@ -89,7 +89,13 @@ import { installmentsSummary } from "../utils/installments";
 import { buildUpcoming, type UpcomingItem } from "../utils/upcoming";
 import { useInstallmentsStore } from "../store/installmentsStore";
 import { useShoppingStore } from "../store/shoppingStore";
-import { currentOpenTrip, itemCountLabel, tripItemCount, tripTotal } from "../utils/shopping";
+import {
+  currentOpenTrip,
+  itemCountLabel,
+  tripItemCount,
+  tripTotal,
+  tripUncheckedCount,
+} from "../utils/shopping";
 import { APP_ROUTES } from "../routes/routeNames";
 import InstallmentsCard from "../components/InstallmentsCard";
 import UpcomingBillsCard from "../components/UpcomingBillsCard";
@@ -884,7 +890,9 @@ export default function Home() {
                         showBalance ? "Ocultar valores" : "Mostrar valores"
                       }
                       accessibilityRole="button"
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      // 18 px era do tamanho de uma unha, e o hitSlop nao vale
+                      // no navegador — que e o foco declarado. Ver ds.touchArea
+                      style={touchArea(18)}
                     >
                       {showBalance ? (
                         <Eye size={18} color={t.text.secondary} />
@@ -1392,7 +1400,11 @@ export default function Home() {
                     >
                       {`Compra em andamento: ${
                         showBalance ? formatBRL(tripTotal(compraAberta)) : HIDDEN
-                      } · ${itemCountLabel(tripItemCount(compraAberta))}`}
+                      } · ${itemCountLabel(tripItemCount(compraAberta))}${
+                        tripUncheckedCount(compraAberta) > 0
+                          ? ` · faltam ${tripUncheckedCount(compraAberta)}`
+                          : ""
+                      }`}
                     </Text>
                     {compraAberta.storeName ? (
                       <Text
@@ -1453,9 +1465,12 @@ export default function Home() {
                     onPress={goToImport}
                     accessibilityLabel="Ver o extrato inteiro"
                     accessibilityRole="button"
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     activeOpacity={0.7}
-                    style={{ flexDirection: "row", alignItems: "center" }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      ...touchHeight(17),
+                    }}
                   >
                     <Text
                       style={{
@@ -1974,7 +1989,7 @@ export default function Home() {
                   onPress={() => navigation.navigate("Notícias" as never)}
                   accessibilityLabel="Ver mais notícias"
                   accessibilityRole="button"
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={touchHeight(20)}
                 >
                   <Text className="text-primary font-bold text-sm">
                     Ver mais

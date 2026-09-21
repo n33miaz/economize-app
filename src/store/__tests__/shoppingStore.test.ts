@@ -1,3 +1,4 @@
+import { tripTotal, tripUncheckedCount } from "../../utils/shopping";
 import { useAuthStore } from "../authStore";
 import {
   PRICE_CACHE_TTL_MS,
@@ -76,6 +77,127 @@ describe("mutações offline", () => {
     expect(feijaoDepois.deleted).toBe(true);
     expect(feijaoDepois.checked).toBe(false);
     expect(compra.items).toHaveLength(3);
+  });
+});
+
+describe("a lista de compras", () => {
+  const compraComLista = () => {
+    const store = useShoppingStore.getState();
+    const clientId = store.createTrip({
+      storeName: "Carrefour",
+      budget: null,
+      shareWithFamily: false,
+    });
+    store.addListItems(clientId, ["Arroz", "Feijão", "Café"]);
+    return clientId;
+  };
+
+  const compraDe = (clientId: string) =>
+    useShoppingStore.getState().trips.find((t) => t.clientId === clientId)!;
+
+  it("a lista nasce desmarcada, sem preço e sem custar nada", () => {
+    const clientId = compraComLista();
+    const compra = compraDe(clientId);
+
+    expect(compra.items).toHaveLength(3);
+    expect(compra.items.every((i) => !i.checked)).toBe(true);
+    // item desmarcado é "não peguei": ele não pode entrar no total nem na
+    // barra de orçamento só por estar escrito
+    expect(tripTotal(compra)).toBe(0);
+    expect(tripUncheckedCount(compra)).toBe(3);
+  });
+
+  it("anotar no corredor DÁ CHECK no item da lista, sem duplicar a linha", () => {
+    const clientId = compraComLista();
+    const antes = compraDe(clientId).items.find((i) => i.name === "Café")!;
+
+    const id = useShoppingStore.getState().addItem(clientId, {
+      name: "café",
+      quantity: 2,
+      unitPrice: 19.9,
+      promoNote: "leve 2",
+      photoRef: "file:///etiqueta.jpg",
+    });
+
+    const compra = compraDe(clientId);
+    // é o MESMO item: uma segunda linha faria a pessoa achar que ainda falta
+    // pegar o que já está no carrinho — o oposto do que a lista serve
+    expect(id).toBe(antes.clientId);
+    expect(compra.items).toHaveLength(3);
+    const cafe = compra.items.find((i) => i.clientId === antes.clientId)!;
+    expect(cafe.checked).toBe(true);
+    expect(cafe.quantity).toBe(2);
+    expect(cafe.unitPrice).toBe(19.9);
+    expect(cafe.promoNote).toBe("leve 2");
+    expect(cafe.photoRef).toBe("file:///etiqueta.jpg");
+    // quem está com o produto na mão leu a embalagem; quem escreveu a lista, não
+    expect(cafe.name).toBe("café");
+    expect(tripUncheckedCount(compra)).toBe(2);
+  });
+
+  it("continuar escrevendo a lista não marca nada", () => {
+    const clientId = compraComLista();
+
+    useShoppingStore.getState().addListItems(clientId, ["arroz", "Macarrão"]);
+
+    const compra = compraDe(clientId);
+    // "arroz" já estava: não entra de novo nem vira pego
+    expect(compra.items).toHaveLength(4);
+    expect(tripUncheckedCount(compra)).toBe(4);
+  });
+
+  it("produto fora da lista entra como linha nova, já no carrinho", () => {
+    const clientId = compraComLista();
+
+    useShoppingStore.getState().addItem(clientId, {
+      name: "Chocolate",
+      quantity: 1,
+      unitPrice: 12,
+      promoNote: null,
+      photoRef: null,
+    });
+
+    const compra = compraDe(clientId);
+    expect(compra.items).toHaveLength(4);
+    expect(compra.items.find((i) => i.name === "Chocolate")!.checked).toBe(true);
+    expect(tripUncheckedCount(compra)).toBe(3);
+  });
+
+  it("o segundo pacote do mesmo produto vira linha própria", () => {
+    const clientId = compraComLista();
+    const store = useShoppingStore.getState();
+    store.addItem(clientId, { name: "Arroz", quantity: 1, unitPrice: 24.9, promoNote: null, photoRef: null });
+
+    store.addItem(clientId, { name: "Arroz", quantity: 1, unitPrice: 31.5, promoNote: null, photoRef: null });
+
+    const compra = compraDe(clientId);
+    // o primeiro cumpriu a lista; o segundo não tem mais o que cumprir e não
+    // pode sobrescrever o preço do que já está no carrinho
+    expect(compra.items.filter((i) => i.name === "Arroz")).toHaveLength(2);
+  });
+
+  it("escrever a lista deixa a compra suja para sincronizar com a casa", () => {
+    const clientId = compraComLista();
+
+    // a lista é do mesmo tipo do item, então ela sobe no mesmo PUT — nenhuma
+    // rota nova precisou existir para a casa ver o que falta pegar
+    expect(compraDe(clientId).dirty).toBe(true);
+  });
+
+  it("pedido vazio não suja a compra à toa", () => {
+    const clientId = compraComLista();
+    useShoppingStore.setState({
+      trips: useShoppingStore.getState().trips.map((t) => ({ ...t, dirty: false })),
+    });
+
+    const quantos = useShoppingStore.getState().addListItems(clientId, ["arroz"]);
+
+    expect(quantos).toBe(0);
+    expect(compraDe(clientId).dirty).toBe(false);
+  });
+
+  it("compra que não existe não quebra nem inventa", () => {
+    expect(useShoppingStore.getState().addListItems("nao-existe", ["Arroz"])).toBe(0);
   });
 });
 

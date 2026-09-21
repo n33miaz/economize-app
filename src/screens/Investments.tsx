@@ -40,7 +40,7 @@ import { useToastStore } from "../store/toastStore";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { useTheme, type Theme } from "../theme/ThemeProvider";
 import { useEsconderBarra } from "../hooks/useEsconderBarra";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { radius, SHEET_PADDING, spacing, TOUCH_MIN } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import * as Haptics from "../utils/haptics";
@@ -738,7 +738,7 @@ export default function Investments() {
               alignItems: "center",
               justifyContent: "center",
               marginTop: spacing[3],
-              minHeight: 40,
+              minHeight: TOUCH_MIN,
             }}
           >
             <Text style={{ color: t.accent.neon, fontSize: 13, fontWeight: "700" }}>
