@@ -23,7 +23,47 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F0E0B"
       },
-      "versionCode": 11
+      "versionCode": 11,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content"
+            },
+            {
+              "scheme": "file"
+            },
+            {
+              "mimeType": "application/x-ofx"
+            },
+            {
+              "mimeType": "application/ofx"
+            },
+            {
+              "mimeType": "application/vnd.intu.qfx"
+            },
+            {
+              "mimeType": "text/csv"
+            },
+            {
+              "mimeType": "text/comma-separated-values"
+            },
+            {
+              "mimeType": "application/vnd.ms-excel"
+            },
+            {
+              "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            },
+            {
+              "mimeType": "application/octet-stream"
+            }
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

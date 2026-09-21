@@ -75,6 +75,10 @@ function prepararStores() {
     fetchedAt: Date.now(),
     fetchTransactions: jest.fn().mockResolvedValue(undefined),
     importStatement: jest.fn(),
+    arquivoRecebido: null,
+    receberArquivo: jest.fn(),
+    descartarArquivoRecebido: jest.fn(),
+    importarArquivoRecebido: jest.fn(),
     applyTransaction: jest.fn(),
     calculateMetrics: () => ({ income: 0, expense: 194.99, total: -194.99 }),
   } as never);
@@ -188,5 +192,40 @@ describe("Extrato", () => {
     const { queryByText } = montar();
 
     await waitFor(() => expect(queryByText("Casa")).toBeNull());
+  });
+  describe("arquivo vindo de fora do app", () => {
+    it("entra sozinho, sem pedir confirmação", async () => {
+      const importar = jest.fn().mockResolvedValue({
+        transactionsImported: 2,
+        suggested: 0,
+        uncategorized: 0,
+        reconciled: 0,
+        duplicated: false,
+        uploadId: "u1",
+      });
+      useBankStore.setState({
+        arquivoRecebido: "content://baixados/42",
+        importarArquivoRecebido: importar,
+      } as never);
+
+      montar();
+
+      // Escolher "Abrir com › Economize!" JÁ é a confirmação: perguntar de novo
+      // depois do gesto só atrasaria quem acabou de decidir
+      await waitFor(() => expect(importar).toHaveBeenCalled());
+    });
+
+    it("sem arquivo parqueado, nada é enviado na abertura", async () => {
+      const importar = jest.fn();
+      useBankStore.setState({
+        arquivoRecebido: null,
+        importarArquivoRecebido: importar,
+      } as never);
+
+      const { toJSON } = montar();
+
+      await waitFor(() => expect(toJSON()).toBeTruthy());
+      expect(importar).not.toHaveBeenCalled();
+    });
   });
 });

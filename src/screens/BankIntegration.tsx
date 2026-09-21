@@ -43,6 +43,7 @@ import type {
   BalanceFinding,
   BankTransaction,
   FamilyTransaction,
+  StatementUploadResult,
 } from "../services/api";
 import FlipCard, { useFlip } from "../components/FlipCard";
 import ProvenanceBack from "../components/ProvenanceBack";
@@ -291,6 +292,10 @@ export default function BankIntegration() {
     importStatement,
   } = useBankStore();
   const applyTransaction = useBankStore((s) => s.applyTransaction);
+  const arquivoRecebido = useBankStore((s) => s.arquivoRecebido);
+  const importarArquivoRecebido = useBankStore(
+    (s) => s.importarArquivoRecebido,
+  );
   // Transação aberta em detalhe: é por ali que o apelido se edita e se limpa
   const [detailTx, setDetailTx] = useState<BankTransaction | null>(null);
   // Filtro de origem (EC-113): o "o que eu gastei NO CARTÃO".
@@ -714,13 +719,19 @@ export default function BankIntegration() {
     [transactions],
   );
 
-  const handleImport = async () => {
+  /**
+   * O que acontece DEPOIS que um arquivo entra, seja ele escolhido no seletor
+   * ou entregue pelo Android ("Abrir com › Economize!"). A leitura do resultado
+   * é a mesma nos dois casos; só a porta de entrada muda, e ela é o argumento.
+   */
+  const executarImportacao = useCallback(
+    async (obterArquivo: () => Promise<StatementUploadResult | null>) => {
     // Trava de reentrância: dois toques rápidos abriam dois seletores de
     // arquivo. O store é a fonte da verdade porque muda antes do re-render
     if (useBankStore.getState().isImporting) return;
     try {
       Haptics.selectionAsync();
-      const result = await importStatement();
+      const result = await obterArquivo();
       if (!result) return; // usuário cancelou o seletor de arquivo
 
       const pending = result.suggested + result.uncategorized;
@@ -774,7 +785,22 @@ export default function BankIntegration() {
         showToast(e.message || "Erro ao importar extrato.", "error");
       }
     }
-  };
+    },
+    [navigation, showToast],
+  );
+
+  const handleImport = () => executarImportacao(importStatement);
+
+  // O arquivo que chegou de fora. Quem o recebeu foi o `Linking`, lá na raiz da
+  // navegação, que o parqueou no store e trouxe a pessoa até aqui — esta tela é
+  // a única que sabe contar o que aconteceu com um arquivo. Envia sozinho, sem
+  // pedir confirmação: escolher "Abrir com › Economize!" JÁ é a confirmação, e
+  // uma segunda pergunta depois do gesto só atrasa. O store tira o arquivo da
+  // fila antes de enviar, então este efeito não repete.
+  useEffect(() => {
+    if (!arquivoRecebido) return;
+    void executarImportacao(importarArquivoRecebido);
+  }, [arquivoRecebido, importarArquivoRecebido, executarImportacao]);
 
   // Cor de cada número, pelo tom que o escopo declarou. O crédito de cartão é
   // NEUTRO: pintá-lo com chart.up é a versão visual de chamá-lo de receita, e
