@@ -6,7 +6,7 @@ import RefreshCw from "lucide-react-native/dist/esm/icons/refresh-cw";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { useVersionStore } from "../store/versionStore";
 import { useTheme } from "../theme/ThemeProvider";
-import { radius, SHEET_PADDING, spacing } from "../theme/ds";
+import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { APP_VERSION, DEFAULT_DOWNLOAD_URL } from "../utils/appVersion";
 
@@ -109,7 +109,7 @@ export default function NewVersionSheet() {
           style={{
             color: t.text.primary,
             fontFamily: "Roboto_700Bold",
-            fontSize: 20,
+            ...SHEET_TITLE,
             textAlign: "center",
           }}
         >

@@ -7,10 +7,18 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn,
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import BrandOpening from "../../components/BrandOpening";
-import BiometricPrompt from "../../components/BiometricPrompt";
+import BiometricPrompt, {
+  DURACAO_SELO_MS,
+} from "../../components/BiometricPrompt";
 import FloatingLabelInput from "../../components/FloatingLabelInput";
 import { useAuthStore, type LoginOutcome } from "../../store/authStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
@@ -59,6 +67,28 @@ export default function Login({ navigation }: any) {
   // depender só de a animação terminar.
   const [pronto, setPronto] = useState(false);
   const [revelado, setRevelado] = useState(false);
+
+  /**
+   * O halo que se dissipa.
+   *
+   * Enquanto o pote enche, um disco dourado pulsa suavemente atrás dele; no
+   * instante em que o pote assenta (`revelado`), o disco cresce e apaga. É o
+   * que dá a sensação de "a marca acendeu a tela" sem mover nada de lugar.
+   *
+   * Só opacidade e escala: as duas são compostas pela GPU e não passam pelo
+   * caminho que, na web, devolvia `position: absolute` a elementos de entrada.
+   */
+  const halo = useSharedValue(0);
+  useEffect(() => {
+    halo.value = withTiming(revelado ? 1 : 0, {
+      duration: revelado ? 620 : 0,
+      easing: Easing.out(Easing.quad),
+    });
+  }, [revelado, halo]);
+  const estiloHalo = useAnimatedStyle(() => ({
+    opacity: interpolate(halo.value, [0, 1], [1, 0]),
+    transform: [{ scale: interpolate(halo.value, [0, 1], [0.86, 1.35]) }],
+  }));
 
   useEffect(() => {
     const id = setTimeout(() => setPronto(true), 420);
@@ -151,7 +181,14 @@ export default function Login({ navigation }: any) {
     setBiometric(true);
     setBiometricChoiceMade(true);
     showToast("Desbloqueio por biometria ativado.", "success");
-    completeLogin(sessaoPendente.token, sessaoPendente.name);
+    // A folha mostra o selo de sucesso (anel verde, visto, um pulo curto) e SÓ
+    // ENTÃO a tela troca. Sem esta espera a animação é cortada no primeiro
+    // quadro — e o instante do desbloqueio é justamente onde a pessoa quer
+    // confirmação. O tempo vem do próprio componente, não de um 550 solto aqui.
+    setTimeout(
+      () => completeLogin(sessaoPendente.token, sessaoPendente.name),
+      DURACAO_SELO_MS,
+    );
     return true;
   };
 
@@ -182,7 +219,26 @@ export default function Login({ navigation }: any) {
       <View className="items-center mb-10">
         {/* O pote deixou de ser um PNG: é a própria marca desenhada, e o nível
             dela passa a contar o resultado do ciclo depois do login */}
-        <View className="w-24 h-24 bg-accentMuted rounded-3xl justify-center items-center mb-4">
+        {/* ABERTURA "SÓBRIA" — escolha do dono em 16/09/2026.
+            O pote enche, um halo dourado se acende atrás dele e se dissipa, e
+            o resto entra com fade PURO. Sem deslocamento de propósito: foi
+            `translate` em animação de entrada que colapsou a tela inteira na
+            web (Reanimated 3.16 devolvendo `position: absolute` ao terminar),
+            e este é o caminho que não repete aquilo. */}
+        <View className="w-24 h-24 justify-center items-center mb-4">
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                position: "absolute",
+                width: 96,
+                height: 96,
+                borderRadius: 48,
+                backgroundColor: t.accent.neonMuted,
+              },
+              estiloHalo,
+            ]}
+          />
           <BrandOpening
             ready={pronto}
             size={64}
@@ -293,18 +349,6 @@ export default function Login({ navigation }: any) {
               </View>
 
               <TouchableOpacity
-                className="self-end mb-6 py-1"
-                onPress={() => navigation.navigate("ForgotPassword")}
-                accessibilityLabel="Esqueci minha senha"
-                accessibilityRole="button"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text className="text-primary font-bold text-sm">
-                  Esqueci minha senha
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 className="bg-primary h-14 rounded-xl justify-center items-center active:bg-accentPressed"
                 onPress={handleLogin}
                 disabled={isLoading}
@@ -320,15 +364,47 @@ export default function Login({ navigation }: any) {
                 )}
               </TouchableOpacity>
 
+              {/* O bloco de baixo, como o dono pediu em 16/09/2026: "embaixo
+                  fique com botão igual o de entrar, mas com cor diferente
+                  (menos destacado) e precisamos colocar o esqueci a senha
+                  também".
+
+                  A entrada por Google e outros provedores ficou para depois —
+                  decisão dele —, então o lugar dos botões sociais é ocupado
+                  pelo caminho que já existe: criar conta. Mesmo formato do
+                  "Entrar" (h-14, mesmo raio) para a mão saber que é botão, e
+                  cor recuada para o olho saber qual é o principal.
+
+                  "Esqueci minha senha" desceu para cá. Antes era um link
+                  miúdo alinhado à direita, acima do botão: quem erra a senha
+                  olha para BAIXO do formulário, não para cima dele. */}
               <TouchableOpacity
-                className="mt-6 items-center"
+                className="mt-3 h-14 rounded-xl justify-center items-center border active:bg-border"
+                style={{
+                  backgroundColor: t.background.elevated,
+                  borderColor: t.border.default,
+                }}
                 onPress={() => navigation.navigate("Register")}
                 accessibilityLabel="Criar conta"
                 accessibilityRole="button"
               >
-                <Text className="text-textSecondary">
-                  Não tem uma conta?{" "}
-                  <Text className="text-primary font-bold">Cadastre-se</Text>
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: t.text.primary }}
+                >
+                  Criar conta
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="mt-4 items-center py-1"
+                onPress={() => navigation.navigate("ForgotPassword")}
+                accessibilityLabel="Esqueci minha senha"
+                accessibilityRole="button"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text className="text-primary font-bold text-sm">
+                  Esqueci minha senha
                 </Text>
               </TouchableOpacity>
 

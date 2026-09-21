@@ -3,7 +3,7 @@ import {
   ActivityIndicator,
   View,
   Text,
-  FlatList,
+  SectionList,
   Platform,
   TouchableOpacity,
   RefreshControl,
@@ -76,12 +76,16 @@ import { useWaitingLine } from "../hooks/useWaitingLine";
 import FreshnessStamp from "../components/FreshnessStamp";
 import PotEmptyState from "../components/PotEmptyState";
 import Skeleton from "../components/Skeleton";
+import StatementDayHeader, {
+  STATEMENT_DAY_HEADER_HEIGHT,
+} from "../components/StatementDayHeader";
 import TransactionDetailSheet from "../components/TransactionDetailSheet";
 import TransactionRow, {
   TRANSACTION_ROW_CARD_HEIGHT,
 } from "../components/TransactionRow";
 import { APP_ROUTES } from "../routes/routeNames";
 import { useTheme } from "../theme/ThemeProvider";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -99,6 +103,11 @@ import {
   statementMetrics,
   statementScopeNote,
 } from "../utils/bankMetrics";
+import {
+  agruparPorDia,
+  podeMostrarSaldoCorrido,
+  rotuloDoDia,
+} from "../utils/statementDays";
 import {
   analysisRangeForMonth,
   cycleMonthKeyContaining,
@@ -227,16 +236,32 @@ function StatementSkeleton() {
         ))}
       </View>
 
-      {/* linhas de lançamento, na altura do card sem selos */}
-      <Skeleton width={148} height={20} className="mb-3" />
-      {[0, 1, 2, 3].map((i) => (
-        <Skeleton
-          key={i}
-          width="100%"
-          height={TRANSACTION_ROW_CARD_HEIGHT}
-          borderRadius={radius["2xl"]}
-          className="mb-3"
-        />
+      {/* Dois dias com cabeçalho e linhas, e não uma pilha de retângulos
+          iguais: desde a escolha 8 a lista tem dois ritmos, e um esqueleto
+          sem o cabeçalho troca de forma quando o conteúdo chega */}
+      {[0, 1].map((dia) => (
+        <View key={dia}>
+          <View
+            className="flex-row items-center justify-between"
+            style={{
+              minHeight: STATEMENT_DAY_HEADER_HEIGHT,
+              paddingTop: spacing[4],
+              paddingBottom: spacing[2],
+            }}
+          >
+            <Skeleton width={58} height={14} />
+            <Skeleton width={84} height={14} />
+          </View>
+          {[0, 1].map((i) => (
+            <Skeleton
+              key={i}
+              width="100%"
+              height={TRANSACTION_ROW_CARD_HEIGHT}
+              borderRadius={radius["2xl"]}
+              className="mb-3"
+            />
+          ))}
+        </View>
       ))}
     </View>
   );
@@ -244,6 +269,8 @@ function StatementSkeleton() {
 
 export default function BankIntegration() {
   const t = useTheme();
+  // A ilha da barra de abas se esconde quando esta lista rola para baixo
+  const barraQueSeEsconde = useEsconderBarra();
   const navigation = useNavigation();
   const route = useRoute();
   const { cardEntering, listItemEntering } = useMotionPresets();
@@ -302,7 +329,9 @@ export default function BankIntegration() {
   const familyTransactions = useFamilyStore((s) => s.transactions);
   const isFamilyLoading = useFamilyStore((s) => s.isTransactionsLoading);
   const familyError = useFamilyStore((s) => s.transactionsError);
-  const hasLoadedFamilyOnce = useFamilyStore((s) => s.hasLoadedTransactionsOnce);
+  const hasLoadedFamilyOnce = useFamilyStore(
+    (s) => s.hasLoadedTransactionsOnce,
+  );
   const fetchFamilyTransactions = useFamilyStore((s) => s.fetchTransactions);
   const inFamilyScope = familyScope === "family";
   const anchorDay = usePreferencesStore(selectCycleAnchorDay);
@@ -387,7 +416,10 @@ export default function BankIntegration() {
   const juntarContas = useCallback(
     async (sugestao: AccountMergeSuggestion) => {
       try {
-        const movidos = await mergeAccounts(sugestao.sourceId, sugestao.targetId);
+        const movidos = await mergeAccounts(
+          sugestao.sourceId,
+          sugestao.targetId,
+        );
         showToast(
           movidos === 1
             ? "1 lançamento mudou de conta. As duas origens agora são uma."
@@ -464,6 +496,37 @@ export default function BankIntegration() {
     () => statementMetrics(visibleTransactions, metricsScope),
     [visibleTransactions, metricsScope],
   );
+
+  /**
+   * O extrato por dia (escolha 8 de 16/09).
+   *
+   * <p>O saldo corrido só entra quando as quatro condições de
+   * `podeMostrarSaldoCorrido` valem. Na casa ele nunca entra: a lista mostra
+   * lançamentos de outras pessoas, e "quanto havia em conta" não tem sujeito
+   * quando as linhas são de contas de várias pessoas.
+   */
+  const linhasDaLista = inFamilyScope
+    ? visibleFamilyTransactions
+    : visibleTransactions;
+
+  const mostraSaldoCorrido = podeMostrarSaldoCorrido({
+    saldoAtual: selectedAccount?.reportedBalance,
+    tipoDaConta: selectedAccount?.type,
+    contaUnica: Boolean(selectedAccount),
+    listaEstreitada: inFamilyScope,
+  });
+
+  const secoes = useMemo(
+    () =>
+      agruparPorDia(linhasDaLista, {
+        saldoAtual: mostraSaldoCorrido
+          ? selectedAccount?.reportedBalance
+          : null,
+      }).map((dia) => ({ ...dia, data: dia.transacoes })),
+    [linhasDaLista, mostraSaldoCorrido, selectedAccount?.reportedBalance],
+  );
+
+  const hoje = todayIso();
   const scopeNote = statementScopeNote(metricsScope);
   // Atalho para as faturas: aparece só para quem tem cartão sincronizado, e
   // leva junto o cartão que está filtrado — quem filtrou o Nubank e toca aqui
@@ -523,7 +586,10 @@ export default function BankIntegration() {
       }
       if (await finishConnect(retorno.itemId)) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast("Banco conectado. Sincronize para trazer as transações.", "success");
+        showToast(
+          "Banco conectado. Sincronize para trazer as transações.",
+          "success",
+        );
       } else {
         showToast(
           useConnectorStore.getState().error || "Não foi possível conectar.",
@@ -581,7 +647,8 @@ export default function BankIntegration() {
           showToast("Banco desconectado.", "success");
         } else {
           showToast(
-            useConnectorStore.getState().error || "Não foi possível desconectar.",
+            useConnectorStore.getState().error ||
+              "Não foi possível desconectar.",
             "error",
           );
         }
@@ -790,8 +857,12 @@ export default function BankIntegration() {
         <TransactionRow
           transaction={item}
           density="card"
+          // A data agora vive no cabeçalho do dia, uma vez, em cima
+          showDate={false}
           category={item.categoryId ? catById.get(item.categoryId) : undefined}
-          account={item.accountId ? accountsById.get(item.accountId) : undefined}
+          account={
+            item.accountId ? accountsById.get(item.accountId) : undefined
+          }
           showOrigin={showOrigin}
           member={
             member
@@ -813,7 +884,12 @@ export default function BankIntegration() {
   // As duas saídas antecipadas abaixo falam do extrato PESSOAL: na casa, quem
   // manda é o estado da lista da casa, e o extrato pessoal vazio (ou que falhou
   // ao baixar) não pode sequestrar a tela inteira
-  if (!inFamilyScope && isLoading && !hasLoadedOnce && transactions.length === 0) {
+  if (
+    !inFamilyScope &&
+    isLoading &&
+    !hasLoadedOnce &&
+    transactions.length === 0
+  ) {
     return (
       <PageContainer style={{ flex: 1, position: "relative" }}>
         <StatementSkeleton />
@@ -843,10 +919,21 @@ export default function BankIntegration() {
 
   return (
     <PageContainer style={{ flex: 1, position: "relative" }}>
-      <FlatList
-        data={inFamilyScope ? visibleFamilyTransactions : visibleTransactions}
+      <SectionList
+        sections={secoes}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        // A data saiu da linha e virou cabeçalho: FIXO, como o dono escolheu,
+        // para a pessoa saber de que dia é a linha que está no meio da tela
+        // depois de rolar mil lançamentos
+        stickySectionHeadersEnabled
+        renderSectionHeader={({ section }) => (
+          <StatementDayHeader
+            rotulo={rotuloDoDia(section.dia, hoje)}
+            total={section.total}
+            saldoNoFim={section.saldoNoFim}
+          />
+        )}
         // O mapa de contas e o de categorias chegam DEPOIS da lista: sem isto
         // as linhas já montadas ficariam sem o selo de origem até o próximo
         // scroll. Memoizado, senão um literal novo a cada render re-renderiza
@@ -1011,340 +1098,361 @@ export default function BankIntegration() {
                 disso vale — os números de lá são da Análise, que soma o que
                 cada um mostra, e importar extrato é ato individual */}
             {!inFamilyScope && (
-            <>
-            <Animated.View entering={cardEntering} className="mb-4">
-              {/* EC-225: o bloco inteiro gira, e não cada número. Os três saem
+              <>
+                <Animated.View entering={cardEntering} className="mb-4">
+                  {/* EC-225: o bloco inteiro gira, e não cada número. Os três saem
                   do MESMO conjunto de linhas, então três versos iguais seriam
                   a mesma resposta repetida — um gesto, uma resposta */}
-              <FlipCard
-                flipped={origemAberta}
-                back={<ProvenanceBack summary={procedencia} />}
-                front={
-                  <TouchableOpacity
-                    onPress={virarOrigem}
-                    activeOpacity={0.9}
-                    accessibilityRole="button"
-                    accessibilityLabel="Ver de onde estes números foram somados"
-                  >
-              {/* Os números vêm prontos do escopo: três no idioma da conta
+                  <FlipCard
+                    flipped={origemAberta}
+                    back={<ProvenanceBack summary={procedencia} />}
+                    front={
+                      <TouchableOpacity
+                        onPress={virarOrigem}
+                        activeOpacity={0.9}
+                        accessibilityRole="button"
+                        accessibilityLabel="Ver de onde estes números foram somados"
+                      >
+                        {/* Os números vêm prontos do escopo: três no idioma da conta
                   (Entradas/Saídas/Líquido), dois no idioma do cartão
                   (Compras/Estornos e pagamentos). Alta/baixa usa
                   chart.up/chart.down; accent nunca marca alta/baixa */}
-              <View className="flex-row gap-2">
-                {metricRows.map((metric) => (
-                  <MetricCard
-                    key={metric.key}
-                    label={metric.label}
-                    value={metric.value}
-                    color={toneColor(metric)}
+                        <View className="flex-row gap-2">
+                          {metricRows.map((metric) => (
+                            <MetricCard
+                              key={metric.key}
+                              label={metric.label}
+                              value={metric.value}
+                              color={toneColor(metric)}
+                            />
+                          ))}
+                        </View>
+                        {scopeNote && (
+                          // A ressalva escrita, do mesmo jeito que o card de fatura
+                          // declara que pagamento não entra no total
+                          <Text
+                            className="text-textTertiary mt-2"
+                            style={{ fontSize: 11, lineHeight: 16 }}
+                          >
+                            {scopeNote}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    }
                   />
-                ))}
-              </View>
-              {scopeNote && (
-                // A ressalva escrita, do mesmo jeito que o card de fatura
-                // declara que pagamento não entra no total
-                <Text
-                  className="text-textTertiary mt-2"
-                  style={{ fontSize: 11, lineHeight: 16 }}
-                >
-                  {scopeNote}
-                </Text>
-              )}
-                  </TouchableOpacity>
-                }
-              />
-            </Animated.View>
+                </Animated.View>
 
-            {chartData.length > 0 && (
-              <View className="bg-surface rounded-3xl p-4 border border-border">
-                <Text className="text-sm font-bold text-textPrimary mb-2">
-                  Análise de Fluxo
-                </Text>
-                <View className="flex-row items-center">
-                  <PieChart
-                    data={chartData}
-                    radius={chartRadius}
-                    donut
-                    // Miolo na cor do card: a rosca é um recorte da superfície,
-                    // não um disco branco por cima dela
-                    innerCircleColor={t.background.surface}
-                    innerRadius={Math.round(chartRadius * 0.6)}
-                  />
-                  <ChartLegend items={legendItems} />
-                </View>
-              </View>
-            )}
+                {chartData.length > 0 && (
+                  <View className="bg-surface rounded-3xl p-4 border border-border">
+                    <Text className="text-sm font-bold text-textPrimary mb-2">
+                      Análise de Fluxo
+                    </Text>
+                    <View className="flex-row items-center">
+                      <PieChart
+                        data={chartData}
+                        radius={chartRadius}
+                        donut
+                        // Miolo na cor do card: a rosca é um recorte da superfície,
+                        // não um disco branco por cima dela
+                        innerCircleColor={t.background.surface}
+                        innerRadius={Math.round(chartRadius * 0.6)}
+                      />
+                      <ChartLegend items={legendItems} />
+                    </View>
+                  </View>
+                )}
 
-            {/* EC-113: a porta das faturas no celular, onde não há trilho
+                {/* EC-113: a porta das faturas no celular, onde não há trilho
                 lateral. Some para quem não tem cartão sincronizado — fatura
                 sem cartão é uma tela que só sabe dizer "não tenho nada" */}
-            {creditCards.length > 0 && (
-              <View className="mt-4">
-                <ActionRow
-                  Icon={CreditCard}
-                  label={
-                    invoiceTarget
-                      ? `Faturas · ${invoiceTarget.name}`
-                      : "Faturas do cartão"
-                  }
-                  description={
-                    invoiceTarget
-                      ? "O que você deve neste ciclo e nos anteriores"
-                      : `${creditCards.length} ${plural(creditCards.length, "cartão sincronizado", "cartões sincronizados")} · veja o que você deve por ciclo`
-                  }
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    (navigation as any).navigate(
-                      APP_ROUTES.cartoes,
-                      invoiceTarget ? { accountId: invoiceTarget.id } : undefined,
-                    );
-                  }}
-                />
-              </View>
-            )}
+                {creditCards.length > 0 && (
+                  <View className="mt-4">
+                    <ActionRow
+                      Icon={CreditCard}
+                      label={
+                        invoiceTarget
+                          ? `Faturas · ${invoiceTarget.name}`
+                          : "Faturas do cartão"
+                      }
+                      description={
+                        invoiceTarget
+                          ? "O que você deve neste ciclo e nos anteriores"
+                          : `${creditCards.length} ${plural(creditCards.length, "cartão sincronizado", "cartões sincronizados")} · veja o que você deve por ciclo`
+                      }
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        (navigation as any).navigate(
+                          APP_ROUTES.cartoes,
+                          invoiceTarget
+                            ? { accountId: invoiceTarget.id }
+                            : undefined,
+                        );
+                      }}
+                    />
+                  </View>
+                )}
 
-            {/* Open Finance: some por completo enquanto o servidor não
+                {/* Open Finance: some por completo enquanto o servidor não
                 devolver enabled — quem não configurou não precisa nem saber */}
-            {connector.enabled && (
-              <View className="bg-surface rounded-3xl p-4 border border-border mt-4">
-                <View className="flex-row items-center mb-2">
-                  <Link2 size={18} color={t.accent.neon} />
-                  <Text className="text-base font-bold text-textPrimary ml-2">
-                    Conexão bancária
-                  </Text>
-                </View>
+                {connector.enabled && (
+                  <View className="bg-surface rounded-3xl p-4 border border-border mt-4">
+                    <View className="flex-row items-center mb-2">
+                      <Link2 size={18} color={t.accent.neon} />
+                      <Text className="text-base font-bold text-textPrimary ml-2">
+                        Conexão bancária
+                      </Text>
+                    </View>
 
-                {/* Uma frase para o que acontece, sem nome de provedor: o
+                    {/* Uma frase para o que acontece, sem nome de provedor: o
                     usuário autoriza no banco dele e o resto é nosso */}
-                <Text
-                  className="text-xs text-textSecondary mb-3"
-                  style={{ lineHeight: 17 }}
-                >
-                  {connections.length > 0
-                    ? `${connections.length} ${plural(connections.length, "banco conectado", "bancos conectados")} pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica — a sincronização traz os últimos 90 dias.`
-                    : "Conecte seu banco pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica."}
-                </Text>
+                    <Text
+                      className="text-xs text-textSecondary mb-3"
+                      style={{ lineHeight: 17 }}
+                    >
+                      {connections.length > 0
+                        ? `${connections.length} ${plural(connections.length, "banco conectado", "bancos conectados")} pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica — a sincronização traz os últimos 90 dias.`
+                        : "Conecte seu banco pelo Open Finance. Você autoriza no seu banco; nós buscamos os lançamentos e nada duplica."}
+                    </Text>
 
-                <BalanceCheckNotice findings={avisosDeSaldo} />
+                    <BalanceCheckNotice findings={avisosDeSaldo} />
 
-                {/* A mesma conta entrando por arquivo E por conector deixa o
+                    {/* A mesma conta entrando por arquivo E por conector deixa o
                     app com duas origens, e aí nenhum total por conta fecha.
                     Medido na conta do dono: 1.632 dos 1.967 lançamentos
                     moravam na origem solta do Inter, e o saldo só existia na
                     ligada. Ver components/DuplicateAccountsCard */}
-                <DuplicateAccountsCard
-                  suggestions={duplicadas}
-                  onMerge={juntarContas}
-                />
+                    <DuplicateAccountsCard
+                      suggestions={duplicadas}
+                      onMerge={juntarContas}
+                    />
 
-                {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
+                    {/* Conexões do usuário. Desde o EC-106 os itens são por conta:
                     conectar deixou de ser configuração de servidor. O nome é
                     a INSTITUIÇÃO — o nome do conector no provedor nunca entra */}
-                {connections.map((conexao) => {
-                  const nome = connectionLabel(conexao);
-                  return (
-                    <View
-                      key={conexao.id}
-                      className="flex-row items-center justify-between bg-elevated border border-border rounded-2xl px-3 py-3 mb-2"
-                    >
-                      <BankLogo
-                        institution={conexao.institution}
-                        size={36}
-                        Fallback={Landmark}
-                        style={{ marginRight: spacing[3] }}
-                      />
-                      <View className="flex-1 pr-3">
-                        <Text
-                          className="text-sm font-bold text-textPrimary"
-                          numberOfLines={1}
+                    {connections.map((conexao) => {
+                      const nome = connectionLabel(conexao);
+                      return (
+                        <View
+                          key={conexao.id}
+                          className="flex-row items-center justify-between bg-elevated border border-border rounded-2xl px-3 py-3 mb-2"
                         >
-                          {nome}
-                        </Text>
-                        {/* Dia e mês não diziam se a leitura tinha uma hora
+                          <BankLogo
+                            institution={conexao.institution}
+                            size={36}
+                            Fallback={Landmark}
+                            style={{ marginRight: spacing[3] }}
+                          />
+                          <View className="flex-1 pr-3">
+                            <Text
+                              className="text-sm font-bold text-textPrimary"
+                              numberOfLines={1}
+                            >
+                              {nome}
+                            </Text>
+                            {/* Dia e mês não diziam se a leitura tinha uma hora
                             ou onze; o carimbo diz, e muda de cor passado um
                             dia sem sincronizar */}
-                        <FreshnessStamp
-                          at={conexao.lastSyncedAt}
-                          prefix="sincronizado"
-                          style={{ marginTop: 2 }}
-                        />
-                      </View>
+                            <FreshnessStamp
+                              at={conexao.lastSyncedAt}
+                              prefix="sincronizado"
+                              style={{ marginTop: 2 }}
+                            />
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleDesconectar(conexao.id, nome)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Desconectar ${nome}`}
+                            hitSlop={{
+                              top: 14,
+                              bottom: 14,
+                              left: 14,
+                              right: 14,
+                            }}
+                          >
+                            <Unlink size={16} color={t.text.tertiary} />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+
+                    <TouchableOpacity
+                      className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3 mt-1"
+                      onPress={handleConectarBanco}
+                      disabled={isLinking}
+                      accessibilityLabel="Conectar um banco pelo Open Finance"
+                      accessibilityRole="button"
+                      activeOpacity={0.85}
+                      style={{ opacity: isLinking ? 0.6 : 1 }}
+                    >
+                      {isLinking ? (
+                        <ActivityIndicator size="small" color={t.accent.neon} />
+                      ) : (
+                        <Plus size={16} color={t.accent.neon} />
+                      )}
+                      <Text className="text-accent font-bold text-sm ml-2">
+                        {isLinking
+                          ? "Abrindo…"
+                          : connections.length > 0
+                            ? "Conectar outro banco"
+                            : "Conectar meu banco"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {connections.length > 0 && (
                       <TouchableOpacity
-                        onPress={() => handleDesconectar(conexao.id, nome)}
+                        className="flex-row items-center justify-center border border-border rounded-full px-4 py-3 mt-2"
+                        onPress={handleConnectorSync}
+                        disabled={isSyncing}
+                        accessibilityLabel="Sincronizar bancos conectados"
                         accessibilityRole="button"
-                        accessibilityLabel={`Desconectar ${nome}`}
-                        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                        activeOpacity={0.85}
+                        style={{ opacity: isSyncing ? 0.6 : 1 }}
                       >
-                        <Unlink size={16} color={t.text.tertiary} />
+                        {isSyncing ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={t.text.secondary}
+                          />
+                        ) : (
+                          <RefreshCw size={16} color={t.text.secondary} />
+                        )}
+                        <Text className="text-textPrimary font-bold text-sm ml-2">
+                          {isSyncing ? "Sincronizando…" : "Sincronizar agora"}
+                        </Text>
                       </TouchableOpacity>
-                    </View>
-                  );
-                })}
-
-                <TouchableOpacity
-                  className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3 mt-1"
-                  onPress={handleConectarBanco}
-                  disabled={isLinking}
-                  accessibilityLabel="Conectar um banco pelo Open Finance"
-                  accessibilityRole="button"
-                  activeOpacity={0.85}
-                  style={{ opacity: isLinking ? 0.6 : 1 }}
-                >
-                  {isLinking ? (
-                    <ActivityIndicator size="small" color={t.accent.neon} />
-                  ) : (
-                    <Plus size={16} color={t.accent.neon} />
-                  )}
-                  <Text className="text-accent font-bold text-sm ml-2">
-                    {isLinking
-                      ? "Abrindo…"
-                      : connections.length > 0
-                        ? "Conectar outro banco"
-                        : "Conectar meu banco"}
-                  </Text>
-                </TouchableOpacity>
-
-                {connections.length > 0 && (
-                  <TouchableOpacity
-                    className="flex-row items-center justify-center border border-border rounded-full px-4 py-3 mt-2"
-                    onPress={handleConnectorSync}
-                    disabled={isSyncing}
-                    accessibilityLabel="Sincronizar bancos conectados"
-                    accessibilityRole="button"
-                    activeOpacity={0.85}
-                    style={{ opacity: isSyncing ? 0.6 : 1 }}
-                  >
-                    {isSyncing ? (
-                      <ActivityIndicator size="small" color={t.text.secondary} />
-                    ) : (
-                      <RefreshCw size={16} color={t.text.secondary} />
                     )}
-                    <Text className="text-textPrimary font-bold text-sm ml-2">
-                      {isSyncing ? "Sincronizando…" : "Sincronizar agora"}
-                    </Text>
-                  </TouchableOpacity>
+                  </View>
                 )}
-              </View>
-            )}
 
-            {/* Atalhos dos Bancos */}
-            <View className="mt-4 -mb-3">
-              <Text className="text-base font-bold text-textPrimary mb-3">
-                Acesso Rápido
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerClassName="gap-3"
-              >
-                {BANK_SHORTCUTS.map((bank) => (
-                  <TouchableOpacity
-                    key={bank.id}
-                    className="rounded-xl justify-center items-center bg-surface border border-border"
-                    style={{ width: BANK_SHORTCUT_SIZE, height: BANK_SHORTCUT_SIZE }}
-                    onPress={() => openBankApp(bank.url)}
-                    accessibilityLabel={`Abrir app do ${bank.name}`}
-                    accessibilityRole="button"
-                    activeOpacity={0.8}
+                {/* Atalhos dos Bancos */}
+                <View className="mt-4 -mb-3">
+                  <Text className="text-base font-bold text-textPrimary mb-3">
+                    Acesso Rápido
+                  </Text>
+                  <ScrollView
+                    {...barraQueSeEsconde}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerClassName="gap-3"
                   >
-                    {/* O logo carrega a marca; o rótulo embaixo é para quem
+                    {BANK_SHORTCUTS.map((bank) => (
+                      <TouchableOpacity
+                        key={bank.id}
+                        className="rounded-xl justify-center items-center bg-surface border border-border"
+                        style={{
+                          width: BANK_SHORTCUT_SIZE,
+                          height: BANK_SHORTCUT_SIZE,
+                        }}
+                        onPress={() => openBankApp(bank.url)}
+                        accessibilityLabel={`Abrir app do ${bank.name}`}
+                        accessibilityRole="button"
+                        activeOpacity={0.8}
+                      >
+                        {/* O logo carrega a marca; o rótulo embaixo é para quem
                         não a reconhece de vista — e para quem não tem logo,
                         que fica com o monograma */}
-                    <BankLogo institution={bank.name} size={34} />
-                    <Text
-                      className="text-textSecondary font-bold mt-1"
-                      style={{ fontSize: 10 }}
-                      numberOfLines={1}
-                    >
-                      {bank.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+                        <BankLogo institution={bank.name} size={34} />
+                        <Text
+                          className="text-textSecondary font-bold mt-1"
+                          style={{ fontSize: 10 }}
+                          numberOfLines={1}
+                        >
+                          {bank.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
 
-            {transactions.length > 0 && (
-              <>
-                <View className="flex-row items-center justify-between mt-5 mb-2">
-                  {/* "Lançamentos", e não "Histórico de Transações": a
+                {transactions.length > 0 && (
+                  <>
+                    <View className="flex-row items-center justify-between mt-5 mb-2">
+                      {/* "Lançamentos", e não "Histórico de Transações": a
                       Carteira, aba irmã, usa este segundo título para o
                       histórico de ATIVOS — duas seções homônimas nomeando
                       coisas diferentes */}
-                  <Text className="text-lg font-bold text-textPrimary">
-                    Lançamentos
-                  </Text>
-                  {/* Import vira ação inline: o canto inferior é do AssistantFAB */}
-                  <Animated.View style={importPress.pressStyle}>
-                    <TouchableOpacity
-                      className="flex-row items-center bg-accentMuted border border-accent rounded-full px-3 py-1.5"
-                      onPress={handleImport}
-                      onPressIn={importPress.onPressIn}
-                      onPressOut={importPress.onPressOut}
-                      disabled={isImporting}
-                      accessibilityLabel={
-                        isImporting ? "Importando extrato" : "Importar extrato"
-                      }
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: isImporting }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      activeOpacity={0.8}
-                      style={{ opacity: isImporting ? 0.6 : 1 }}
-                    >
-                      {isImporting ? (
-                        <ActivityIndicator size="small" color={t.accent.neon} />
-                      ) : (
-                        <Upload size={14} color={t.accent.neon} />
-                      )}
-                      <Text className="text-accent text-xs font-bold ml-1">
-                        {isImporting ? (legendaDaImportacao ?? "Importando") : "Importar"}
+                      <Text className="text-lg font-bold text-textPrimary">
+                        Lançamentos
                       </Text>
-                    </TouchableOpacity>
-                  </Animated.View>
-                </View>
-                {activeOrigin !== ORIGIN_ALL && (
-                  // O recorte escrito por extenso ao lado dos números, como a
-                  // janela do ciclo faz na Análise: total sem período (ou sem
-                  // origem) declarado é total que ninguém consegue conferir
-                  <Text className="text-textSecondary text-xs mb-2">
-                    {`Mostrando só ${describeOriginFilter(activeOrigin, originOptions)} · ${visibleTransactions.length} ${plural(visibleTransactions.length, "lançamento", "lançamentos")}`}
-                  </Text>
-                )}
-                {pendingCount > 0 && (
-                  // Sem uploadId: a Revisão abre a fila global de pendências
-                  <Animated.View style={bannerPress.pressStyle}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        (navigation as any).navigate(APP_ROUTES.revisao)
-                      }
-                      onPressIn={bannerPress.onPressIn}
-                      onPressOut={bannerPress.onPressOut}
-                      accessibilityLabel={`${pendingCount} ${pendingCount === 1 ? "transação aguardando" : "transações aguardando"} revisão. Abrir revisão`}
-                      accessibilityRole="button"
-                      activeOpacity={0.85}
-                      className="flex-row items-center justify-between mb-3"
-                      style={{
-                        backgroundColor: t.semantic.warningMuted,
-                        borderRadius: radius.xl,
-                        paddingHorizontal: spacing[4],
-                        paddingVertical: spacing[3],
-                        minHeight: 44,
-                      }}
-                    >
-                      <Text
-                        className="text-xs font-bold flex-1 mr-2"
-                        style={{ color: t.semantic.warning }}
-                      >
-                        {pendingCount === 1
-                          ? "1 transação aguardando revisão"
-                          : `${pendingCount} transações aguardando revisão`}
+                      {/* Import vira ação inline: o canto inferior é do AssistantFAB */}
+                      <Animated.View style={importPress.pressStyle}>
+                        <TouchableOpacity
+                          className="flex-row items-center bg-accentMuted border border-accent rounded-full px-3 py-1.5"
+                          onPress={handleImport}
+                          onPressIn={importPress.onPressIn}
+                          onPressOut={importPress.onPressOut}
+                          disabled={isImporting}
+                          accessibilityLabel={
+                            isImporting
+                              ? "Importando extrato"
+                              : "Importar extrato"
+                          }
+                          accessibilityRole="button"
+                          accessibilityState={{ disabled: isImporting }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.8}
+                          style={{ opacity: isImporting ? 0.6 : 1 }}
+                        >
+                          {isImporting ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={t.accent.neon}
+                            />
+                          ) : (
+                            <Upload size={14} color={t.accent.neon} />
+                          )}
+                          <Text className="text-accent text-xs font-bold ml-1">
+                            {isImporting
+                              ? (legendaDaImportacao ?? "Importando")
+                              : "Importar"}
+                          </Text>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    </View>
+                    {activeOrigin !== ORIGIN_ALL && (
+                      // O recorte escrito por extenso ao lado dos números, como a
+                      // janela do ciclo faz na Análise: total sem período (ou sem
+                      // origem) declarado é total que ninguém consegue conferir
+                      <Text className="text-textSecondary text-xs mb-2">
+                        {`Mostrando só ${describeOriginFilter(activeOrigin, originOptions)} · ${visibleTransactions.length} ${plural(visibleTransactions.length, "lançamento", "lançamentos")}`}
                       </Text>
-                      <ChevronRight size={16} color={t.semantic.warning} />
-                    </TouchableOpacity>
-                  </Animated.View>
+                    )}
+                    {pendingCount > 0 && (
+                      // Sem uploadId: a Revisão abre a fila global de pendências
+                      <Animated.View style={bannerPress.pressStyle}>
+                        <TouchableOpacity
+                          onPress={() =>
+                            (navigation as any).navigate(APP_ROUTES.revisao)
+                          }
+                          onPressIn={bannerPress.onPressIn}
+                          onPressOut={bannerPress.onPressOut}
+                          accessibilityLabel={`${pendingCount} ${pendingCount === 1 ? "transação aguardando" : "transações aguardando"} revisão. Abrir revisão`}
+                          accessibilityRole="button"
+                          activeOpacity={0.85}
+                          className="flex-row items-center justify-between mb-3"
+                          style={{
+                            backgroundColor: t.semantic.warningMuted,
+                            borderRadius: radius.xl,
+                            paddingHorizontal: spacing[4],
+                            paddingVertical: spacing[3],
+                            minHeight: 44,
+                          }}
+                        >
+                          <Text
+                            className="text-xs font-bold flex-1 mr-2"
+                            style={{ color: t.semantic.warning }}
+                          >
+                            {pendingCount === 1
+                              ? "1 transação aguardando revisão"
+                              : `${pendingCount} transações aguardando revisão`}
+                          </Text>
+                          <ChevronRight size={16} color={t.semantic.warning} />
+                        </TouchableOpacity>
+                      </Animated.View>
+                    )}
+                  </>
                 )}
               </>
-            )}
-            </>
             )}
           </View>
         }
@@ -1353,25 +1461,29 @@ export default function BankIntegration() {
           // mostrando lançamentos"): repetir o convite a importar aqui pediria
           // à pessoa que resolvesse com o extrato dela algo que não é dela
           inFamilyScope ? null : (
-          // EC-231: o pote vazio no lugar do glifo de arquivo num disco; o
-          // card tracejado continua dizendo "aqui vai entrar algo". A segunda
-          // porta (conectar o banco) só existe para quem tem o conector
-          // ligado — quem não configurou não precisa nem saber dele
-          <Animated.View
-            entering={cardEntering}
-            className="mt-6 bg-surface rounded-3xl border border-dashed border-border"
-          >
-            <PotEmptyState
-              mood="comecar"
-              size={72}
-              title="Nenhum extrato importado"
-              body="Exporte o extrato no app do seu banco — prefira OFX, ou CSV — e importe aqui para gerar seus gráficos e relatórios."
-              actionLabel={isImporting ? "Importando…" : "Importar extrato"}
-              onAction={handleImport}
-              secondaryActionLabel={connector.enabled ? "Conectar banco" : undefined}
-              onSecondaryAction={connector.enabled ? handleConectarBanco : undefined}
-            />
-          </Animated.View>
+            // EC-231: o pote vazio no lugar do glifo de arquivo num disco; o
+            // card tracejado continua dizendo "aqui vai entrar algo". A segunda
+            // porta (conectar o banco) só existe para quem tem o conector
+            // ligado — quem não configurou não precisa nem saber dele
+            <Animated.View
+              entering={cardEntering}
+              className="mt-6 bg-surface rounded-3xl border border-dashed border-border"
+            >
+              <PotEmptyState
+                mood="comecar"
+                size={72}
+                title="Nenhum extrato importado"
+                body="Exporte o extrato no app do seu banco — prefira OFX, ou CSV — e importe aqui para gerar seus gráficos e relatórios."
+                actionLabel={isImporting ? "Importando…" : "Importar extrato"}
+                onAction={handleImport}
+                secondaryActionLabel={
+                  connector.enabled ? "Conectar banco" : undefined
+                }
+                onSecondaryAction={
+                  connector.enabled ? handleConectarBanco : undefined
+                }
+              />
+            </Animated.View>
           )
         }
       />

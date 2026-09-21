@@ -82,6 +82,19 @@ export default function FloatingLabelInput({
 
   // Erro pinta borda e rótulo direto, sem passar pela interpolação de foco:
   // feedback imediato, e a posição do rótulo segue só o par foco/conteúdo
+  /**
+   * O campo em foco: borda dourada INTEIRA e o fundo clareando.
+   *
+   * Escolha do dono em 16/09/2026, no comparador antes-e-depois. Ele tinha
+   * relatado que "só dá pra ver as pontinhas amarelas" — aquilo era o anel de
+   * foco do navegador desenhado reto por cima da borda arredondada, e já foi
+   * desligado no `global.css`. O que faltava era o outro lado: com só a cor da
+   * borda mudando, o foco some numa tela de 390 px ao sol. O fundo subindo de
+   * `surface` para `elevated` diz onde o dedo está sem depender de 1 px.
+   *
+   * A espessura vai de 1 para 1,5 px e não mais: 2 px empurra o texto o
+   * suficiente para o rótulo flutuado parecer tremer ao ganhar foco.
+   */
   const fieldAnimatedStyle = useAnimatedStyle(() => ({
     borderColor: hasError
       ? t.semantic.danger
@@ -90,6 +103,12 @@ export default function FloatingLabelInput({
           [0, 1],
           [t.border.default, t.accent.neon],
         ),
+    borderWidth: interpolate(focusProgress.value, [0, 1], [1, 1.5]),
+    backgroundColor: interpolateColor(
+      focusProgress.value,
+      [0, 1],
+      [t.background.surface, t.background.elevated],
+    ),
   }));
 
   const labelAnimatedStyle = useAnimatedStyle(() => ({
@@ -132,7 +151,7 @@ export default function FloatingLabelInput({
 
   return (
     <Animated.View
-      className="h-14 flex-row bg-elevated border rounded-xl"
+      className="h-14 flex-row rounded-xl"
       style={fieldAnimatedStyle}
     >
       {/* O input preenche o campo inteiro, então tocar em qualquer ponto já

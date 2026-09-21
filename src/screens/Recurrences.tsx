@@ -31,6 +31,7 @@ import {
 } from "../services/api";
 import type { AppTheme } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
 import { radius, spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
 import { askConfirm } from "../store/confirmStore";
@@ -345,6 +346,8 @@ export default function Recurrences() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const t = useTheme() as AppTheme;
+  // A ilha da barra de abas se esconde quando esta lista rola para baixo
+  const barraQueSeEsconde = useEsconderBarra();
   const { cardEntering } = useMotionPresets();
   const showToast = useToastStore((s) => s.showToast);
 
@@ -494,6 +497,7 @@ export default function Recurrences() {
         <RecurrencesSkeleton />
       ) : (
         <ScrollView
+        {...barraQueSeEsconde}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: spacing[5],

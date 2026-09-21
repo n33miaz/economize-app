@@ -41,10 +41,13 @@ import PageContainer from "./PageContainer";
 import ErrorState from "./ErrorState";
 import IndicatorDetailSheet from "./IndicatorDetailSheet";
 import AssetFilterSheet from "./AssetFilterSheet";
+import MarketHeadline from "./MarketHeadline";
 import {
   toggleFavoriteWithSnapshot,
   useFavoritesStore,
 } from "../store/favoritesStore";
+import { useEsconderBarra } from "../hooks/useEsconderBarra";
+import { ativoDaManchete, origemDaManchete } from "../utils/marketHeadline";
 import { AssetTab, useIndicatorStore } from "../store/indicatorStore";
 
 interface AssetListScreenProps {
@@ -55,6 +58,15 @@ interface AssetListScreenProps {
   symbol?: string;
   title?: string;
   featuredItems?: Indicator[];
+  /**
+   * Liga a lista à ilha da barra de abas e ao segmentado do topo.
+   *
+   * <p>OPT-IN de propósito. Esta mesma lista é usada dentro do
+   * `IndicatorDetailSheet`, e rolar o conteúdo de uma FOLHA não deve esconder
+   * a navegação atrás dela — a barra sumiria por causa de um gesto que não era
+   * sobre ela, e reapareceria só quando a folha fechasse.
+   */
+  esconderBarraAoRolar?: boolean;
 }
 
 // Resultado remoto amarrado ao termo que o produziu: sem isso, a resposta de
@@ -72,7 +84,12 @@ export default function AssetListScreen({
   tab,
   symbol,
   featuredItems = [],
+  esconderBarraAoRolar = false,
 }: AssetListScreenProps) {
+  // O hook é chamado SEMPRE (regra dos hooks); o que a prop decide é se os
+  // handlers chegam à lista
+  const barra = useEsconderBarra();
+  const barraDaLista = esconderBarraAoRolar ? barra : null;
   const t = useTheme();
   // Card de ativo é largo e baixo: numa coluna de 1180 px sobra deserto entre
   // o nome e a cotação. Duas colunas encurtam a varredura pela metade
@@ -226,96 +243,134 @@ export default function AssetListScreen({
     return FadeOut.duration(motion.duration.fast).easing(enteringEasing);
   }, [reducedMotion]);
 
+  /**
+   * A MANCHETE (escolha 10 do dono em 16/09: "uma manchete, depois o resto").
+   *
+   * <p>Ela sai da mesma fonte que a fita já usava — primeiro favorito, senão
+   * primeiro destaque —, e o ativo escolhido SAI da fita: repetir o mesmo card
+   * logo abaixo dele, pequeno, era o que fazia a tela não ter manchete
+   * nenhuma, só seis cards do mesmo tamanho.
+   */
+  const manchete = useMemo(
+    () => ativoDaManchete(favoriteItems, featuredItems),
+    [favoriteItems, featuredItems],
+  );
+  const origemManchete = origemDaManchete(favoriteItems);
+  const fita = useMemo(() => {
+    const fonte = favoriteItems.length > 0 ? favoriteItems : featuredItems;
+    return manchete ? fonte.filter((item) => item.id !== manchete.id) : fonte;
+  }, [favoriteItems, featuredItems, manchete]);
+
   const renderHeader = useMemo(() => {
     if (searchText) return null;
+
+    const cabecalhoDaManchete = manchete ? (
+      <View className="mt-2 mb-6">
+        <MarketHeadline
+          indicador={manchete}
+          origem={origemManchete}
+          onPress={() => handleOpenModal(manchete)}
+        />
+      </View>
+    ) : null;
 
     // Mesma régua da Home ("Favoritados" substitui "Mercado agora"): com
     // favoritos na aba, a faixa deles ocupa o lugar dos destaques; sem
     // favoritos, nada de estado vazio — os destaques (quando houver) voltam
-    if (favoriteItems.length > 0) {
+    if (fita.length > 0 && favoriteItems.length > 0) {
       return (
-        <Animated.View
-          entering={favEntering}
-          exiting={favExiting}
-          // A faixa fura o padding da lista para os cards deslizarem de
-          // borda a borda da tela
-          className="-mx-5 mt-2 mb-6"
-        >
-          <View className="flex-row items-center px-5 mb-3">
-            <Star size={14} color={t.accent.neon} fill={t.accent.neon} />
-            <Text className="text-base font-bold text-textPrimary ml-2">
-              Favoritos
-            </Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerClassName="px-3"
+        <>
+          {cabecalhoDaManchete}
+          <Animated.View
+            entering={favEntering}
+            exiting={favExiting}
+            // A faixa fura o padding da lista para os cards deslizarem de
+            // borda a borda da tela
+            className="-mx-5 mb-6"
           >
-            {favoriteItems.map((item) => (
-              <Animated.View
-                key={`fav-${item.id}`}
-                entering={favEntering}
-                exiting={favExiting}
-              >
+            <View className="flex-row items-center px-5 mb-3">
+              <Star size={14} color={t.accent.neon} fill={t.accent.neon} />
+              <Text className="text-base font-bold text-textPrimary ml-2">
+                Favoritos
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="px-3"
+            >
+              {fita.map((item) => (
+                <Animated.View
+                  key={`fav-${item.id}`}
+                  entering={favEntering}
+                  exiting={favExiting}
+                >
+                  <HighlightCard
+                    title={item.code || item.name}
+                    // Sem `?? 0`: quem decide como mostrar ausência de preço
+                    // é o card, e ele desenha traço. Zerar aqui afirmava que
+                    // o ativo não vale nada
+                    value={item.points ?? item.buy}
+                    variation={item.variation}
+                    type={item.type}
+                    Icon={
+                      item.type === "crypto"
+                        ? Bitcoin
+                        : isIndexData(item)
+                          ? TrendingUp
+                          : Banknote
+                    }
+                    onPress={() => handleOpenModal(item)}
+                  />
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        </>
+      );
+    }
+
+    // Sem favoritos: a manchete é o primeiro destaque e a fita é o resto
+    if (fita.length > 0) {
+      return (
+        <>
+          {cabecalhoDaManchete}
+          <View className="mb-6">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="px-4"
+            >
+              {fita.map((item) => (
                 <HighlightCard
+                  key={`highlight-${item.id}`}
                   title={item.code || item.name}
-                  // Sem `?? 0`: quem decide como mostrar ausência de preço
-                  // é o card, e ele desenha traço. Zerar aqui afirmava que
-                  // o ativo não vale nada
-                  value={item.points ?? item.buy}
+                  value={item.points || item.buy}
                   variation={item.variation}
                   type={item.type}
                   Icon={
-                    item.type === "crypto"
+                    item.code === "BTC" || item.id.includes("BTC")
                       ? Bitcoin
-                      : isIndexData(item)
-                        ? TrendingUp
-                        : Banknote
+                      : TrendingUp
                   }
+                  // Cartão morto era só vitrine — agora abre o mesmo sheet
                   onPress={() => handleOpenModal(item)}
                 />
-              </Animated.View>
-            ))}
-          </ScrollView>
-        </Animated.View>
+              ))}
+            </ScrollView>
+          </View>
+        </>
       );
     }
 
-    if (featuredItems.length > 0) {
-      return (
-        <View className="mb-6 mt-2">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerClassName="px-4"
-          >
-            {featuredItems.map((item) => (
-              <HighlightCard
-                key={`highlight-${item.id}`}
-                title={item.code || item.name}
-                value={item.points || item.buy}
-                variation={item.variation}
-                type={item.type}
-                Icon={
-                  item.code === "BTC" || item.id.includes("BTC")
-                    ? Bitcoin
-                    : TrendingUp
-                }
-                // Cartão morto era só vitrine — agora abre o mesmo sheet
-                onPress={() => handleOpenModal(item)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      );
-    }
-
-    return null;
+    // Um ativo só na fonte: a manchete consumiu o único, e não há fita
+    return cabecalhoDaManchete;
   }, [
     searchText,
+    manchete,
+    origemManchete,
+    fita,
     favoriteItems,
-    featuredItems,
     handleOpenModal,
     favEntering,
     favExiting,
@@ -481,6 +536,7 @@ export default function AssetListScreen({
         </View>
       ) : (
         <FlatList
+          {...barraDaLista}
           // `numColumns` não muda em voo: a chave remonta a lista no breakpoint
           key={`grade-${columns}`}
           data={rows}
