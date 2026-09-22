@@ -37,8 +37,12 @@ import {
   tripHeadline,
   tripItemCount,
   tripTotal,
+  tripCandidatesFor,
+  tripLinkedTo,
   tripUncheckedCount,
+  tripValue,
   tripVersion,
+  describeTripLine,
   upsertPayloadFrom,
 } from "../shopping";
 
@@ -605,5 +609,97 @@ describe("datas e estado", () => {
   it("ids do aparelho não colidem", () => {
     const ids = new Set(Array.from({ length: 200 }, () => makeClientId()));
     expect(ids.size).toBe(200);
+  });
+});
+
+describe("achar a compra de um lançamento do extrato", () => {
+  // O lançamento de R$ 600 que o dono tentou casar dentro do mercado
+  const LANCAMENTO = { amount: -600, date: "2026-09-20T12:00:00.000Z" };
+
+  it("a compra já ligada aparece por ela mesma, sem adivinhação", () => {
+    const ligada = trip({ clientId: "a", transactionId: "tx-1" });
+    const solta = trip({ clientId: "b" });
+    expect(tripLinkedTo([ligada, solta], "tx-1")).toBe(ligada);
+    expect(tripLinkedTo([ligada, solta], "tx-9")).toBeNull();
+  });
+
+  it("o valor da compra é o da nota; sem nota, o do carrinho; sem os dois, nenhum", () => {
+    expect(tripValue(trip({ receiptTotal: 612.34 }))).toBe(612.34);
+    expect(tripValue(trip({ items: [item({ unitPrice: 30, quantity: 2 })] }))).toBe(60);
+    expect(tripValue(trip())).toBeNull();
+  });
+
+  it("ordena pelo valor e pela data juntos — e o valor decide o empate de dia", () => {
+    const certa = trip({
+      clientId: "certa",
+      receiptTotal: 600,
+      closedAt: "2026-09-20T13:00:00.000Z",
+    });
+    const mesmoDiaOutroValor = trip({
+      clientId: "outro-valor",
+      receiptTotal: 90,
+      closedAt: "2026-09-20T13:00:00.000Z",
+    });
+    const mesmoValorOutroDia = trip({
+      clientId: "outro-dia",
+      receiptTotal: 600,
+      closedAt: "2026-08-02T13:00:00.000Z",
+    });
+
+    const ordem = tripCandidatesFor(
+      [mesmoDiaOutroValor, mesmoValorOutroDia, certa],
+      LANCAMENTO,
+    ).map((t) => t.clientId);
+
+    expect(ordem[0]).toBe("certa");
+    expect(ordem).toContain("outro-valor");
+    expect(ordem).toContain("outro-dia");
+  });
+
+  it("compra já amarrada a OUTRO lançamento não é candidata", () => {
+    const tomada = trip({ clientId: "tomada", receiptTotal: 600, transactionId: "tx-9" });
+    expect(tripCandidatesFor([tomada], LANCAMENTO)).toHaveLength(0);
+  });
+
+  it("compra da casa (de outra pessoa) não entra: ninguém concilia o extrato alheio", () => {
+    const daAlice = trip({ clientId: "alice", receiptTotal: 600, mine: false });
+    expect(tripCandidatesFor([daAlice], LANCAMENTO)).toHaveLength(0);
+  });
+
+  it("carrinho vazio entra por último, mas entra — é nele que a nota antiga falta", () => {
+    const vazia = trip({ clientId: "vazia", closedAt: "2026-09-20T13:00:00.000Z" });
+    const comValor = trip({
+      clientId: "com-valor",
+      receiptTotal: 590,
+      closedAt: "2026-09-20T13:00:00.000Z",
+    });
+    const ordem = tripCandidatesFor([vazia, comValor], LANCAMENTO).map((t) => t.clientId);
+    expect(ordem).toEqual(["com-valor", "vazia"]);
+  });
+
+  it("data ilegível não derruba a lista", () => {
+    const qualquer = trip({ clientId: "x", receiptTotal: 600 });
+    expect(
+      tripCandidatesFor([qualquer], { amount: -600, date: "lixo" }),
+    ).toHaveLength(1);
+  });
+
+  it("devolve no máximo o teto pedido", () => {
+    const muitas = Array.from({ length: 9 }, (_, i) =>
+      trip({ clientId: `t${i}`, receiptTotal: 600 + i }),
+    );
+    expect(tripCandidatesFor(muitas, LANCAMENTO)).toHaveLength(5);
+    expect(tripCandidatesFor(muitas, LANCAMENTO, 2)).toHaveLength(2);
+  });
+
+  it("a compra numa linha só diz loja, itens e valor", () => {
+    const linha = describeTripLine(
+      trip({ storeName: "Flash", receiptTotal: 612.34, items: [item()] }),
+    );
+    expect(linha).toContain("Flash");
+    expect(linha).toContain("1 item");
+    expect(linha).toContain("612,34");
+    // Sem valor nenhum, a linha não inventa um zero
+    expect(describeTripLine(trip({ storeName: "" }))).toBe("Compra · 0 itens");
   });
 });

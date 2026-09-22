@@ -918,3 +918,79 @@ export function describeTripStatus(trip: ShoppingTrip): string {
   }
   return `Começou ${formatTripDate(trip.startedAt)}`;
 }
+
+/** Quanto vale a compra para efeito de comparação: a nota manda, o carrinho supre. */
+export function tripValue(trip: ShoppingTrip): number | null {
+  if (trip.receiptTotal != null) return trip.receiptTotal;
+  const carrinho = tripTotal(trip);
+  return carrinho > 0 ? carrinho : null;
+}
+
+/** A compra já ligada a ESTE lançamento, quando existe. */
+export function tripLinkedTo(
+  trips: ShoppingTrip[],
+  transactionId: string,
+): ShoppingTrip | null {
+  return trips.find((trip) => trip.transactionId === transactionId) ?? null;
+}
+
+/** O lançamento do extrato como o casamento precisa dele. */
+export interface TripMatchTarget {
+  /** Valor absoluto, em reais. */
+  amount: number;
+  /** Data do lançamento, ISO. */
+  date: string;
+}
+
+/** Um real de diferença pesa o mesmo que este tanto de dia de distância. */
+const PESO_DO_DIA = 15;
+
+/** Compra sem valor nenhum começa devendo isto, para não ganhar de uma que bate. */
+const PENALIDADE_SEM_VALOR = 500;
+
+/**
+ * As compras que PODEM ser este lançamento, da mais parecida para a menos.
+ *
+ * <p>Nasceu do dia em que o dono tentou anexar a nota de R$ 600 do Flash
+ * pelo extrato e não achou por onde: a ligação só existia no fechamento da
+ * compra, e quem já fechou tinha de adivinhar o caminho de volta.
+ *
+ * <p>Ordena por valor e por data juntos — um real de diferença vale o mesmo
+ * que quinze dias de distância. Não é estatística: é que duas compras do
+ * mesmo mercado na mesma semana se distinguem pelo valor, e duas de valor
+ * parecido se distinguem pela data. Compra sem valor algum (carrinho vazio,
+ * sem nota) entra por último, mas entra: é justamente nela que a nota de um
+ * lançamento antigo costuma faltar.
+ */
+export function tripCandidatesFor(
+  trips: ShoppingTrip[],
+  alvo: TripMatchTarget,
+  limit = 5,
+): ShoppingTrip[] {
+  const quando = new Date(alvo.date).getTime();
+  const livres = trips.filter((trip) => trip.transactionId == null && trip.mine);
+
+  const pontuadas = livres.map((trip) => {
+    const valor = tripValue(trip);
+    const referencia = trip.closedAt ?? trip.startedAt;
+    const dias = Number.isNaN(quando)
+      ? 0
+      : Math.abs(new Date(referencia).getTime() - quando) / 86_400_000;
+    const distanciaDeValor =
+      valor == null ? PENALIDADE_SEM_VALOR : Math.abs(valor - Math.abs(alvo.amount));
+    return { trip, nota: distanciaDeValor + dias * PESO_DO_DIA };
+  });
+
+  return pontuadas
+    .sort((a, b) => a.nota - b.nota)
+    .slice(0, limit)
+    .map((entrada) => entrada.trip);
+}
+
+/** "Flash · 23 itens · R$ 612,34" — a compra numa linha só. */
+export function describeTripLine(trip: ShoppingTrip): string {
+  const partes = [trip.storeName || "Compra", itemCountLabel(tripItemCount(trip))];
+  const valor = tripValue(trip);
+  if (valor != null) partes.push(formatBRL(valor));
+  return partes.join(" · ");
+}

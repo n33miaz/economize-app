@@ -55,6 +55,7 @@ import BankLogo from "./BankLogo";
 import CategoryIcon from "./CategoryIcon";
 import CustomModal from "./CustomModal";
 import FloatingLabelInput from "./FloatingLabelInput";
+import TransactionReceiptBlock from "./TransactionReceiptBlock";
 import { amountColor } from "./TransactionRow";
 
 // A partir daqui o contador aparece: antes disso ele só faria barulho
@@ -103,6 +104,11 @@ interface TransactionDetailSheetProps {
   onClose: () => void;
   /** Recebe a transação como o servidor devolveu, para o chamador propagar. */
   onUpdated: (updated: BankTransaction) => void;
+  /**
+   * Abre a compra do carrinho ligada a este lançamento. Ausente esconde o
+   * atalho — a folha continua inteira sem um navegador por perto.
+   */
+  onOpenTrip?: (tripClientId: string) => void;
 }
 
 /**
@@ -117,6 +123,7 @@ export default function TransactionDetailSheet({
   visible,
   onClose,
   onUpdated,
+  onOpenTrip,
 }: TransactionDetailSheetProps) {
   const t = useTheme();
   const categories = useCategoriesStore((s) => s.items);
@@ -542,6 +549,15 @@ export default function TransactionDetailSheet({
           A data é a de lançamento, em UTC — o extrato não traz data de
           liquidação, e ela é outra coisa que a hora em que a linha entrou aqui.
         </Text>
+
+        {/* Só num débito de verdade: transferência entre as próprias contas e
+          entrada de dinheiro não têm cupom fiscal para anexar */}
+        {transaction.type === "DEBIT" && !transaction.internalTransfer ? (
+          <TransactionReceiptBlock
+            transaction={transaction}
+            onOpenTrip={onOpenTrip}
+          />
+        ) : null}
 
         <View
           style={{

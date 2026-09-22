@@ -1519,6 +1519,12 @@ export default function BankIntegration() {
         visible={detailTx !== null}
         onClose={() => setDetailTx(null)}
         onUpdated={applyTransaction}
+        onOpenTrip={(clientId) => {
+          // A folha sai da frente antes de navegar: uma camada aberta sobre
+          // a tela nova é o mesmo defeito que já custou caro aqui
+          setDetailTx(null);
+          (navigation as any).navigate(APP_ROUTES.compra, { clientId });
+        }}
       />
 
       {/* A âncora do ciclo é a MESMA da Home e da Análise: mudar aqui muda lá */}
