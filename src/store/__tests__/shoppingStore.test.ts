@@ -376,6 +376,65 @@ describe("fechar e conciliar", () => {
     expect(resultado.message.length).toBeGreaterThan(0);
     expect(useShoppingStore.getState().trips[0].status).toBe("OPEN");
   });
+
+  it("compra que ainda não subiu é enviada ANTES de conciliar", async () => {
+    // O servidor só concilia o que ele conhece; sem isto a compra criada
+    // pelo extrato levava "não encontrada" na cara
+    const clientId = abrirCompraComItens();
+    api.reconcileShoppingTrip.mockResolvedValue({ clientId, status: "RECONCILED" });
+
+    await useShoppingStore.getState().reconcile(clientId, "tx");
+
+    expect(api.upsertShoppingTrip).toHaveBeenCalled();
+  });
+});
+
+describe("anexar a nota partindo do extrato", () => {
+  const LANCAMENTO = {
+    transactionId: "tx-600",
+    storeName: "FLASH APP",
+    amount: -600,
+    date: "2026-09-20T12:00:00.000Z",
+    receiptKey: "35260912345678000195650010001234561123456788",
+  };
+
+  it("cria a compra do dia do lançamento, com o valor do banco e a nota, e liga", async () => {
+    api.reconcileShoppingTrip.mockImplementation(async (clientId: string) => ({
+      clientId,
+      status: "RECONCILED",
+    }));
+
+    const resultado = await useShoppingStore
+      .getState()
+      .attachReceiptToTransaction(LANCAMENTO);
+
+    expect(resultado.ok).toBe(true);
+    const compra = useShoppingStore.getState().trips[0];
+    expect(compra.storeName).toBe("FLASH APP");
+    expect(compra.receiptTotal).toBe(600);
+    expect(compra.receiptKey).toBe(LANCAMENTO.receiptKey);
+    // A data é a da ida ao mercado, não a de agora
+    expect(compra.startedAt).toBe(LANCAMENTO.date);
+    expect(compra.closedAt).toBe(LANCAMENTO.date);
+    expect(compra.status).toBe("RECONCILED");
+    expect(api.reconcileShoppingTrip).toHaveBeenCalledWith(resultado.clientId, "tx-600");
+  });
+
+  it("sem rede a nota fica guardada no aparelho — e diz isso, sem inventar sucesso", async () => {
+    api.upsertShoppingTrip.mockRejectedValue(new Error("Network Error"));
+
+    const resultado = await useShoppingStore
+      .getState()
+      .attachReceiptToTransaction(LANCAMENTO);
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado.message).toMatch(/internet/i);
+    expect(api.reconcileShoppingTrip).not.toHaveBeenCalled();
+    // mas a compra existe aqui, com a nota: nada se perdeu
+    const compra = useShoppingStore.getState().trips[0];
+    expect(compra.receiptKey).toBe(LANCAMENTO.receiptKey);
+    expect(compra.dirty).toBe(true);
+  });
 });
 
 describe("preço de outras vezes", () => {

@@ -120,12 +120,16 @@ describe("AddItemSheet", () => {
     expect(getByLabelText("Quantidade").props.value).toBe("1");
   });
 
-  it("sugestões completam o nome em um toque", () => {
+  it("sugestões completam o nome em um toque", async () => {
     const { getByLabelText, props } = montar({
       suggestionsFor: jest.fn((q: string) => (q ? ["Arroz integral"] : [])),
     });
 
     fireEvent.changeText(getByLabelText("Nome do item"), "arr");
+
+    // As sugestões só aparecem quando o dedo PARA: durante a digitação a
+    // folha não varre compra nenhuma, e é isso que mantém a tecla rápida
+    await waitFor(() => expect(getByLabelText("Usar Arroz integral")).toBeTruthy());
     fireEvent.press(getByLabelText("Usar Arroz integral"));
 
     expect(getByLabelText("Nome do item").props.value).toBe("Arroz integral");
@@ -187,5 +191,86 @@ describe("AddItemSheet", () => {
     expect(await findByLabelText("Tirar outra foto do preço")).toBeTruthy();
     fireEvent.press(getByLabelText("Adicionar ao carrinho"));
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ photoRef: "file:///preco.jpg" }));
+  });
+});
+
+describe("AddItemSheet — o teclado do app", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    detectar.mockResolvedValue(true);
+  });
+
+  it("confirmar o nome leva ao preço SEM trocar de teclado do sistema", () => {
+    const { getByLabelText } = montar();
+
+    fireEvent.changeText(getByLabelText("Nome do item"), "Arroz");
+    fireEvent(getByLabelText("Nome do item"), "submitEditing");
+
+    // as teclas do app entram no lugar do teclado do Android
+    expect(getByLabelText("7")).toBeTruthy();
+    expect(getByLabelText("Vírgula")).toBeTruthy();
+  });
+
+  it("as teclas escrevem no preço, e o botão de adicionar vive entre elas", () => {
+    const { getByLabelText, props } = montar();
+
+    fireEvent.changeText(getByLabelText("Nome do item"), "Arroz");
+    fireEvent(getByLabelText("Preço unitário"), "focus");
+
+    fireEvent.press(getByLabelText("5"));
+    fireEvent.press(getByLabelText("Vírgula"));
+    fireEvent.press(getByLabelText("9"));
+    fireEvent.press(getByLabelText("9"));
+    expect(getByLabelText("Preço unitário").props.value).toBe("5,99");
+
+    fireEvent.press(getByLabelText("Adicionar ao carrinho"));
+    expect(props.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Arroz", unitPrice: 5.99 }),
+    );
+  });
+
+  it("depois de adicionar, o teclado de números sai da frente para o próximo nome", () => {
+    const { getByLabelText, queryByLabelText } = montar();
+
+    fireEvent.changeText(getByLabelText("Nome do item"), "Arroz");
+    fireEvent(getByLabelText("Preço unitário"), "focus");
+    fireEvent.press(getByLabelText("Adicionar ao carrinho"));
+
+    expect(queryByLabelText("7")).toBeNull();
+  });
+
+  it("tocar num campo de letras recolhe o teclado de números", () => {
+    const { getByLabelText, queryByLabelText } = montar();
+
+    fireEvent(getByLabelText("Preço unitário"), "focus");
+    expect(getByLabelText("7")).toBeTruthy();
+
+    fireEvent(getByLabelText("Nome do item"), "focus");
+    expect(queryByLabelText("7")).toBeNull();
+  });
+
+  it("digitar não varre compra nenhuma — era daí que saíam os nomes duplicados", async () => {
+    // "aabsorvente", "llinguiça", "pimenpimenta calabresa": o começo do que
+    // foi digitado colado na palavra inteira. Cada tecla disparava duas
+    // varreduras de todas as compras, o render chegava atrasado e o Android
+    // reescrevia o campo. Aqui se cobra que a tecla só escreva.
+    const priceSummaryFor = jest.fn(() => null);
+    const { getByLabelText } = montar({ priceSummaryFor });
+    const campo = getByLabelText("Nome do item");
+    priceSummaryFor.mockClear();
+
+    for (const texto of ["a", "ab", "abs", "abso", "absor"]) {
+      fireEvent.changeText(campo, texto);
+    }
+    expect(priceSummaryFor).not.toHaveBeenCalled();
+
+    // e quando o dedo para, a conta acontece UMA vez, com o nome inteiro
+    await waitFor(() => expect(priceSummaryFor).toHaveBeenCalledWith("absor"));
+    expect(priceSummaryFor).toHaveBeenCalledTimes(1);
+  });
+
+  it("o carrinho continua à vista com a folha aberta", () => {
+    const { getByText } = montar({ resumo: { total: 143.2, itens: 12 } });
+    expect(getByText(/No carrinho: R\$ ?143,20 · 12 itens/)).toBeTruthy();
   });
 });

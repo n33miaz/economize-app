@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -22,7 +24,7 @@ import type { ReconcileCandidate } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
 import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
-import { useContentCapStyle } from "../hooks/useBreakpoint";
+import { useBreakpoint, useContentCapStyle } from "../hooks/useBreakpoint";
 import { useShoppingSync } from "../hooks/useShoppingSync";
 import { askConfirm } from "../store/confirmStore";
 import { useShoppingStore } from "../store/shoppingStore";
@@ -52,6 +54,7 @@ import {
 } from "../utils/shopping";
 
 import AddItemSheet from "../components/AddItemSheet";
+import AmountKeypad from "../components/AmountKeypad";
 import Badge from "../components/Badge";
 import CustomModal from "../components/CustomModal";
 import PageContainer from "../components/PageContainer";
@@ -490,6 +493,7 @@ export default function ShoppingTrip() {
         onSave={salvarItem}
         onDelete={tirarDoCarrinho}
         onClose={() => setFolhaItem(false)}
+        resumo={{ total, itens: quantidade }}
       />
 
       <CloseTripSheet
@@ -760,6 +764,12 @@ function CloseTripSheet({
   const fetchReconcileCandidates = useShoppingStore((s) => s.fetchReconcileCandidates);
   const reconcile = useShoppingStore((s) => s.reconcile);
 
+  const { isWide } = useBreakpoint();
+  // O mesmo teclado da folha do item: no caixa, o total da nota é digitado
+  // de pé, e o botão de fechar tem de continuar visível
+  const [keypad, setKeypad] = useState(false);
+  const tecladoDoApp = Platform.OS !== "web" && !isWide;
+
   const [fase, setFase] = useState<FasePorFechar>("confirmar");
   const [nota, setNota] = useState("");
   // A nota fiscal lida do QR. Fica na folha, e não no store, porque ela só
@@ -791,6 +801,7 @@ function CloseTripSheet({
   useEffect(() => {
     if (!visible) return;
     setNota("");
+    setKeypad(false);
     setErro(null);
     setConciliando(null);
     setCandidatos([]);
@@ -854,7 +865,12 @@ function CloseTripSheet({
       onClose={() => setFolhaNota(false)}
     />
     <CustomModal visible={visible} onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={SHEET_PADDING}>
+      <View style={{ flexShrink: 1 }}>
+      <ScrollView
+        style={{ flexShrink: 1 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ ...SHEET_PADDING, paddingBottom: spacing[4] }}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: spacing[3] }}>
           <Text style={{ flex: 1, color: t.text.primary, ...SHEET_TITLE }}>
             {fase === "confirmar" ? "Fechar compra" : "Conciliar com o extrato"}
@@ -922,17 +938,24 @@ function CloseTripSheet({
               }}
               keyboardType="decimal-pad"
               accessibilityLabel="Total da nota"
+              showSoftInputOnFocus={!tecladoDoApp}
+              onFocus={() => {
+                if (!tecladoDoApp) return;
+                setKeypad(true);
+                Keyboard.dismiss();
+              }}
               placeholder="0,00"
               placeholderTextColor={t.text.tertiary}
               returnKeyType="done"
+              blurOnSubmit={false}
               onSubmitEditing={fechar}
               style={{
                 color: t.text.primary,
                 fontSize: 18,
                 fontWeight: "700",
                 fontVariant: ["tabular-nums"],
-                borderWidth: 1,
-                borderColor: t.border.subtle,
+                borderWidth: keypad ? 1.5 : 1,
+                borderColor: keypad ? t.accent.neon : t.border.subtle,
                 borderRadius: radius.lg,
                 backgroundColor: t.background.elevated,
                 paddingHorizontal: spacing[3],
@@ -941,36 +964,6 @@ function CloseTripSheet({
               }}
             />
 
-            {erro ? (
-              <Text style={{ color: t.semantic.danger, fontSize: 12, marginTop: spacing[3] }}>
-                {erro}
-              </Text>
-            ) : null}
-
-            <Pressable
-              onPress={fechar}
-              disabled={fechando}
-              accessibilityRole="button"
-              accessibilityLabel="Confirmar fechamento da compra"
-              accessibilityState={{ disabled: fechando }}
-              style={{
-                height: 52,
-                borderRadius: radius.xl,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: t.accent.neon,
-                opacity: fechando ? 0.6 : 1,
-                marginTop: spacing[4],
-              }}
-            >
-              {fechando ? (
-                <ActivityIndicator size="small" color={t.text.inverse} />
-              ) : (
-                <Text style={{ color: t.text.inverse, fontWeight: "700", fontSize: 16 }}>
-                  Fechar compra
-                </Text>
-              )}
-            </Pressable>
           </>
         ) : (
           <>
@@ -1059,12 +1052,73 @@ function CloseTripSheet({
               </Text>
             ) : null}
 
-            {erro ? (
-              <Text style={{ color: t.semantic.danger, fontSize: 12, marginTop: spacing[3] }}>
-                {erro}
-              </Text>
-            ) : null}
+          </>
+        )}
+      </ScrollView>
 
+      {/* Rodapé fixo: o que encerra a folha não some atrás do teclado */}
+      {erro ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={{
+            color: t.semantic.danger,
+            fontSize: 12,
+            paddingHorizontal: spacing[5],
+            paddingTop: spacing[2],
+          }}
+        >
+          {erro}
+        </Text>
+      ) : null}
+
+      {fase === "confirmar" && keypad ? (
+        <AmountKeypad
+          value={nota}
+          onChange={(proximo) => {
+            setNota(proximo);
+            if (erro) setErro(null);
+          }}
+          actionLabel="Fechar compra"
+          onAction={fechar}
+          onDismiss={() => setKeypad(false)}
+          hint={`Carrinho: ${formatBRL(total)}`}
+          disabled={fechando}
+        />
+      ) : (
+        <View
+          style={{
+            paddingHorizontal: spacing[5],
+            paddingTop: spacing[3],
+            paddingBottom: spacing[2],
+            borderTopWidth: 1,
+            borderTopColor: t.border.subtle,
+          }}
+        >
+          {fase === "confirmar" ? (
+            <Pressable
+              onPress={fechar}
+              disabled={fechando}
+              accessibilityRole="button"
+              accessibilityLabel="Confirmar fechamento da compra"
+              accessibilityState={{ disabled: fechando }}
+              style={{
+                height: 52,
+                borderRadius: radius.xl,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: t.accent.neon,
+                opacity: fechando ? 0.6 : 1,
+              }}
+            >
+              {fechando ? (
+                <ActivityIndicator size="small" color={t.text.inverse} />
+              ) : (
+                <Text style={{ color: t.text.inverse, fontWeight: "700", fontSize: 16 }}>
+                  Fechar compra
+                </Text>
+              )}
+            </Pressable>
+          ) : (
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
@@ -1075,16 +1129,16 @@ function CloseTripSheet({
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: t.background.elevated,
-                marginTop: spacing[4],
               }}
             >
               <Text style={{ color: t.text.primary, fontWeight: "700", fontSize: 14 }}>
                 {candidatos.length > 0 ? "Deixar para depois" : "Concluir"}
               </Text>
             </Pressable>
-          </>
-        )}
-      </ScrollView>
+          )}
+        </View>
+      )}
+      </View>
     </CustomModal>
     </>
   );

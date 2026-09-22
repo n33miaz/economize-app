@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
+  type TextInputProps,
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -18,20 +20,93 @@ import X from "lucide-react-native/dist/esm/icons/x";
 import type { PriceSummary } from "../services/api";
 import { useTheme } from "../theme/ThemeProvider";
 import { SHEET_PADDING, SHEET_TITLE, radius, spacing } from "../theme/ds";
+import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useDebounce } from "../hooks/useDebounce";
 import { detectCamera, shrinkImageForWeb } from "../utils/camera";
 import * as Haptics from "../utils/haptics";
-import { parseAmount } from "../utils/money";
+import { formatBRL, parseAmount } from "../utils/money";
 import {
+  ITEM_NAME_MAX,
   type ItemInput,
   type ShoppingItem,
   describePriceHint,
   formatQuantity,
   parseQuantity,
 } from "../utils/shopping";
+import AmountKeypad from "./AmountKeypad";
 import CustomModal from "./CustomModal";
 
-/** Espera depois da última tecla antes de perguntar o preço ao servidor. */
-const PRICE_LOOKUP_DEBOUNCE_MS = 400;
+/**
+ * Quanto tempo o nome precisa ficar parado antes de a folha pensar nele.
+ *
+ * <p><b>Isto é o conserto de um defeito, não um afinamento.</b> A compra de
+ * 21/09 voltou do mercado com "aabsorvente", "llinguiça", "pimenpimenta
+ * calabresa", "mussarmussarela". Todos têm a mesma forma: o começo do que
+ * foi digitado, e em seguida a palavra inteira.
+ *
+ * <p>A causa: cada tecla disparava duas varreduras de TODAS as compras e de
+ * TODOS os itens — uma para as sugestões de nome, outra para o histórico de
+ * preço. Com 45 itens no carrinho, o render de uma tecla chegava depois da
+ * tecla seguinte, e o Android reaplicava o texto antigo por cima do que já
+ * estava no campo. O resultado é a palavra escrita duas vezes pela metade.
+ *
+ * <p>Com o nome atrasado, a tecla só escreve; as contas caras acontecem
+ * quando o dedo para. E o campo do nome é memoizado logo abaixo, para que
+ * nem elas nem o teclado de números o façam renderizar de novo.
+ */
+const NAME_SETTLE_MS = 250;
+
+/** Espera depois disso antes de perguntar o preço ao servidor. */
+const PRICE_LOOKUP_DEBOUNCE_MS = 200;
+
+/**
+ * O campo do nome, isolado do resto da folha.
+ *
+ * <p>`memo` aqui não é micro-otimização: é o que impede que a linha de
+ * preço, as sugestões, o erro ou o teclado de números toquem no campo
+ * enquanto ele está sendo digitado. Cada um desses toques é uma chance de o
+ * Android reescrever o texto — que é de onde vinham os nomes duplicados.
+ */
+const CampoDoNome = React.memo(
+  React.forwardRef<
+    TextInput,
+    {
+      value: string;
+      onChangeText: (texto: string) => void;
+      onFocus: () => void;
+      onSubmitEditing: () => void;
+      style: TextInputProps["style"];
+      placeholderTextColor: string;
+    }
+  >(function CampoDoNome(
+    { value, onChangeText, onFocus, onSubmitEditing, style, placeholderTextColor },
+    ref,
+  ) {
+  return (
+    <TextInput
+      ref={ref}
+      value={value}
+      onChangeText={onChangeText}
+      accessibilityLabel="Nome do item"
+      placeholder="arroz, leite, sabão…"
+      placeholderTextColor={placeholderTextColor}
+      maxLength={ITEM_NAME_MAX}
+      autoCapitalize="sentences"
+      // Os três juntos desligam a correção do teclado do Android. Enquanto
+      // ela existe, o teclado guarda uma palavra "em composição" que ele
+      // reescreve sozinho — e era sobre ela que o texto duplicava
+      autoCorrect={false}
+      autoComplete="off"
+      spellCheck={false}
+      returnKeyType="next"
+      blurOnSubmit={false}
+      onFocus={onFocus}
+      onSubmitEditing={onSubmitEditing}
+      style={style}
+    />
+  );
+  }),
+);
 
 interface AddItemSheetProps {
   visible: boolean;
@@ -48,6 +123,12 @@ interface AddItemSheetProps {
   onSave: (input: ItemInput) => void;
   onDelete?: (item: ShoppingItem) => void;
   onClose: () => void;
+  /**
+   * O carrinho como está agora. Aparece no alto da folha porque, com a folha
+   * aberta, a tela de trás some — e a pergunta "quanto já deu?" é a razão de
+   * o dono estar com o celular na mão no corredor.
+   */
+  resumo?: { total: number; itens: number } | null;
 }
 
 /**
@@ -77,8 +158,10 @@ export default function AddItemSheet({
   onSave,
   onDelete,
   onClose,
+  resumo,
 }: AddItemSheetProps) {
   const t = useTheme();
+  const { isWide } = useBreakpoint();
   const [nome, setNome] = useState("");
   const [quantidade, setQuantidade] = useState("1");
   const [preco, setPreco] = useState("");
@@ -89,11 +172,19 @@ export default function AddItemSheet({
   // Na web começa escondido até a resposta chegar: botão de câmera que abre
   // "escolher arquivo" num desktop sem webcam é promessa quebrada
   const [temCamera, setTemCamera] = useState(Platform.OS !== "web");
+  // O teclado de números do app está na tela? Ele substitui o do sistema no
+  // campo do preço; no desktop e no tablet largo não aparece, porque lá o
+  // teclado é físico e a folha é um diálogo estreito
+  const [keypad, setKeypad] = useState(false);
+  const tecladoDoApp = Platform.OS !== "web" && !isWide;
   const nomeRef = useRef<TextInput>(null);
   const precoRef = useRef<TextInput>(null);
+  const rolagemRef = useRef<ScrollView>(null);
   // Descarta a resposta de uma consulta velha: quem digitou "arroz" e depois
   // "arroz integral" não pode ver o preço do arroz chegar por último
   const consultaRef = useRef(0);
+  // O nome como as contas caras o enxergam: sempre um passo atrás do dedo
+  const nomeParado = useDebounce(nome.trim(), NAME_SETTLE_MS);
 
   useEffect(() => {
     let vivo = true;
@@ -120,32 +211,44 @@ export default function AddItemSheet({
     setFoto(editing?.photoRef ?? null);
     setErro(null);
     setDica(null);
+    setKeypad(false);
     // Depois da animação da folha: focar antes de ela existir na tela não
     // abre o teclado
     const foco = setTimeout(() => nomeRef.current?.focus(), 350);
     return () => clearTimeout(foco);
   }, [visible, editing]);
 
-  // A linha de preço: o aparelho responde na hora, o servidor quando puder
+  // A linha de preço: o aparelho responde quando o dedo para, o servidor
+  // logo depois. Nenhum dos dois acontece durante a digitação
   useEffect(() => {
     if (!visible) return;
-    const alvo = nome.trim();
-    if (!alvo) {
+    if (!nomeParado) {
       setDica(null);
       return;
     }
-    setDica(describePriceHint(priceSummaryFor(alvo), storeName));
+    setDica(describePriceHint(priceSummaryFor(nomeParado), storeName));
     const id = ++consultaRef.current;
     const espera = setTimeout(() => {
-      lookupPrice(alvo).then((resumo) => {
+      lookupPrice(nomeParado).then((resumo) => {
         if (consultaRef.current !== id) return;
         setDica(describePriceHint(resumo, storeName));
       });
     }, PRICE_LOOKUP_DEBOUNCE_MS);
     return () => clearTimeout(espera);
-  }, [nome, visible, storeName, priceSummaryFor, lookupPrice]);
+  }, [nomeParado, visible, storeName, priceSummaryFor, lookupPrice]);
 
-  const sugestoes = visible && !editing ? suggestionsFor(nome) : [];
+  const sugestoes = useMemo(
+    () => (visible && !editing ? suggestionsFor(nomeParado) : []),
+    [visible, editing, suggestionsFor, nomeParado],
+  );
+
+  // Sem `erro` na lista de dependências: o updater funcional já sabe o que
+  // havia, e uma dependência a mais aqui recriaria o callback e derrubaria a
+  // memoização do campo a cada erro mostrado
+  const digitarNome = useCallback((texto: string) => {
+    setNome(texto);
+    setErro((atual) => (atual ? null : atual));
+  }, []);
 
   const limpar = useCallback(() => {
     setNome("");
@@ -156,6 +259,26 @@ export default function AddItemSheet({
     setErro(null);
     setDica(null);
   }, []);
+
+  /**
+   * Ir do nome para o preço.
+   *
+   * <p>Com o teclado do app, o dedo NÃO vai para o campo: vai para as
+   * teclas. Dar foco ao campo aqui seria pedir ao Android que decidisse de
+   * novo se abre o teclado do sistema — e era essa decisão, quarenta vezes
+   * por compra, que fazia a folha piscar.
+   */
+  const irParaOPreco = useCallback(() => {
+    if (!tecladoDoApp) {
+      precoRef.current?.focus();
+      return;
+    }
+    setKeypad(true);
+    Keyboard.dismiss();
+  }, [tecladoDoApp]);
+
+  /** Qualquer campo de LETRAS recolhe o teclado de números. */
+  const voltarAoTecladoDoSistema = useCallback(() => setKeypad(false), []);
 
   const ajustarQuantidade = (delta: number) => {
     const atual = parseQuantity(quantidade) ?? 1;
@@ -196,8 +319,12 @@ export default function AddItemSheet({
       return;
     }
     // Novo item: a folha continua aberta, limpa e com o foco no nome — o
-    // próximo produto já pode ser digitado
+    // próximo produto já pode ser digitado. A rolagem volta ao topo sem
+    // animação: depois de quarenta itens, a folha rolada no meio fazia o
+    // campo do nome "sumir" mesmo com o foco nele
     limpar();
+    setKeypad(false);
+    rolagemRef.current?.scrollTo({ y: 0, animated: false });
     nomeRef.current?.focus();
   };
 
@@ -237,23 +364,43 @@ export default function AddItemSheet({
     letterSpacing: 0.5,
   };
 
-  const campo = {
-    color: t.text.primary,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: radius.lg,
-    backgroundColor: t.background.elevated,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    minHeight: 48,
-  };
+  const campo = useMemo(
+    () => ({
+      color: t.text.primary,
+      fontSize: 16,
+      borderWidth: 1,
+      borderColor: t.border.subtle,
+      borderRadius: radius.lg,
+      backgroundColor: t.background.elevated,
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[3],
+      minHeight: 48,
+    }),
+    [t],
+  );
 
+  // O estilo do campo do nome não pode ser um objeto novo a cada render: ele
+  // é uma prop, e uma prop nova por tecla desfaz a memoização que existe
+  // justamente para o campo não ser tocado enquanto se digita
+  const estiloDoNome = useMemo(
+    () => ({ ...campo, marginTop: spacing[2] }),
+    [campo],
+  );
+
+  const acaoLabel = editing ? "Salvar item" : "Adicionar ao carrinho";
+
+  // A folha é rolagem EM CIMA e rodapé fixo EMBAIXO. Antes o botão de
+  // adicionar era o último filho da rolagem e, com o teclado aberto, ficava
+  // abaixo da dobra: o dono digitava o item e não tinha onde tocar. Agora
+  // ele nunca sai da tela.
   return (
     <CustomModal visible={visible} onClose={onClose}>
+      <View style={{ flexShrink: 1 }}>
       <ScrollView
+        ref={rolagemRef}
+        style={{ flexShrink: 1 }}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={SHEET_PADDING}
+        contentContainerStyle={{ ...SHEET_PADDING, paddingBottom: spacing[4] }}
       >
         <View
           style={{
@@ -262,9 +409,19 @@ export default function AddItemSheet({
             marginBottom: spacing[3],
           }}
         >
-          <Text style={{ flex: 1, color: t.text.primary, ...SHEET_TITLE }}>
-            {editing ? "Editar item" : "Novo item"}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: t.text.primary, ...SHEET_TITLE }}>
+              {editing ? "Editar item" : "Novo item"}
+            </Text>
+            {resumo && resumo.itens > 0 ? (
+              <Text
+                style={{ color: t.text.tertiary, fontSize: 12, marginTop: 2 }}
+              >
+                No carrinho: {formatBRL(resumo.total)} · {resumo.itens}{" "}
+                {resumo.itens === 1 ? "item" : "itens"}
+              </Text>
+            ) : null}
+          </View>
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
@@ -276,24 +433,21 @@ export default function AddItemSheet({
         </View>
 
         <Text style={rotuloCampo}>O que você pegou</Text>
-        <TextInput
+        <CampoDoNome
           ref={nomeRef}
           value={nome}
-          onChangeText={(texto) => {
-            setNome(texto);
-            if (erro) setErro(null);
-          }}
-          accessibilityLabel="Nome do item"
-          placeholder="arroz, leite, sabão…"
+          onChangeText={digitarNome}
+          onFocus={voltarAoTecladoDoSistema}
+          onSubmitEditing={irParaOPreco}
           placeholderTextColor={t.text.tertiary}
-          autoCapitalize="sentences"
-          autoCorrect={false}
-          returnKeyType="next"
-          blurOnSubmit={false}
-          onSubmitEditing={() => precoRef.current?.focus()}
-          style={{ ...campo, marginTop: spacing[2] }}
+          style={estiloDoNome}
         />
 
+        {/* Altura fixa de propósito. As sugestões aparecem na segunda letra
+          e a linha de preço na terceira; cada uma delas empurrava o campo do
+          preço uns 40 px para baixo NO MEIO da digitação, e o dedo caía na
+          quantidade. O espaço fica reservado, esteja vazio ou não. */}
+        <View style={{ minHeight: 40, justifyContent: "center" }}>
         {sugestoes.length > 0 ? (
           <View
             style={{
@@ -307,9 +461,13 @@ export default function AddItemSheet({
               <Pressable
                 key={sugestao}
                 onPress={() => {
+                  // Fechar o teclado ANTES de trocar o texto. Sem isto o
+                  // Android grudava a sugestão no que já estava escrito —
+                  // foi assim que nasceu "Zona Rural AtacdAtacadista"
+                  Keyboard.dismiss();
                   setNome(sugestao);
                   Haptics.selectionAsync();
-                  precoRef.current?.focus();
+                  irParaOPreco();
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Usar ${sugestao}`}
@@ -329,17 +487,21 @@ export default function AddItemSheet({
             ))}
           </View>
         ) : null}
+        </View>
 
-        {dica ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ color: t.text.tertiary, fontSize: 12, marginTop: spacing[2] }}
-          >
-            {dica}
-          </Text>
-        ) : null}
+        <View style={{ minHeight: 18, justifyContent: "center" }}>
+          {dica ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              numberOfLines={1}
+              style={{ color: t.text.tertiary, fontSize: 12 }}
+            >
+              {dica}
+            </Text>
+          ) : null}
+        </View>
 
-        <View style={{ flexDirection: "row", gap: spacing[3], marginTop: spacing[4] }}>
+        <View style={{ flexDirection: "row", gap: spacing[3], marginTop: spacing[3] }}>
           <View style={{ flex: 1 }}>
             <Text style={rotuloCampo}>Quantidade</Text>
             <View
@@ -368,6 +530,7 @@ export default function AddItemSheet({
                 onChangeText={setQuantidade}
                 accessibilityLabel="Quantidade"
                 keyboardType="decimal-pad"
+                onFocus={voltarAoTecladoDoSistema}
                 selectTextOnFocus
                 textAlign="center"
                 style={{
@@ -405,15 +568,28 @@ export default function AddItemSheet({
               }}
               accessibilityLabel="Preço unitário"
               keyboardType="decimal-pad"
+              // Com o teclado do app, o do sistema não abre: era ele que
+              // remontava a folha a cada troca de campo
+              showSoftInputOnFocus={!tecladoDoApp}
+              onFocus={() => {
+                if (!tecladoDoApp) return;
+                setKeypad(true);
+                Keyboard.dismiss();
+              }}
               placeholder="0,00"
               placeholderTextColor={t.text.tertiary}
               returnKeyType="done"
+              blurOnSubmit={false}
               onSubmitEditing={salvar}
               style={{
                 ...campo,
                 marginTop: spacing[2],
                 fontWeight: "700",
                 fontVariant: ["tabular-nums"],
+                // O campo que o teclado de números está escrevendo fica
+                // marcado: sem isso não dá para saber onde o "7" vai cair
+                borderColor: keypad ? t.accent.neon : t.border.subtle,
+                borderWidth: keypad ? 1.5 : 1,
               }}
             />
           </View>
@@ -425,6 +601,7 @@ export default function AddItemSheet({
           onChangeText={setPromocao}
           maxLength={200}
           accessibilityLabel="Promoção"
+          onFocus={voltarAoTecladoDoSistema}
           placeholder="leve 3 pague 2, 20% no app…"
           placeholderTextColor={t.text.tertiary}
           style={{ ...campo, fontSize: 14, marginTop: spacing[2] }}
@@ -493,60 +670,92 @@ export default function AddItemSheet({
           </View>
         ) : null}
 
-        {erro ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ color: t.semantic.danger, fontSize: 12, marginTop: spacing[3] }}
-          >
-            {erro}
-          </Text>
-        ) : null}
+      </ScrollView>
 
-        <Pressable
-          onPress={salvar}
-          accessibilityRole="button"
-          accessibilityLabel={editing ? "Salvar item" : "Adicionar ao carrinho"}
+      {/* O rodapé. Fora da rolagem de propósito: o que encerra o item nunca
+        pode depender de rolar a folha. */}
+      {erro ? (
+        <Text
+          accessibilityLiveRegion="polite"
           style={{
-            height: 52,
-            borderRadius: radius.xl,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: t.accent.neon,
-            marginTop: spacing[4],
+            color: t.semantic.danger,
+            fontSize: 12,
+            paddingHorizontal: spacing[5],
+            paddingTop: spacing[2],
           }}
         >
-          <Text style={{ color: t.text.inverse, fontWeight: "700", fontSize: 16 }}>
-            {editing ? "Salvar" : "Adicionar"}
-          </Text>
-        </Pressable>
+          {erro}
+        </Text>
+      ) : null}
 
-        {editing && onDelete ? (
+      {keypad ? (
+        <AmountKeypad
+          value={preco}
+          onChange={(proximo) => {
+            setPreco(proximo);
+            if (erro) setErro(null);
+          }}
+          actionLabel={acaoLabel}
+          onAction={salvar}
+          onDismiss={() => setKeypad(false)}
+          hint={dica}
+        />
+      ) : (
+        <View
+          style={{
+            paddingHorizontal: spacing[5],
+            paddingTop: spacing[3],
+            paddingBottom: spacing[2],
+            borderTopWidth: 1,
+            borderTopColor: t.border.subtle,
+          }}
+        >
           <Pressable
-            onPress={remover}
+            onPress={salvar}
             accessibilityRole="button"
-            accessibilityLabel="Remover item do carrinho"
+            accessibilityLabel={acaoLabel}
             style={{
-              height: 44,
-              flexDirection: "row",
+              height: 52,
+              borderRadius: radius.xl,
               alignItems: "center",
               justifyContent: "center",
-              marginTop: spacing[2],
+              backgroundColor: t.accent.neon,
             }}
           >
-            <Trash size={16} color={t.semantic.danger} />
-            <Text
-              style={{
-                color: t.semantic.danger,
-                fontWeight: "700",
-                fontSize: 13,
-                marginLeft: spacing[2],
-              }}
-            >
-              Remover
+            <Text style={{ color: t.text.inverse, fontWeight: "700", fontSize: 16 }}>
+              {editing ? "Salvar" : "Adicionar"}
             </Text>
           </Pressable>
-        ) : null}
-      </ScrollView>
+
+          {editing && onDelete ? (
+            <Pressable
+              onPress={remover}
+              accessibilityRole="button"
+              accessibilityLabel="Remover item do carrinho"
+              style={{
+                height: 44,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: spacing[1],
+              }}
+            >
+              <Trash size={16} color={t.semantic.danger} />
+              <Text
+                style={{
+                  color: t.semantic.danger,
+                  fontWeight: "700",
+                  fontSize: 13,
+                  marginLeft: spacing[2],
+                }}
+              >
+                Remover
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      )}
+      </View>
     </CustomModal>
   );
 }
