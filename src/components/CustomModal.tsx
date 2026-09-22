@@ -9,10 +9,12 @@ import React, {
 import {
   View,
   TouchableOpacity,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   BackHandler,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
@@ -28,12 +30,19 @@ import { motion, radius, spacing } from "../theme/ds";
 import { sheetSpring } from "../theme/motionPresets";
 import { boxNone } from "../utils/pointerEvents";
 import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import { useWebKeyboardInset } from "../hooks/useWebKeyboardInset";
 import { useOverlayStore } from "../store/overlayStore";
 
 // Teto do diálogo na tela larga: cabe o conteúdo de qualquer folha do app sem
 // esticar a linha de leitura (mesma ordem de grandeza das colunas da grade)
 const DIALOG_MAX_WIDTH = 560;
+
+// Quanto a folha precisa descer, ou com que pressa, para o arrasto virar
+// fechamento. 96 px e um gesto deliberado numa tela de 390; abaixo disso o
+// polegar que rola a lista fecharia a folha sem querer.
+const DRAG_CLOSE_DISTANCE = 96;
+const DRAG_CLOSE_VELOCITY = 900;
 
 interface CustomModalProps {
   visible: boolean;
@@ -76,6 +85,10 @@ export default function CustomModal({
   // folha, que é exatamente o que o KAV faria no iOS. No nativo o hook
   // devolve zero e nada muda.
   const keyboardInset = useWebKeyboardInset();
+  // Teclado NATIVO. Não move nada sozinho: serve para a folha decidir o que
+  // um toque no fundo significa, e para ela ganhar altura enquanto o teclado
+  // come metade da tela.
+  const tecladoAberto = useKeyboardVisible();
   const [showModal, setShowModal] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(500);
@@ -96,6 +109,63 @@ export default function CustomModal({
   const esconderSeAindaFechada = useCallback(() => {
     if (!visibleRef.current) setShowModal(false);
   }, []);
+
+  /**
+   * O toque no fundo escuro — e o rascunho que ele custava.
+   *
+   * <p>Com o teclado aberto sobra pouco fundo, e é exatamente nessa hora que
+   * a pessoa toca nele: para fechar o teclado e ver o que está por baixo. O
+   * comportamento antigo fechava a folha inteira e jogava fora o item que
+   * estava sendo digitado. Agora o primeiro toque fecha só o teclado; a
+   * folha continua aberta com tudo no lugar, e o segundo toque fecha.
+   */
+  const tocarNoFundo = useCallback(() => {
+    if (tecladoAberto) {
+      Keyboard.dismiss();
+      return;
+    }
+    onClose();
+  }, [tecladoAberto, onClose]);
+
+  // O gesto lê `onClose` por referência: sem isto, cada render do pai
+  // recriaria o gesto, e recriar o gesto no meio do arrasto o cancela
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const fecharPeloArrasto = useCallback(() => {
+    Keyboard.dismiss();
+    onCloseRef.current();
+  }, []);
+
+  /**
+   * Puxar a folha para baixo fecha — o que a alça sempre prometeu.
+   *
+   * <p>A alça no topo da folha existe desde o começo e não arrastava nada:
+   * quem puxava ficava com a folha parada na mão. O gesto vive SÓ na faixa
+   * da alça, e não na folha inteira, porque a folha inteira disputaria cada
+   * rolagem da lista lá dentro com o dedo que quer rolar.
+   *
+   * <p>No diálogo centralizado da tela larga não há para onde arrastar, e o
+   * gesto fica desligado.
+   */
+  const arrasto = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!isWide)
+        .onUpdate((evento) => {
+          // Só desce: puxar para cima não estica a folha
+          modalTranslateY.value = Math.max(0, evento.translationY);
+        })
+        .onEnd((evento) => {
+          const longe = evento.translationY > DRAG_CLOSE_DISTANCE;
+          const rapido = evento.velocityY > DRAG_CLOSE_VELOCITY;
+          if (longe || rapido) {
+            runOnJS(fecharPeloArrasto)();
+            return;
+          }
+          modalTranslateY.value = withSpring(0, sheetSpring);
+        }),
+    [isWide, modalTranslateY, fecharPeloArrasto],
+  );
 
   useEffect(() => {
     if (visible) {
@@ -168,7 +238,13 @@ export default function CustomModal({
     () =>
       showModal ? (
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          // No Android o `behavior="height"` descontava o teclado uma SEGUNDA
+          // vez: a janela do app já encolhe sozinha (`adjustResize`), e a
+          // camada da folha, que é absoluta de topo a rodapé, já nasce acima
+          // do teclado. O desconto em dobro era o pulo que fazia o campo
+          // fugir do dedo a cada tecla. Sem `behavior` o componente vira uma
+          // `View` comum, que é o certo aqui.
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={{ flex: 1 }}
         >
           {/* Backdrop */}
@@ -190,8 +266,9 @@ export default function CustomModal({
               "botão" sobre tudo o que não é o sheet. Quem navega por leitor
               fecha pelo X do próprio sheet, que tem rótulo */}
             <TouchableOpacity
+              testID="modal-backdrop"
               style={{ flex: 1 }}
-              onPress={onClose}
+              onPress={tocarNoFundo}
               activeOpacity={1}
               accessible={false}
               importantForAccessibility="no-hide-descendants"
@@ -225,7 +302,10 @@ export default function CustomModal({
                   backgroundColor: t.background.surface,
                   borderTopLeftRadius: radius["3xl"],
                   borderTopRightRadius: radius["3xl"],
-                  maxHeight: "90%",
+                  // Com o teclado aberto o espaço disponível já caiu pela
+                  // metade; guardar mais 10% dele para o fundo escuro era o
+                  // que empurrava o botão de salvar para fora da tela
+                  maxHeight: tecladoAberto ? "100%" : "90%",
                   paddingBottom: insets.bottom + keyboardInset,
                   borderTopWidth: 1,
                   borderTopColor: t.border.subtle,
@@ -245,17 +325,28 @@ export default function CustomModal({
                 No diálogo centralizado ele não promete nada (não há arrasto),
                 então some */}
               {!isWide && (
-                <View
-                  style={{
-                    alignSelf: "center",
-                    width: 40,
-                    height: 4,
-                    borderRadius: radius.full,
-                    backgroundColor: t.border.default,
-                    marginTop: 12,
-                    marginBottom: 4,
-                  }}
-                />
+                <GestureDetector gesture={arrasto}>
+                  {/* A faixa inteira arrasta, não só os 4 px pintados: a alça
+                    é um alvo de 40x4 e ninguém acerta isso com o polegar */}
+                  <View
+                    accessibilityRole="adjustable"
+                    accessibilityLabel="Puxe para baixo para fechar"
+                    style={{
+                      paddingTop: 12,
+                      paddingBottom: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 40,
+                        height: 4,
+                        borderRadius: radius.full,
+                        backgroundColor: t.border.default,
+                      }}
+                    />
+                  </View>
+                </GestureDetector>
               )}
               {children}
             </Animated.View>
@@ -266,7 +357,9 @@ export default function CustomModal({
       showModal,
       children,
       isWide,
-      onClose,
+      arrasto,
+      tecladoAberto,
+      tocarNoFundo,
       insets.bottom,
       keyboardInset,
       t,

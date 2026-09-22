@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Receipt from "lucide-react-native/dist/esm/icons/receipt";
@@ -415,7 +415,12 @@ function NewTripSheet({
             if (erro) setErro(null);
           }}
           autoCapitalize="words"
+          // Os três juntos desligam a correção do teclado do Android, que
+          // guarda uma palavra "em composição" e a reescreve sozinha por
+          // cima do campo
           autoCorrect={false}
+          autoComplete="off"
+          spellCheck={false}
         />
         {lojas.length > 0 ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing[2], marginTop: spacing[3] }}>
@@ -425,6 +430,10 @@ function NewTripSheet({
                 <Pressable
                   key={nome}
                   onPress={() => {
+                    // Fechar o teclado ANTES de trocar o texto: sem isto o
+                    // Android grudava a loja escolhida no que já estava
+                    // escrito, e a compra nascia "Zona Rural AtacdAtacadista"
+                    Keyboard.dismiss();
                     setLoja(nome);
                     Haptics.selectionAsync();
                   }}

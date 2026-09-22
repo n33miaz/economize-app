@@ -325,3 +325,34 @@ describe("Detalhe da transação", () => {
     ).toBeTruthy();
   });
 });
+
+describe("Detalhe da transação — nota fiscal", () => {
+  beforeEach(() => {
+    useCategoriesStore.setState({
+      items: [CATEGORIA as never],
+      byId: (id: string) => (id === CATEGORIA.id ? (CATEGORIA as never) : undefined),
+    } as never);
+    useAccountsStore.setState({ accounts: [], byId: new Map() } as never);
+    useFamilyStore.setState({ hasFamily: false } as never);
+  });
+
+  it("num gasto, a folha tem por onde anexar a nota — era o que faltava", () => {
+    // "ao clicar em extrato e ir em detalhes não aparece nenhum botões"
+    const { getByText, getByLabelText } = montar();
+    expect(getByText("Nota fiscal e carrinho")).toBeTruthy();
+    expect(getByLabelText("Ler o QR da nota fiscal")).toBeTruthy();
+  });
+
+  it("dinheiro que ENTROU não tem cupom para anexar", () => {
+    const { queryByText } = montar(true, jest.fn(), {
+      type: "CREDIT",
+      amount: 1200,
+    });
+    expect(queryByText("Nota fiscal e carrinho")).toBeNull();
+  });
+
+  it("perna interna também não: ninguém emite nota para si mesmo", () => {
+    const { queryByText } = montar(true, jest.fn(), { internalTransfer: true });
+    expect(queryByText("Nota fiscal e carrinho")).toBeNull();
+  });
+});

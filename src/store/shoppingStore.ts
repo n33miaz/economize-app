@@ -59,6 +59,23 @@ export interface ShoppingOutcome {
   message: string;
 }
 
+/** O lançamento do extrato que vai ganhar uma compra. */
+export interface AttachReceiptInput {
+  transactionId: string;
+  storeName: string;
+  /** O valor do lançamento; o sinal não importa. */
+  amount: number;
+  /** A data do lançamento, ISO — é a data da ida ao mercado. */
+  date: string;
+  /** A chave de 44 dígitos, quando o QR foi lido. */
+  receiptKey: string | null;
+}
+
+export interface AttachReceiptOutcome extends ShoppingOutcome {
+  /** A compra criada — serve para a tela oferecer "abrir a compra". */
+  clientId: string;
+}
+
 export interface NewTripInput {
   storeName: string;
   budget: number | null;
@@ -111,6 +128,17 @@ interface ShoppingState {
   removeTrip: (clientId: string) => void;
   fetchReconcileCandidates: (clientId: string) => Promise<ReconcileCandidate[]>;
   reconcile: (clientId: string, transactionId: string) => Promise<ShoppingOutcome>;
+  /**
+   * O caminho INVERSO da conciliação: parte do lançamento do extrato e cria
+   * a compra que o explica, já fechada, já ligada e com a nota anexada.
+   *
+   * <p>Existe porque o dono tentou anexar a nota de uma compra de R$ 600
+   * pelo extrato e não tinha por onde: a nota só entrava no fechamento de
+   * uma compra anotada item a item, e a compra já tinha sido paga. Aqui a
+   * compra nasce do lançamento — o valor é o que o banco cobrou, a data é a
+   * do lançamento, e os itens entram depois se ele quiser.
+   */
+  attachReceiptToTransaction: (input: AttachReceiptInput) => Promise<AttachReceiptOutcome>;
   /** O que o aparelho já sabe do preço, sem rede: cache do servidor ∪ compras locais. */
   priceSummaryFor: (name: string, excludeTripClientId?: string | null) => PriceSummary | null;
   /** Pergunta ao servidor (respeitando o cache) e devolve o melhor resumo. */
@@ -378,6 +406,10 @@ export const useShoppingStore = create(
       },
 
       reconcile: async (clientId, transactionId) => {
+        // O servidor só concilia o que ele conhece: uma compra que nasceu
+        // neste aparelho e ainda não subiu daria "não encontrada"
+        const pendente = get().trips.find((t) => t.clientId === clientId);
+        if (pendente?.dirty) await get().sync();
         try {
           const dto = await reconcileShoppingTrip(clientId, transactionId);
           const viewer = useAuthStore.getState().userName;
@@ -396,6 +428,54 @@ export const useShoppingStore = create(
         } catch (e) {
           return { ok: false, message: describeRequestFailure(e).message };
         }
+      },
+
+      attachReceiptToTransaction: async ({
+        transactionId,
+        storeName,
+        amount,
+        date,
+        receiptKey,
+      }) => {
+        const clientId = get().createTrip({
+          storeName,
+          budget: null,
+          shareWithFamily: false,
+        });
+        const agora = nowIso();
+        set((state) => ({
+          trips: sortTrips(
+            state.trips.map((trip) =>
+              trip.clientId === clientId
+                ? {
+                    ...trip,
+                    status: "CLOSED",
+                    // A compra é do dia do lançamento, e não de agora: a
+                    // nota é de uma ida ao mercado que já aconteceu, e é
+                    // essa data que o histórico de preço vai usar
+                    startedAt: date,
+                    closedAt: date,
+                    receiptTotal: Math.abs(amount),
+                    receiptKey,
+                    clientUpdatedAt: agora,
+                    dirty: true,
+                  }
+                : trip,
+            ),
+          ),
+        }));
+
+        const subiu = await get().sync();
+        if (!subiu) {
+          return {
+            ok: false,
+            clientId,
+            message:
+              "Sem conexão agora. A nota ficou guardada neste aparelho e sobe quando a internet voltar.",
+          };
+        }
+        const resultado = await get().reconcile(clientId, transactionId);
+        return { ...resultado, clientId };
       },
 
       priceSummaryFor: (name, excludeTripClientId) => {
