@@ -29,6 +29,8 @@ interface WalletState {
     transaction: Omit<Transaction, "id" | "transactionDate">,
   ) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
+  /** Fim de sessão: apaga os aportes e a janela de cache. */
+  reset: () => void;
 }
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -50,9 +52,11 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.get<Transaction[]>("/wallet/transactions");
+      // `error: null` no sucesso pela mesma razão do extrato
       set({
         transactions: response.data,
         isLoading: false,
+        error: null,
         fetchedAt: Date.now(),
       });
     } catch (error) {
@@ -96,4 +100,9 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       throw error;
     }
   },
+
+  // Fim de sessão. Mesma razão do extrato: sem zerar `fetchedAt`, a janela de
+  // um minuto entregava a carteira de quem saiu para quem entrou
+  reset: () =>
+    set({ transactions: [], isLoading: false, error: null, fetchedAt: null }),
 }));

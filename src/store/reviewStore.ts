@@ -63,6 +63,8 @@ interface ReviewState {
   /** Aplica a versão que o servidor devolveu (ex.: rename) na fila carregada. */
   applyTransaction: (updated: BankTransaction) => void;
   pendingTransactionsCount: () => number;
+  /** Fim de sessão: apaga a fila e a contagem. */
+  reset: () => void;
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
@@ -253,4 +255,18 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   pendingTransactionsCount: () =>
     get().groups.reduce((sum, g) => sum + g.transactions.length, 0),
+
+  // Fim de sessão: a fila de revisão é o extrato em outro recorte, e a
+  // contagem alimenta o bloco "N para revisar" da Home — que apareceria para
+  // a conta nova com o número da anterior
+  reset: () =>
+    set({
+      groups: [],
+      uploadId: null,
+      pendingCount: null,
+      applyProgress: null,
+      isLoading: false,
+      isApplying: false,
+      error: null,
+    }),
 }));

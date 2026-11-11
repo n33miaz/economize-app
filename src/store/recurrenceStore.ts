@@ -85,6 +85,8 @@ interface RecurrenceState {
    */
   invalidateForecast: () => void;
   byId: (id: string | null | undefined) => RecurringSeries | undefined;
+  /** Fim de sessão: apaga as séries, o estado do mês e a previsão. */
+  reset: () => void;
 }
 
 // Id de requisição da previsão: trocar 1 → 12 meses dispara duas chamadas e a
@@ -340,4 +342,28 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
   },
 
   byId: (id) => (id ? get().series.find((item) => item.id === id) : undefined),
+
+  // Fim de sessão: contas fixas, salário detectado e a previsão de saldo são
+  // o retrato do mês de alguém — e os dois `hasLoaded…Once` fariam a conta
+  // nova desenhar o da anterior sem skeleton. O id da previsão avança pelo
+  // mesmo motivo do `invalidateForecast`: a resposta em voo não pode voltar
+  reset: () => {
+    forecastRequestId += 1;
+    set({
+      series: [],
+      dismissed: [],
+      monthState: {},
+      forecast: null,
+      isLoading: false,
+      hasLoadedOnce: false,
+      isLoadingDismissed: false,
+      isDetecting: false,
+      isSaving: false,
+      isForecastLoading: false,
+      hasLoadedForecastOnce: false,
+      error: null,
+      dismissedError: null,
+      forecastError: null,
+    });
+  },
 }));

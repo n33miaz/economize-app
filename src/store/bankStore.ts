@@ -143,6 +143,8 @@ interface BankState {
   /** Aplica a versão que o servidor devolveu (ex.: rename) sem refazer a lista. */
   applyTransaction: (updated: BankTransaction) => void;
   calculateMetrics: () => { income: number; expense: number; total: number };
+  /** Fim de sessão: apaga o extrato. Ver o comentário na implementação. */
+  reset: () => void;
 }
 
 export const useBankStore = create<BankState>((set, get) => ({
@@ -168,7 +170,15 @@ export const useBankStore = create<BankState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await getBankTransactions();
-      set({ transactions: data, isLoading: false, fetchedAt: Date.now() });
+      // `error: null` também no sucesso: a busca de uma sessão encerrada
+      // pode ter escrito a sua falha DEPOIS do início desta, e lista boa com
+      // erro ao lado é a tela discordando de si mesma
+      set({
+        transactions: data,
+        isLoading: false,
+        error: null,
+        fetchedAt: Date.now(),
+      });
     } catch (e) {
       // A frase vai para o ErrorState da tela, não para toast: leitura que
       // falha se explica no lugar, com "tentar de novo" ao lado.
@@ -231,4 +241,23 @@ export const useBankStore = create<BankState>((set, get) => ({
     set({ transactions: replaceTransaction(get().transactions, updated) }),
 
   calculateMetrics: () => calculateBankMetrics(get().transactions),
+
+  // Fim de sessão. `fetchedAt` volta a null junto com a lista: era ele que
+  // fazia a próxima conta ver o extrato da anterior por até um minuto, porque
+  // a janela de cache respondia "ainda está bom" sem perguntar DE QUEM era.
+  // `isLoading` cai para o primeiro foco da conta nova poder buscar — a
+  // resposta que ainda estiver em voo é descartada pelo interceptor da API.
+  //
+  // `arquivoRecebido` fica de fora DE PROPÓSITO: é um arquivo que o Android
+  // entregou ao aparelho, não dado de conta, e foi desenhado para atravessar
+  // uma tela de login inteira (ver o campo). Apagá-lo aqui perderia o "Abrir
+  // com" de quem estava deslogado ou saiu pela tranca da biometria
+  reset: () =>
+    set({
+      transactions: [],
+      isLoading: false,
+      isImporting: false,
+      error: null,
+      fetchedAt: null,
+    }),
 }));
