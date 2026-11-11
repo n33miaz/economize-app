@@ -8,6 +8,7 @@ import type {
   InvestmentPositionPayload,
   InvestmentProfile,
   InvestmentSource,
+  InvestmentSummary,
   InvestmentType,
   MacroIndicator,
   MacroIndicatorCode,
@@ -272,14 +273,192 @@ export function formatBRLOrNull(value: number | null | undefined): string | null
   return isFinite_(value) ? formatBRL(value) : null;
 }
 
-/** "+R$ 120,00 (+2,30%)" — valor e percentual com o mesmo sinal. */
-export function formatProfit(profit: Profit): string {
+/**
+ * "+R$ 120,00 (+2,30%)" — valor e percentual com o mesmo sinal. A moeda é a
+ * da posição: resultado em dólar com "R$" na frente seria outro número.
+ */
+export function formatProfit(profit: Profit, currency = "BRL"): string {
   const sign = profit.value > 0 ? "+" : "";
   const percent =
     profit.percent === null
       ? ""
       : ` (${formatPercent(profit.percent, { signed: true })})`;
-  return `${sign}${formatBRL(profit.value)}${percent}`;
+  return `${sign}${formatMoney(profit.value, currency)}${percent}`;
+}
+
+// --- Moeda estrangeira ---
+
+// Mapa escrito à mão, e não `Intl` com a moeda da posição: o código vem do
+// conector, e um código torto faz o Intl lançar RangeError no meio da lista.
+// Moeda fora do mapa aparece pelo próprio código ISO — nunca como "R$"
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "US$",
+  EUR: "€",
+  GBP: "£",
+};
+
+type FxSummary =
+  | Pick<InvestmentSummary, "unconverted" | "exchangeRates">
+  | null
+  | undefined;
+
+/** Moeda da posição em ISO maiúsculo; ausente vale BRL. */
+export function currencyOf(position: Pick<InvestmentPosition, "currency">): string {
+  return (position.currency ?? "").trim().toUpperCase() || "BRL";
+}
+
+/** Valor na moeda dele: "R$ 1.234,56", "US$ 1.234,56", "CHF 1.234,56". */
+export function formatMoney(value: number, currency: string): string {
+  const code = currency.trim().toUpperCase() || "BRL";
+  if (code === "BRL") return formatBRL(value);
+  const symbol = CURRENCY_SYMBOLS[code] ?? code;
+  const sign = value < 0 ? "-" : "";
+  return `${sign}${symbol}\u00A0${formatDecimal(Math.abs(value))}`;
+}
+
+/** Câmbio que o SERVIDOR usou para a moeda; `null` sem ele ou no servidor antigo. */
+export function exchangeRateFor(
+  summary: FxSummary,
+  currency: string,
+): { rate: number; asOf: string | null; stale: boolean } | null {
+  const found = (summary?.exchangeRates ?? []).find(
+    (item) => (item.currency ?? "").trim().toUpperCase() === currency,
+  );
+  if (!found || !isFinite_(found.rate) || found.rate <= 0) return null;
+  return { rate: found.rate, asOf: found.asOf ?? null, stale: found.stale === true };
+}
+
+/** O que a linha da posição mostra, já na moeda certa. */
+export interface PositionValueView {
+  /** Valor principal, formatado na moeda da posição; `null` sem valor. */
+  primary: string | null;
+  /** "≈ R$ 5.432,10" — só em moeda estrangeira com câmbio do servidor. */
+  equivalent: string | null;
+  profit: Profit | null;
+  /** Resultado na MESMA moeda do valor principal. */
+  profitLabel: string | null;
+  /** Sem câmbio: o servidor deixou a posição fora dos totais em reais. */
+  excluded: boolean;
+}
+
+/**
+ * Valor da posição para a lista.
+ *
+ * O defeito que isto conserta: a posição em dólar do conector era devolvida
+ * como estava e formatada com "R$". Agora a moeda estrangeira aparece na
+ * moeda dela, e o equivalente em reais só existe quando o SERVIDOR mandou o
+ * câmbio (`exchangeRates`) — é o mesmo câmbio que entrou no total, então a
+ * linha e o total não divergem. A manual sem valor atual segue no caminho
+ * antigo, o da cotação do papel.
+ */
+export function positionValueView(
+  position: InvestmentPosition,
+  summary: FxSummary,
+  quotes: Record<string, ForeignQuote | undefined> = {},
+  usdBrl: number | null = null,
+): PositionValueView {
+  const currency = currencyOf(position);
+  const view = (
+    value: number | null,
+    invested: number | null | undefined,
+    money: string,
+    extra: Partial<PositionValueView> = {},
+  ): PositionValueView => {
+    const profit = profitOf(invested, value);
+    return {
+      primary: isFinite_(value) ? formatMoney(value, money) : null,
+      equivalent: null,
+      profit,
+      profitLabel: profit ? formatProfit(profit, money) : null,
+      excluded: false,
+      ...extra,
+    };
+  };
+
+  if (currency === "BRL") {
+    return view(
+      positionCurrentValue(position, quotes, usdBrl),
+      position.investedAmount,
+      "BRL",
+    );
+  }
+
+  // Sem câmbio vence qualquer conta local: mostrar reais ao lado de "fora do
+  // total" seria afirmar um valor que o total não tem
+  const pending = (summary?.unconverted ?? []).find(
+    (item) => item.id === position.id,
+  );
+  if (pending) {
+    return view(
+      isFinite_(pending.currentValue) ? pending.currentValue : position.currentValue,
+      isFinite_(pending.investedAmount) ? pending.investedAmount : position.investedAmount,
+      currency,
+      { excluded: true },
+    );
+  }
+
+  const manual = position.source === "MANUAL";
+  const rate = exchangeRateFor(summary, currency);
+  let native: number | null = isFinite_(position.currentValue)
+    ? position.currentValue
+    : null;
+  if (native === null && !manual) {
+    if (isFinite_(position.quantity) && isFinite_(position.unitPrice)) {
+      native = position.quantity * position.unitPrice;
+    } else if (isFinite_(position.investedAmount)) {
+      native = position.investedAmount;
+    }
+  }
+
+  // Manual sem valor atual (ou servidor antigo, sem câmbio): só a cotação do
+  // papel dá o valor, e ela já chega em reais
+  if (native === null || (manual && !rate)) {
+    return view(
+      positionCurrentValue(position, quotes, usdBrl),
+      position.investedAmount,
+      "BRL",
+    );
+  }
+
+  return view(native, position.investedAmount, currency, {
+    equivalent: rate ? `≈ ${formatBRL(native * rate.rate)}` : null,
+  });
+}
+
+/**
+ * Avisos de câmbio velho: "Câmbio US$ de 04/11/2026". Só para `stale`, e com
+ * a data no fuso do aparelho — é a data que o usuário compara com o hoje dele.
+ */
+export function staleExchangeNotices(
+  summary: Pick<InvestmentSummary, "exchangeRates"> | null | undefined,
+): string[] {
+  return (summary?.exchangeRates ?? [])
+    .filter((item) => item.stale === true)
+    .map((item) => {
+      const code = (item.currency ?? "").trim().toUpperCase();
+      const symbol = CURRENCY_SYMBOLS[code] ?? code;
+      const time = item.asOf ? new Date(item.asOf).getTime() : NaN;
+      if (!Number.isFinite(time)) return `Câmbio ${symbol} desatualizado`;
+      const date = new Date(time);
+      const pad = (value: number) => String(value).padStart(2, "0");
+      return `Câmbio ${symbol} de ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+    });
+}
+
+/**
+ * Valor em REAIS só para ORDENAR a lista. Dólar comparado como real poria
+ * US$ 1.000 abaixo de R$ 1.200; sem câmbio a posição não compete (`null`).
+ */
+function orderingValue(
+  position: InvestmentPosition,
+  summary: FxSummary,
+): number | null {
+  if (!isFinite_(position.currentValue)) return null;
+  const currency = currencyOf(position);
+  if (currency === "BRL") return position.currentValue;
+  if ((summary?.unconverted ?? []).some((item) => item.id === position.id)) return null;
+  const rate = exchangeRateFor(summary, currency);
+  return rate ? position.currentValue * rate.rate : null;
 }
 
 // --- Agrupamento ---
@@ -306,6 +485,7 @@ export const SEM_INSTITUICAO = "Sem instituição";
  */
 export function groupPositionsByType(
   positions: InvestmentPosition[],
+  summary?: FxSummary,
 ): PositionGroup[] {
   const buckets = new Map<InvestmentType, InvestmentPosition[]>();
   positions.forEach((position) => {
@@ -316,7 +496,7 @@ export function groupPositionsByType(
   });
 
   const valueOf = (position: InvestmentPosition) =>
-    isFinite_(position.currentValue) ? position.currentValue : -Infinity;
+    orderingValue(position, summary) ?? -Infinity;
 
   return INVESTMENT_TYPE_ORDER.filter((type) => buckets.has(type)).map(
     (type) => ({
@@ -344,14 +524,12 @@ export function groupPositionsByType(
  */
 export function groupPositionsByInstitution(
   positions: InvestmentPosition[],
+  summary?: FxSummary,
 ): PositionGroup[] {
   const valueOf = (position: InvestmentPosition) =>
-    isFinite_(position.currentValue) ? position.currentValue : -Infinity;
+    orderingValue(position, summary) ?? -Infinity;
   const somaDe = (lista: InvestmentPosition[]) =>
-    lista.reduce(
-      (total, p) => total + (isFinite_(p.currentValue) ? p.currentValue : 0),
-      0,
-    );
+    lista.reduce((total, p) => total + (orderingValue(p, summary) ?? 0), 0);
 
   const buckets = new Map<string, InvestmentPosition[]>();
   positions.forEach((position) => {
@@ -378,10 +556,11 @@ export function groupPositionsByInstitution(
 export function groupPositions(
   positions: InvestmentPosition[],
   cut: PositionCut,
+  summary?: FxSummary,
 ): PositionGroup[] {
   return cut === "institution"
-    ? groupPositionsByInstitution(positions)
-    : groupPositionsByType(positions);
+    ? groupPositionsByInstitution(positions, summary)
+    : groupPositionsByType(positions, summary);
 }
 
 // --- Indicadores acompanhados ---
