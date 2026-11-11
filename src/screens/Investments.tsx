@@ -10,6 +10,7 @@ import {
 import ArrowDownRight from "lucide-react-native/dist/esm/icons/arrow-down-right";
 import ArrowUpRight from "lucide-react-native/dist/esm/icons/arrow-up-right";
 import ChevronRight from "lucide-react-native/dist/esm/icons/chevron-right";
+import Clock from "lucide-react-native/dist/esm/icons/clock";
 import Landmark from "lucide-react-native/dist/esm/icons/landmark";
 import Newspaper from "lucide-react-native/dist/esm/icons/newspaper";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
@@ -48,7 +49,6 @@ import { formatDayMonthShort } from "../utils/cycleWindow";
 import {
   buildWatchCards,
   explainIndicatorForUser,
-  formatBRLOrNull,
   formatProfit,
   formatRelativeTime,
   formatShortDate,
@@ -60,10 +60,11 @@ import {
   maturityLabel,
   movementKindLabel,
   movementSignedAmount,
-  positionCurrentValue,
   positionNeedsQuote,
   positionSubtitle,
-  profitOf,
+  positionValueView,
+  staleExchangeNotices,
+  type PositionValueView,
   treasuryRateLabel,
   treasuryRelevantTo,
   type WatchCardData,
@@ -214,8 +215,12 @@ export default function Investments() {
     return nomes.size > 1;
   }, [positions.data]);
   const groups = useMemo(
-    () => groupPositions(positions.data ?? [], corte),
-    [positions.data, corte],
+    () => groupPositions(positions.data ?? [], corte, summary.data),
+    [positions.data, corte, summary.data],
+  );
+  const cambioVelho = useMemo(
+    () => staleExchangeNotices(summary.data),
+    [summary.data],
   );
 
   const treasuryInterest = hasTreasuryInterest(profile.data);
@@ -603,12 +608,23 @@ export default function Investments() {
                   key={position.id}
                   t={t}
                   position={position}
-                  value={positionCurrentValue(position, quotes, usdBrl)}
+                  value={positionValueView(position, summary.data, quotes, usdBrl)}
                   onEdit={() => setPositionSheet({ open: true, position })}
                   onDelete={() => confirmDelete(position)}
                 />
               ))}
             </View>
+            ))}
+            {/* Câmbio velho: discreto, no pé da lista onde os "≈ R$" estão —
+                diz de quando é a conta, sem virar alerta */}
+            {cambioVelho.map((aviso) => (
+              <View
+                key={aviso}
+                style={{ flexDirection: "row", alignItems: "center", gap: spacing[1] }}
+              >
+                <Clock size={12} color={t.text.tertiary} />
+                <Text style={{ color: t.text.tertiary, fontSize: 11 }}>{aviso}</Text>
+              </View>
             ))}
           </>
         )}
@@ -1366,16 +1382,16 @@ function PositionRow({
 }: {
   t: Theme;
   position: InvestmentPosition;
-  value: number | null;
+  /** Já na moeda da posição — a linha não formata nem converte nada. */
+  value: PositionValueView;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const manual = position.source === "MANUAL";
   const subtitle = positionSubtitle(position);
   const maturity = maturityLabel(position.maturityDate);
-  const profit = profitOf(position.investedAmount, value);
-  const valueLabel = formatBRLOrNull(value);
-  const profitPositive = (profit?.value ?? 0) >= 0;
+  const valueLabel = value.primary;
+  const profitPositive = (value.profit?.value ?? 0) >= 0;
 
   return (
     <View
@@ -1419,7 +1435,17 @@ function PositionRow({
               {positionNeedsQuote(position) ? "cotação indisponível" : "sem valor"}
             </Text>
           )}
-          {profit ? (
+          {value.equivalent ? (
+            // Conta derivada do câmbio, não o valor informado: fica em tom
+            // secundário e com "≈", separada do número da posição
+            <Text
+              numberOfLines={1}
+              style={{ color: t.text.secondary, fontSize: 11, marginTop: 2 }}
+            >
+              {value.equivalent}
+            </Text>
+          ) : null}
+          {value.profitLabel ? (
             <Text
               numberOfLines={1}
               style={{
@@ -1429,13 +1455,13 @@ function PositionRow({
                 marginTop: 2,
               }}
             >
-              {formatProfit(profit)}
+              {value.profitLabel}
             </Text>
           ) : null}
         </View>
       </View>
 
-      {(manual || position.stale) && (
+      {(manual || position.stale || value.excluded) && (
         <View
           style={{
             flexDirection: "row",
@@ -1456,6 +1482,20 @@ function PositionRow({
             >
               <Text style={{ color: t.semantic.warning, fontSize: 11, fontWeight: "700" }}>
                 desatualizada
+              </Text>
+            </View>
+          ) : null}
+          {value.excluded ? (
+            <View
+              style={{
+                paddingHorizontal: spacing[2],
+                paddingVertical: 2,
+                borderRadius: radius.full,
+                backgroundColor: t.semantic.warningMuted,
+              }}
+            >
+              <Text style={{ color: t.semantic.warning, fontSize: 11, fontWeight: "700" }}>
+                sem cotação · fora do total
               </Text>
             </View>
           ) : null}
