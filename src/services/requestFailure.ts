@@ -28,6 +28,11 @@ export type RequestFailureKind =
   | "server"
   /** 4xx de negócio: a resposta explica, e quem chamou é que mostra. */
   | "client"
+  /**
+   * A resposta chegou depois de a sessão que a pediu ter acabado. Não é falha:
+   * é uma resposta sem destinatário, e ninguém deve ser avisado dela.
+   */
+  | "session-ended"
   /** Não é falha HTTP (erro de código, cancelamento): não há o que repetir. */
   | "unknown";
 
@@ -51,8 +56,51 @@ export const FAILURE_MESSAGES: Record<RequestFailureKind, string> = {
   upgrade: "Atualize o aplicativo para continuar.",
   server: "Não conseguimos concluir agora. Já estamos tentando de novo.",
   client: "Não foi possível concluir a solicitação.",
+  // Vazia de propósito: não há o que dizer a ninguém. O toast ignora frase
+  // vazia e o `ErrorState` das telas só aparece com frase — é assim que quem
+  // trata erro genérico deixa este passar sem saber que ele existe
+  "session-ended": "",
   unknown: "Não foi possível concluir.",
 };
+
+/**
+ * A resposta de uma sessão que já acabou.
+ *
+ * <p>O interceptor da API rejeita com isto toda resposta (boa ou ruim) de uma
+ * requisição que saiu com um token que já não é o atual: quem saiu da conta
+ * não pode ter o extrato escrito no store de quem entrou, nem derrubar a
+ * sessão nova com um 401 atrasado.
+ *
+ * <p><b>Por que REJEITA, e não fica pendente para sempre.</b> A primeira
+ * versão devolvia uma promessa que nunca resolvia — e travava quem esperava
+ * num `finally`: o diálogo de confirmação ficava "ocupado" por cima da tela
+ * de login, porque a exclusão confirmada nunca voltava. Toda espera tem de
+ * terminar.
+ *
+ * <p>Tem a cara de um cancelamento do axios (`code` e `__CANCEL__`), para
+ * `axios.isCancel()` e qualquer código que já ignora cancelamento tratarem
+ * como tal. Classe própria, e não `CanceledError`, porque este módulo é puro
+ * e os testes que dublam o axios inteiro não teriam de onde herdar.
+ */
+export class SessionEndedError extends Error {
+  readonly code = "ERR_CANCELED";
+  readonly __CANCEL__ = true;
+  readonly sessionEnded = true;
+
+  constructor() {
+    super("Resposta de uma sessão encerrada");
+    this.name = "SessionEndedError";
+  }
+}
+
+/** Pela marca, e não por `instanceof`: sobrevive a módulo carregado duas vezes. */
+export function isSessionEnded(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { sessionEnded?: unknown }).sessionEnded === true
+  );
+}
 
 // Códigos com que o axios descreve "nem chegou lá": timeout, rede fora,
 // conexão recusada ou derrubada. Cancelamento fica FORA — quem cancelou não
@@ -159,6 +207,8 @@ function failure(
  * "o servidor não respondeu", e só entra quando não houve resposta nenhuma.
  */
 export function describeRequestFailure(error: unknown): RequestFailure {
+  if (isSessionEnded(error)) return failure("session-ended", null, false);
+
   const status = readStatus(error);
 
   if (status === null) {
@@ -207,6 +257,10 @@ export function describeLoadFailure(error: unknown, fallback: string): string {
     case "rate-limited":
     case "unauthorized":
       return described.message;
+    // Frase vazia: o store de quem ENTROU não ganha um "falha ao carregar"
+    // por causa de uma busca de quem saiu
+    case "session-ended":
+      return "";
     default:
       return fallback;
   }

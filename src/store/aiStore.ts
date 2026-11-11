@@ -72,6 +72,8 @@ interface AiState {
   sendMessage: (text: string) => Promise<boolean>;
   retryMessage: (id: string) => Promise<boolean>;
   clearHistory: () => void;
+  /** Fim de sessão: apaga a conversa (memória e disco). */
+  reset: () => void;
 }
 
 const trim = (messages: ChatMessage[]) =>
@@ -169,6 +171,17 @@ export const useAiStore = create(
             ],
           });
         },
+
+        // Fim de sessão. A conversa cita gastos, saldos e nomes, e é a única
+        // lista deste app que ficava no DISCO sem prazo: sobrevivia ao logout
+        // e a quem entrasse depois, para sempre. Volta à saudação — e não ao
+        // "Histórico limpo" do `clearHistory`, que diria à conta nova que
+        // havia um histórico. O `set` é o que regrava o disco
+        reset: () =>
+          set({
+            messages: [WELCOME_MESSAGE],
+            isLoading: false,
+          }),
       };
     },
     {

@@ -169,6 +169,8 @@ interface PreferencesState {
   markPlusOfferShown: (at: number) => void;
   markPlusInterest: (at: number) => void;
   reset: () => void;
+  /** Fim de sessão: apaga só o que é derivado da conta. */
+  resetAccountScoped: () => void;
 }
 
 const initialState = {
@@ -254,6 +256,27 @@ export const usePreferencesStore = create(
       markPlusInterest: (at) => set({ plusInterestAt: at }),
       setLastPurchaseAdvice: (lastPurchaseAdvice) => set({ lastPurchaseAdvice }),
       reset: () => set({ ...initialState }),
+
+      // Fim de sessão — e NÃO o `reset` acima, que é o "apagar dados locais".
+      //
+      // Este store mistura duas naturezas. A maior parte é do APARELHO e tem
+      // de sobreviver à troca de conta: tema, idioma, moeda, a tranca por
+      // biometria e a política dela (quem sai pela tranca para digitar a senha
+      // chama `logout()` — apagar ali desligaria a tranca que a pessoa acabou
+      // de usar), avisos de versão já vistos, cartões de primeira vez
+      // dispensados, o ritmo da oferta do Plus e a régua do ciclo.
+      //
+      // O que cai aqui é só o que foi CALCULADO a partir dos lançamentos de
+      // alguém ou responde por uma pessoa:
+      //  - a última recomendação de dia de compra (datas tiradas das compras);
+      //  - a queda de VR/VA cujo pedido foi dispensado (a data do benefício);
+      //  - o "tenho interesse" no Plus, que calaria a oferta para outra pessoa.
+      resetAccountScoped: () =>
+        set({
+          lastPurchaseAdvice: null,
+          mealVoucherPromptDismissedFor: null,
+          plusInterestAt: null,
+        }),
     }),
     {
       name: "@preferences_storage",

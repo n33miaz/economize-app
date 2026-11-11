@@ -17,6 +17,8 @@ interface ConfirmState {
   request: ConfirmOptions | null;
   ask: (options: ConfirmOptions) => void;
   dismiss: () => void;
+  /** Fim de sessão: fecha o diálogo sem responder por ninguém. */
+  reset: () => void;
 }
 
 // `Alert.alert` do react-native-web é `static alert() {}` — um no-op silencioso.
@@ -33,6 +35,12 @@ export const useConfirmStore = create<ConfirmState>((set, get) => ({
     set({ request: options });
   },
   dismiss: () => set({ request: null }),
+  // Fim de sessão. O pedido guarda título, mensagem ("Excluir a categoria
+  // Mesada do Pedro?") e o callback de quem saiu: aberto por cima do Login,
+  // mostraria o texto e — pior — deixaria quem entra CONFIRMAR a ação do
+  // outro. Sem chamar `onCancel`: ele é a resposta de uma pessoa, e aqui
+  // ninguém respondeu
+  reset: () => set({ request: null }),
 }));
 
 // Atalho para quem chama de fora de componente (handlers, stores)

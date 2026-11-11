@@ -7,6 +7,8 @@ import {
   readDeviceToken,
   saveDeviceToken,
 } from "../utils/deviceIdentity";
+import { userKeyFromToken } from "../utils/sessionIdentity";
+import { clearPersonalData, clearSessionData } from "./sessionReset";
 
 /**
  * O que o login devolve ao chamador quando ele pede para NÃO entrar ainda.
@@ -25,6 +27,13 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   hasHydrated: boolean;
+  /**
+   * Quem foi a última pessoa a ter sessão neste aparelho — um resumo do
+   * e-mail, nunca o e-mail (ver `utils/sessionIdentity`). SOBREVIVE ao
+   * logout, que é o ponto: é contra ele que a próxima entrada decide se a
+   * conversa e os favoritos guardados aqui são de quem está entrando.
+   */
+  lastUserKey: string | null;
   login: (
     email: string,
     password: string,
@@ -42,6 +51,40 @@ interface AuthState {
   clearError: () => void;
 }
 
+/**
+ * A ÚNICA porta por onde uma sessão entra no estado: login direto, segundo
+ * fator, cadastro e o `completeLogin` da tela passam todos aqui.
+ *
+ * <p>Limpa ANTES de gravar o token. O logout já limpou — mas entre a saída de
+ * uma pessoa e a entrada da outra pode ter sobrado alguma coisa (uma resposta
+ * atrasada, um store escrito por uma tela ainda montada), e é na entrada que
+ * "nada de quem saiu aparece" tem de ser verdade. Custa um punhado de `set`
+ * em stores já vazios.
+ *
+ * <p>É também AQUI que se decide o destino do que só existe no aparelho (a
+ * conversa com o Nino, os favoritos): fica se quem entra é quem saiu, some se
+ * é outra pessoa. Decidir na saída seria impossível — na saída ninguém sabe
+ * quem vem depois — e apagar sempre faria a pessoa perder a conversa a cada
+ * sessão expirada. Token que não diz de quem é conta como outra pessoa.
+ *
+ * <p>Função de módulo, e não closure do `create`: usa o `setState` do
+ * store pronto, o que deixa as quatro chamadas iguais e testáveis por fora.
+ */
+function openSession(token: string, userName: string): void {
+  const userKey = userKeyFromToken(token);
+  clearSessionData("entry");
+  if (userKey === null || userKey !== useAuthStore.getState().lastUserKey) {
+    clearPersonalData();
+  }
+  useAuthStore.setState({
+    token,
+    userName,
+    lastUserKey: userKey,
+    isLoading: false,
+    error: null,
+  });
+}
+
 export const useAuthStore = create(
   persist<AuthState>(
     (set) => ({
@@ -50,6 +93,7 @@ export const useAuthStore = create(
       isLoading: false,
       error: null,
       hasHydrated: false,
+      lastUserKey: null,
 
       login: async (email, password, options) => {
         set({ isLoading: true, error: null });
@@ -81,11 +125,7 @@ export const useAuthStore = create(
               name: response.data.name,
             };
           }
-          set({
-            token: response.data.token,
-            userName: response.data.name,
-            isLoading: false,
-          });
+          openSession(response.data.token, response.data.name);
           return undefined;
         } catch (error: any) {
           set({
@@ -122,11 +162,7 @@ export const useAuthStore = create(
               name: response.data.name,
             };
           }
-          set({
-            token: response.data.token,
-            userName: response.data.name,
-            isLoading: false,
-          });
+          openSession(response.data.token, response.data.name);
           return undefined;
         } catch (error: any) {
           // O servidor responde o MESMO 401 para código errado e para desafio
@@ -143,7 +179,7 @@ export const useAuthStore = create(
       },
 
       completeLogin: (token, userName) => {
-        set({ token, userName, error: null });
+        openSession(token, userName);
       },
 
       register: async (name, email, password) => {
@@ -154,11 +190,7 @@ export const useAuthStore = create(
             email,
             password,
           });
-          set({
-            token: response.data.token,
-            userName: response.data.name,
-            isLoading: false,
-          });
+          openSession(response.data.token, response.data.name);
         } catch (error: any) {
           set({
             error:
@@ -172,89 +204,16 @@ export const useAuthStore = create(
       },
 
       logout: () => {
+        // O token cai PRIMEIRO: é ele que faz o interceptor da API descartar
+        // as respostas ainda em voo desta sessão, que de outro modo
+        // repovoariam os stores logo depois de limpos
         set({ token: null, userName: null, error: null });
-        // O accountsStore é o único store com cache permanente
-        // (`hasLoadedOnce`): sem zerá-lo AQUI, um login com outra conta
-        // continuaria desenhando os cartões e as faturas da conta anterior,
-        // porque nenhuma tela refaz o fetch depois do primeiro sucesso.
         // Ponto único de propósito — sair pelo Perfil, pela biometria, pelo
         // 401 do interceptor e pelo "apagar dados locais" passam todos aqui.
-        //
-        // Import tardio pelo mesmo motivo (e no mesmo estilo) do interceptor
-        // em `services/api`: o accountsStore importa a API, que importa este
-        // store, e trazer o módulo no topo fecharia o ciclo na inicialização.
-        const { useAccountsStore } = require("./accountsStore");
-        useAccountsStore.getState().reset();
-
-        // Idem, e agora com disco: a consolidação da Home passou a ficar
-        // guardada no aparelho para a cortina do servidor mostrar o último
-        // saldo conhecido. Sem zerar aqui, o próximo login neste aparelho
-        // veria o mês de OUTRA pessoa enquanto a API acorda — antes mesmo de
-        // qualquer tela autenticada
-        const { useAnalyticsStore } = require("./analyticsStore");
-        useAnalyticsStore.getState().reset();
-
-        // A cortina de abertura vale por SESSÃO: sem zerar aqui, quem sai e
-        // entra com outra conta não veria a abertura, e o app começaria no
-        // esqueleto cinza como antes do EC-148
-        const { useOpeningStore } = require("./openingStore");
-        useOpeningStore.getState().reset();
-
-        // Idem: os nomes dos arquivos que a pessoa importou são rastro dela, e
-        // o `hasLoadedOnce` faria a próxima conta ver a procedência da anterior
-        const { useImportSourcesStore } = require("./importSourcesStore");
-        useImportSourcesStore.getState().reset();
-
-        // Mesma razão e mesmo import tardio: as opções de IA guardam provedor,
-        // modelo e os 4 últimos dígitos da chave do dono anterior, e o
-        // `hasLoadedOnce` impediria a tela de perguntar de novo
-        const { useAiSettingsStore } = require("./aiSettingsStore");
-        useAiSettingsStore.getState().reset();
-
-        // Idem: os desejos guardam o salário confirmado e a jornada do dono
-        // anterior — o dado mais pessoal que o app tem. Sair tem de apagar.
-        const { useWishStore } = require("./wishStore");
-        useWishStore.getState().reset();
-
-        // Idem: a casa guarda nome e números de OUTRAS pessoas, e o
-        // `hasLoadedOnce` faria a próxima conta ver a casa da anterior
-        const { useFamilyStore } = require("./familyStore");
-        useFamilyStore.getState().reset();
-
-        // Idem: o plano é da conta. Sem zerar, quem entrasse depois de um
-        // Plus continuaria sem anúncios — e um gratuito depois de um Plus
-        // vencido veria o rótulo errado no Perfil
-        const { usePlanStore } = require("./planStore");
-        usePlanStore.getState().reset();
-        // A fila de anúncios: um pedido preso aqui faria o próximo login
-        // entrar com a vez ocupada por uma folha que já não existe, e o
-        // anúncio seguinte nunca falaria
-        const { useAnnouncementStore } = require("./announcementStore");
-        useAnnouncementStore.getState().reset();
-
-        // Parcelamentos são o retrato das compras de alguém, e o cache de
-        // cinco minutos sobreviveria a um login com outra conta
-        const { useInstallmentsStore } = require("./installmentsStore");
-        useInstallmentsStore.getState().reset();
-
-        // Idem: posições, saldos e o perfil de investidor são o retrato mais
-        // completo do patrimônio de alguém, e o cache de cinco minutos por
-        // fatia sobreviveria a um login com outra conta
-        const { useInvestmentStore } = require("./investmentStore");
-        useInvestmentStore.getState().reset();
-
-        // Manchete não é dado pessoal — o motivo aqui é outro: "apagar dados
-        // locais" passa por este ponto e tem de esvaziar os caches de verdade,
-        // e o reset também descarta as buscas em voo, pedidas com o token que
-        // acabou de ser jogado fora
-        const { useNewsStore } = require("./newsStore");
-        useNewsStore.getState().reset();
-
-        // O carrinho de compras é da conta: as idas ao mercado, os preços
-        // anotados e o que ainda não subiu. Sair apaga — e o que não
-        // sincronizou vai junto, como em todo store por conta
-        const { useShoppingStore } = require("./shoppingStore");
-        useShoppingStore.getState().reset();
+        // O QUE é limpo mora em `sessionReset`, com um teste que falha se um
+        // store novo ficar de fora. `lastUserKey` fica: é a memória de quem
+        // saiu, e o que só existe no aparelho espera a próxima entrada
+        clearSessionData("exit");
       },
 
       clearError: () => set({ error: null }),
@@ -265,7 +224,15 @@ export const useAuthStore = create(
       // Sinaliza o fim da hidratação via setState para as rotas esperarem o
       // token persistido — sem isso o cold start pisca a tela de Login
       onRehydrateStorage: () => () => {
-        useAuthStore.setState({ hasHydrated: true });
+        // Sessão gravada por uma versão anterior a `lastUserKey`: sem tirar a
+        // chave do token aqui, a primeira saída depois da atualização deixaria
+        // "ninguém" como última pessoa, e a volta do próprio dono apagaria a
+        // conversa dele
+        const { token, lastUserKey } = useAuthStore.getState();
+        useAuthStore.setState({
+          hasHydrated: true,
+          lastUserKey: lastUserKey ?? userKeyFromToken(token),
+        });
       },
     },
   ),

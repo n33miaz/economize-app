@@ -28,10 +28,20 @@ export function useAnnouncement(
   const release = useAnnouncementStore((s) => s.release);
   const claims = useAnnouncementStore((s) => s.claims);
 
+  // O pedido deste anúncio ainda está na fila? Entra nas dependências abaixo
+  // porque a fila é esvaziada no fim E no começo de cada sessão (ver
+  // `store/sessionReset`), e nem todo anúncio mora na árvore autenticada: o
+  // aviso de versão e a tranca ficam na raiz e não desmontam com o login. Sem
+  // isto, o pedido deles era apagado e — como `wants` não mudou — nunca
+  // refeito: o aviso que esperava a vez atrás da oferta de biometria do Login
+  // não aparecia mais até o app reabrir. Quem já desmontou não pede de novo,
+  // que é o que a limpeza quer.
+  const claimed = id in claims;
+
   useEffect(() => {
     if (wants) claim(id, priority);
     else release(id);
-  }, [wants, id, priority, claim, release]);
+  }, [wants, claimed, id, priority, claim, release]);
 
   useEffect(() => () => release(id), [id, release]);
 
