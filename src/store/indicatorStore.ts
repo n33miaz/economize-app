@@ -42,6 +42,8 @@ interface IndicatorState {
   removeFavoriteSnapshot: (id: string) => void;
   setFilters: (tab: AssetTab, patch: Partial<AssetListFilters>) => void;
   resetFilters: (tab: AssetTab) => void;
+  /** Fim de sessão: esquece os retratos dos favoritos (memória e disco). */
+  resetFavorites: () => void;
   fetchIndicators: () => Promise<void>;
   searchIndicators: (query: string) => Promise<Indicator[]>;
   getCurrencies: () => Indicator[];
@@ -114,6 +116,11 @@ export const useIndicatorStore = create<IndicatorState>()(
         set((state) => ({
           filters: { ...state.filters, [tab]: { ...DEFAULT_ASSET_FILTERS } },
         })),
+
+      // Fim de sessão. Só os retratos: são a única parte deste store que é de
+      // alguém (e a única que vai para o disco). Cotação e filtro de lista são
+      // os mesmos para qualquer conta — apagá-los só custaria um refetch
+      resetFavorites: () => set({ favoriteSnapshots: [] }),
 
       fetchIndicators: async () => {
         const CACHE_TIME = 5 * 60 * 1000; // 5 minutos

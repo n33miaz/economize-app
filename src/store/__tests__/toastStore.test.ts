@@ -20,6 +20,14 @@ describe("toastStore", () => {
     jest.useRealTimers();
   });
 
+  it("frase vazia não é aviso", () => {
+    // é o que a leitura comum de falhas devolve para a resposta de uma sessão
+    // encerrada: quem faz `showToast(falha.message)` não mostra um balão vazio
+    useToastStore.getState().showToast("", "error");
+
+    expect(useToastStore.getState().visible).toBe(false);
+  });
+
   it("mostra e some sozinho depois do tempo de leitura", () => {
     useToastStore.getState().showToast("Salvo.", "success");
 

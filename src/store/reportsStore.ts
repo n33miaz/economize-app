@@ -30,6 +30,8 @@ interface ReportsState {
   ) => Promise<Report | null>;
   /** `true` quando o servidor confirmou a exclusão; a tela decide o que dizer. */
   remove: (id: string) => Promise<boolean>;
+  /** Fim de sessão: apaga os relatórios. */
+  reset: () => void;
 }
 
 /**
@@ -108,5 +110,12 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({ error: "Falha ao remover relatório" });
       return false;
     }
+  },
+
+  // Fim de sessão. A sequência avança para uma busca em voo não se achar
+  // "a mais recente" e escrever depois da limpeza
+  reset: () => {
+    ultimaBusca += 1;
+    set({ items: [], isLoading: false, isGenerating: false, error: null });
   },
 }));

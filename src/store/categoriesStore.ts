@@ -38,6 +38,8 @@ interface CategoriesState {
   ) => Promise<Category | null>;
   remove: (id: string) => Promise<"deleted" | "archived" | null>;
   byId: (id: string | null | undefined) => Category | undefined;
+  /** Fim de sessão: apaga as categorias. */
+  reset: () => void;
 }
 
 export const useCategoriesStore = create<CategoriesState>((set, get) => ({
@@ -124,4 +126,9 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
   },
 
   byId: (id) => (id ? get().items.find((c) => c.id === id) : undefined),
+
+  // Fim de sessão: categoria é da conta, e o nome que a pessoa deu a cada uma
+  // é rastro dela. `isLoading` cai para a conta nova poder buscar
+  reset: () =>
+    set({ items: [], isLoading: false, isSaving: false, error: null }),
 }));
