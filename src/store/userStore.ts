@@ -20,6 +20,8 @@ interface UserState {
   fetchMe: () => Promise<void>;
   fetchStats: () => Promise<void>;
   updateName: (name: string) => Promise<boolean>;
+  /** Fim de sessão: apaga o perfil e os contadores. */
+  reset: () => void;
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
@@ -75,4 +77,17 @@ export const useUserStore = create<UserState>((set, get) => ({
       return false;
     }
   },
+
+  // Fim de sessão: nome, e-mail e os contadores do hub ("1.752 lançamentos")
+  // são de quem saiu. Sem isto o Perfil da conta nova abria com os da anterior
+  // até o fetch responder
+  reset: () =>
+    set({
+      me: null,
+      stats: null,
+      isLoading: false,
+      isLoadingStats: false,
+      isSaving: false,
+      error: null,
+    }),
 }));

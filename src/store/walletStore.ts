@@ -29,6 +29,8 @@ interface WalletState {
     transaction: Omit<Transaction, "id" | "transactionDate">,
   ) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
+  /** Fim de sessão: apaga os aportes e a janela de cache. */
+  reset: () => void;
 }
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -96,4 +98,9 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       throw error;
     }
   },
+
+  // Fim de sessão. Mesma razão do extrato: sem zerar `fetchedAt`, a janela de
+  // um minuto entregava a carteira de quem saiu para quem entrou
+  reset: () =>
+    set({ transactions: [], isLoading: false, error: null, fetchedAt: null }),
 }));

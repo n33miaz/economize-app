@@ -53,6 +53,9 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Carimba a sessão que PEDIU: é o que deixa a resposta ser reconhecida
+    // como órfã se a sessão trocar no caminho (ver `fromEndedSession`)
+    (config as RetryableRequest)._sessionToken = token ?? null;
     // Versão e plataforma em TODA requisição: é o que permite ao servidor
     // recusar (426) um app velho demais para o contrato atual, em vez de
     // responder um shape que a tela não sabe ler
@@ -83,7 +86,43 @@ const SERVER_RETRY_BACKOFF_MS = 1000;
 type RetryableRequest = InternalAxiosRequestConfig & {
   _wakeAttempted?: boolean;
   _retried?: boolean;
+  /** O token com que a requisição saiu; null quando saiu sem sessão. */
+  _sessionToken?: string | null;
 };
+
+/**
+ * A resposta é de uma sessão que já acabou?
+ *
+ * <p>O logout limpa os stores, mas uma busca que já estava em voo responde
+ * DEPOIS — e com sucesso, porque o token dela ainda vale no servidor. Sem esta
+ * guarda, o extrato de quem saiu era escrito no store recém-limpo, com
+ * `fetchedAt` novo, e quem entrasse em seguida o via pelo minuto de cache. Com
+ * a API hibernada a janela não é de milissegundos: a resposta pode levar
+ * minutos, tempo de sobra para outra pessoa entrar.
+ *
+ * <p>Fica AQUI, e não em cada store, pela mesma razão do manifesto de limpeza:
+ * uma guarda por store depende de alguém lembrar dela no store seguinte.
+ * Requisição sem sessão (login, cadastro) nunca é órfã.
+ */
+function fromEndedSession(config: RetryableRequest | undefined): boolean {
+  const sentWith = config?._sessionToken;
+  if (!sentWith) return false;
+  const { useAuthStore } = require("../store/authStore");
+  return useAuthStore.getState().token !== sentWith;
+}
+
+/**
+ * O destino da resposta órfã: uma promessa que nunca resolve.
+ *
+ * <p>Rejeitar parece mais limpo e é pior: o `catch` de cada store escreve
+ * "Falha ao carregar…" e derruba o `isLoading` — em cima da sessão NOVA, que
+ * a essa altura pode estar no meio da própria busca. Quem esperava esta
+ * resposta era uma tela que já foi desmontada e um store que já foi limpo:
+ * não há ninguém para avisar, nem de sucesso nem de erro.
+ */
+function abandoned<T>(): Promise<T> {
+  return new Promise<T>(() => {});
+}
 
 function isUserAction(config: RetryableRequest | undefined): boolean {
   return USER_ACTION_METHODS.has((config?.method ?? "get").toLowerCase());
@@ -99,11 +138,18 @@ let offlineNoticed = false;
 
 api.interceptors.response.use(
   (response) => {
+    if (fromEndedSession(response.config as RetryableRequest)) {
+      return abandoned();
+    }
     offlineNoticed = false;
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as RetryableRequest | undefined;
+    // Erro de sessão encerrada também não é de ninguém — e este é o caso que
+    // machuca: o 401 atrasado de quem saiu derrubaria a sessão de quem acabou
+    // de entrar, com um "sessão expirada" que não é verdade
+    if (fromEndedSession(originalRequest)) return abandoned();
     const failure = describeRequestFailure(error);
     const { showToast } = useToastStore.getState();
 
@@ -142,6 +188,10 @@ api.interceptors.response.use(
     ) {
       originalRequest._wakeAttempted = true;
       const awake = await waitForServer(healthUrlFrom(getBaseUrl()));
+      // A espera pode durar minutos, e a sessão pode ter trocado nela. Repetir
+      // agora mandaria o pedido de quem saiu com o token de quem entrou — um
+      // POST de uma pessoa gravado na conta da outra
+      if (fromEndedSession(originalRequest)) return abandoned();
       if (awake) return api(originalRequest);
     }
 
@@ -155,6 +205,7 @@ api.interceptors.response.use(
     ) {
       originalRequest._retried = true;
       await sleep(failure.retryAfterSeconds * 1000);
+      if (fromEndedSession(originalRequest)) return abandoned();
       return api(originalRequest);
     }
 
@@ -168,6 +219,7 @@ api.interceptors.response.use(
     ) {
       originalRequest._retried = true;
       await sleep(SERVER_RETRY_BACKOFF_MS);
+      if (fromEndedSession(originalRequest)) return abandoned();
       return api(originalRequest);
     }
 

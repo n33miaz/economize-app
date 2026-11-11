@@ -12,6 +12,8 @@ interface FavoritesState {
 interface FavoritesActions {
   toggleFavorite: (id: string) => void;
   isFavorite: (id: string) => boolean;
+  /** Fim de sessão: esquece os favoritos (memória e disco). */
+  reset: () => void;
 }
 
 type FavoritesStore = FavoritesState & FavoritesActions;
@@ -39,6 +41,11 @@ export const useFavoritesStore = create(
 
         set({ favorites: newFavorites });
       },
+
+      // Fim de sessão. Os favoritos moram SÓ neste aparelho, sem cópia no
+      // servidor: o `set` é o que regrava o disco vazio, e quem sair perde a
+      // lista. É o preço de não mostrar a uma pessoa o que a outra acompanha
+      reset: () => set({ favorites: [] }),
     }),
     {
       name: "@favorites",
