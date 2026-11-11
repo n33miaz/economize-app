@@ -1,7 +1,12 @@
 import { AxiosError, AxiosHeaders } from "axios";
 import type { InternalAxiosRequestConfig } from "axios";
 
-import { describeLoadFailure, describeRequestFailure } from "../api";
+import {
+  describeLoadFailure,
+  describeRequestFailure,
+  isSessionEnded,
+  SessionEndedError,
+} from "../api";
 
 const config = {
   headers: new AxiosHeaders(),
@@ -228,5 +233,37 @@ describe("describeLoadFailure — a frase do ErrorState de quem só lê", () => 
   it("Error comum também fica com a frase do domínio", () => {
     expect(describeLoadFailure(new Error("offline"), "Erro ao carregar carteira"))
       .toBe("Erro ao carregar carteira");
+  });
+});
+
+/**
+ * A resposta de uma sessão que já acabou. O interceptor rejeita com ela; o que
+ * se prova aqui é que quem trata erro genérico a deixa passar sem aviso — sem
+ * que tela ou store nenhum precise saber que o caso existe.
+ */
+describe("SessionEndedError — a resposta sem destinatário", () => {
+  it("é reconhecida pela marca, e tem a cara de um cancelamento", () => {
+    const erro = new SessionEndedError();
+
+    expect(isSessionEnded(erro)).toBe(true);
+    expect(erro).toBeInstanceOf(Error);
+    expect(erro.code).toBe("ERR_CANCELED");
+    expect(isSessionEnded(new Error("qualquer"))).toBe(false);
+    expect(isSessionEnded(semResposta("ERR_CANCELED"))).toBe(false);
+    expect(isSessionEnded(null)).toBe(false);
+  });
+
+  it("não é falha de ninguém: sem frase, sem repetição", () => {
+    const r = describeRequestFailure(new SessionEndedError());
+
+    expect(r.kind).toBe("session-ended");
+    expect(r.retryable).toBe(false);
+    expect(r.message).toBe("");
+  });
+
+  it("o ErrorState de quem entrou não ganha a 'falha' de quem saiu", () => {
+    expect(
+      describeLoadFailure(new SessionEndedError(), "Falha ao carregar extrato."),
+    ).toBe("");
   });
 });

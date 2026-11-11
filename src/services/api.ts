@@ -7,7 +7,7 @@ import { useToastStore } from "../store/toastStore";
 import { healthUrlFrom, waitForServer } from "../store/serverStore";
 import { APP_VERSION, platformHeader, versionHeaders } from "../utils/appVersion";
 import type { AnalysisRange } from "../utils/cycleWindow";
-import { describeRequestFailure } from "./requestFailure";
+import { SessionEndedError, describeRequestFailure } from "./requestFailure";
 
 // A leitura das falhas mora em módulo próprio (puro, sem cliente HTTP) e sai
 // também por aqui: quem já importa o `api` não precisa saber onde ela vive
@@ -15,6 +15,8 @@ export {
   describeLoadFailure,
   describeRequestFailure,
   FAILURE_MESSAGES,
+  isSessionEnded,
+  SessionEndedError,
 } from "./requestFailure";
 export type { RequestFailure, RequestFailureKind } from "./requestFailure";
 
@@ -112,16 +114,17 @@ function fromEndedSession(config: RetryableRequest | undefined): boolean {
 }
 
 /**
- * O destino da resposta órfã: uma promessa que nunca resolve.
+ * O destino da resposta órfã: uma rejeição que se identifica.
  *
- * <p>Rejeitar parece mais limpo e é pior: o `catch` de cada store escreve
- * "Falha ao carregar…" e derruba o `isLoading` — em cima da sessão NOVA, que
- * a essa altura pode estar no meio da própria busca. Quem esperava esta
- * resposta era uma tela que já foi desmontada e um store que já foi limpo:
- * não há ninguém para avisar, nem de sucesso nem de erro.
+ * <p>Rejeita, e não fica pendente: quem espera num `finally` (o diálogo de
+ * confirmação, um botão "salvando") precisa que a espera TERMINE, ou fica
+ * travado por cima da tela de login. O que impede a rejeição de virar barulho
+ * é ela ser reconhecível: este interceptor sai antes do toast, do logout e da
+ * repetição, e a leitura comum de falhas (`describeRequestFailure`) devolve
+ * frase vazia — que nem o toast nem o `ErrorState` mostram.
  */
-function abandoned<T>(): Promise<T> {
-  return new Promise<T>(() => {});
+function abandoned(): Promise<never> {
+  return Promise.reject(new SessionEndedError());
 }
 
 function isUserAction(config: RetryableRequest | undefined): boolean {

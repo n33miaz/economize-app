@@ -52,9 +52,11 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.get<Transaction[]>("/wallet/transactions");
+      // `error: null` no sucesso pela mesma razão do extrato
       set({
         transactions: response.data,
         isLoading: false,
+        error: null,
         fetchedAt: Date.now(),
       });
     } catch (error) {

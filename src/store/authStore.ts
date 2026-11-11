@@ -7,7 +7,8 @@ import {
   readDeviceToken,
   saveDeviceToken,
 } from "../utils/deviceIdentity";
-import { clearSessionData } from "./sessionReset";
+import { userKeyFromToken } from "../utils/sessionIdentity";
+import { clearPersonalData, clearSessionData } from "./sessionReset";
 
 /**
  * O que o login devolve ao chamador quando ele pede para NÃO entrar ainda.
@@ -26,6 +27,13 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   hasHydrated: boolean;
+  /**
+   * Quem foi a última pessoa a ter sessão neste aparelho — um resumo do
+   * e-mail, nunca o e-mail (ver `utils/sessionIdentity`). SOBREVIVE ao
+   * logout, que é o ponto: é contra ele que a próxima entrada decide se a
+   * conversa e os favoritos guardados aqui são de quem está entrando.
+   */
+  lastUserKey: string | null;
   login: (
     email: string,
     password: string,
@@ -53,12 +61,28 @@ interface AuthState {
  * "nada de quem saiu aparece" tem de ser verdade. Custa um punhado de `set`
  * em stores já vazios.
  *
+ * <p>É também AQUI que se decide o destino do que só existe no aparelho (a
+ * conversa com o Nino, os favoritos): fica se quem entra é quem saiu, some se
+ * é outra pessoa. Decidir na saída seria impossível — na saída ninguém sabe
+ * quem vem depois — e apagar sempre faria a pessoa perder a conversa a cada
+ * sessão expirada. Token que não diz de quem é conta como outra pessoa.
+ *
  * <p>Função de módulo, e não closure do `create`: usa o `setState` do
  * store pronto, o que deixa as quatro chamadas iguais e testáveis por fora.
  */
 function openSession(token: string, userName: string): void {
-  clearSessionData();
-  useAuthStore.setState({ token, userName, isLoading: false, error: null });
+  const userKey = userKeyFromToken(token);
+  clearSessionData("entry");
+  if (userKey === null || userKey !== useAuthStore.getState().lastUserKey) {
+    clearPersonalData();
+  }
+  useAuthStore.setState({
+    token,
+    userName,
+    lastUserKey: userKey,
+    isLoading: false,
+    error: null,
+  });
 }
 
 export const useAuthStore = create(
@@ -69,6 +93,7 @@ export const useAuthStore = create(
       isLoading: false,
       error: null,
       hasHydrated: false,
+      lastUserKey: null,
 
       login: async (email, password, options) => {
         set({ isLoading: true, error: null });
@@ -186,8 +211,9 @@ export const useAuthStore = create(
         // Ponto único de propósito — sair pelo Perfil, pela biometria, pelo
         // 401 do interceptor e pelo "apagar dados locais" passam todos aqui.
         // O QUE é limpo mora em `sessionReset`, com um teste que falha se um
-        // store novo ficar de fora
-        clearSessionData();
+        // store novo ficar de fora. `lastUserKey` fica: é a memória de quem
+        // saiu, e o que só existe no aparelho espera a próxima entrada
+        clearSessionData("exit");
       },
 
       clearError: () => set({ error: null }),
@@ -198,7 +224,15 @@ export const useAuthStore = create(
       // Sinaliza o fim da hidratação via setState para as rotas esperarem o
       // token persistido — sem isso o cold start pisca a tela de Login
       onRehydrateStorage: () => () => {
-        useAuthStore.setState({ hasHydrated: true });
+        // Sessão gravada por uma versão anterior a `lastUserKey`: sem tirar a
+        // chave do token aqui, a primeira saída depois da atualização deixaria
+        // "ninguém" como última pessoa, e a volta do próprio dono apagaria a
+        // conversa dele
+        const { token, lastUserKey } = useAuthStore.getState();
+        useAuthStore.setState({
+          hasHydrated: true,
+          lastUserKey: lastUserKey ?? userKeyFromToken(token),
+        });
       },
     },
   ),

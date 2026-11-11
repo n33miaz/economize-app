@@ -170,7 +170,15 @@ export const useBankStore = create<BankState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await getBankTransactions();
-      set({ transactions: data, isLoading: false, fetchedAt: Date.now() });
+      // `error: null` também no sucesso: a busca de uma sessão encerrada
+      // pode ter escrito a sua falha DEPOIS do início desta, e lista boa com
+      // erro ao lado é a tela discordando de si mesma
+      set({
+        transactions: data,
+        isLoading: false,
+        error: null,
+        fetchedAt: Date.now(),
+      });
     } catch (e) {
       // A frase vai para o ErrorState da tela, não para toast: leitura que
       // falha se explica no lugar, com "tentar de novo" ao lado.

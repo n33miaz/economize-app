@@ -5,16 +5,21 @@
 // que quebra?" Antes: nada. O extrato ficou fora do `logout()` sem que teste
 // nenhum reclamasse, e duas pessoas usam o mesmo aparelho.
 //
-// São duas redes, uma por tamanho de esquecimento:
+// São três redes, uma por tamanho de esquecimento:
 //  1. o ARQUIVO — todo store de `src/store` tem de estar classificado;
-//  2. o CAMPO — todo campo de dado de um store limpo volta ao estado inicial,
-//     ou está na lista de quem fica de propósito.
+//  2. o CAMPO de store limpo — volta ao estado inicial, ou está na lista de
+//     quem fica de propósito;
+//  3. o CAMPO de store "do aparelho" — está numa lista fechada. Um store que
+//     nasceu só com estado de tela e ganha um campo com dado de alguém não
+//     passa sem que uma pessoa olhe.
 import fs from "fs";
 import path from "path";
 
 import {
   DEVICE_STORES,
+  PERSONAL_RESETS,
   SESSION_RESETS,
+  clearPersonalData,
   clearSessionData,
 } from "../sessionReset";
 
@@ -63,6 +68,40 @@ const KEPT_ON_DEVICE: Record<string, string[]> = {
   ],
   // Se o disco já foi lido: fato do processo, não da conta
   shoppingStore: ["hasHydrated"],
+  // A cor do último aviso: sem texto, não diz nada de ninguém
+  toastStore: ["type"],
+};
+
+/**
+ * Os campos de dado de cada store "do aparelho" — lista FECHADA.
+ *
+ * Falhou aqui? Um destes stores ganhou (ou perdeu) um campo. Se o campo novo
+ * guarda qualquer coisa de quem está logado, o store deixou de ser "do
+ * aparelho": dê a ele um `reset()` e mude-o de tabela em `sessionReset`. Se é
+ * mesmo estado de tela, acrescente o nome aqui — a linha no diff é a prova de
+ * que alguém decidiu.
+ */
+const DEVICE_STORE_FIELDS: Record<string, string[]> = {
+  // `token` e `userName` são a sessão, e é o `logout()` que os apaga;
+  // `lastUserKey` é um resumo (não o e-mail) e sobrevive de propósito
+  authStore: [
+    "token",
+    "userName",
+    "isLoading",
+    "error",
+    "hasHydrated",
+    "lastUserKey",
+  ],
+  overlayStore: ["layers", "hostMounted"],
+  serverStore: ["isWaking", "waitedSeconds"],
+  tabBarStore: ["escondida", "ultimoY"],
+  versionStore: [
+    "status",
+    "info",
+    "checkedAt",
+    "refusedByServer",
+    "bannerDismissed",
+  ],
 };
 
 type AnyStore = {
@@ -109,23 +148,23 @@ function dirty(initial: unknown): unknown {
 }
 
 describe("todo store está classificado", () => {
-  it.each(storeFiles)("%s é limpo no fim da sessão OU fica, com motivo", (name) => {
-    const cleared = name in SESSION_RESETS;
-    const kept = name in DEVICE_STORES;
-    // Falhou aqui? Você criou um store. Se ele guarda qualquer coisa de quem
-    // está logado, dê a ele um `reset()` e uma linha em SESSION_RESETS; se é
-    // estado de tela ou do aparelho, uma linha em DEVICE_STORES dizendo por quê
-    expect({ name, cleared, kept }).toEqual({
-      name,
-      cleared: !kept,
-      kept: !cleared,
-    });
-    expect(cleared || kept).toBe(true);
+  it.each(storeFiles)("%s está em exatamente UMA das três tabelas", (name) => {
+    const tabelas = [
+      name in SESSION_RESETS && "SESSION_RESETS",
+      name in PERSONAL_RESETS && "PERSONAL_RESETS",
+      name in DEVICE_STORES && "DEVICE_STORES",
+    ].filter(Boolean);
+    // Falhou com lista vazia? Você criou um store. Se ele guarda cache do
+    // servidor, dê a ele um `reset()` e uma linha em SESSION_RESETS; se guarda
+    // algo da pessoa que só existe no aparelho, PERSONAL_RESETS; se é estado
+    // de tela ou do aparelho, DEVICE_STORES com o porquê
+    expect(tabelas).toHaveLength(1);
   });
 
   it("o manifesto não cita store que não existe", () => {
     const listed = [
       ...Object.keys(SESSION_RESETS),
+      ...Object.keys(PERSONAL_RESETS),
       ...Object.keys(DEVICE_STORES),
     ].sort();
     expect(listed).toEqual(storeFiles);
@@ -138,8 +177,26 @@ describe("todo store está classificado", () => {
   });
 });
 
+describe("store do aparelho tem a lista de campos fechada", () => {
+  // `sessionReset` é o manifesto, não um store: não tem estado
+  const names = Object.keys(DEVICE_STORES).filter((n) => n !== "sessionReset");
+
+  it("a lista de campos cobre exatamente os stores do aparelho", () => {
+    expect(Object.keys(DEVICE_STORE_FIELDS).sort()).toEqual(names.sort());
+  });
+
+  it.each(names)("%s", (name) => {
+    expect(dataKeys(storeOf(name).getState()).sort()).toEqual(
+      [...DEVICE_STORE_FIELDS[name]].sort(),
+    );
+  });
+});
+
 describe("todo campo de dado volta ao inicial", () => {
-  const names = Object.keys(SESSION_RESETS);
+  const names = [
+    ...Object.keys(SESSION_RESETS),
+    ...Object.keys(PERSONAL_RESETS),
+  ];
   const stores = Object.fromEntries(names.map((name) => [name, storeOf(name)]));
   // Fotografia ANTES de qualquer sujeira: é contra ela que a limpeza é medida
   const initial = Object.fromEntries(
@@ -152,42 +209,83 @@ describe("todo campo de dado volta ao inicial", () => {
     }),
   );
 
-  beforeAll(() => {
+  const sujar = () => {
     for (const name of names) {
-      const sujeira = Object.fromEntries(
-        Object.entries(initial[name]).map(([key, value]) => [key, dirty(value)]),
+      stores[name].setState(
+        Object.fromEntries(
+          Object.entries(initial[name]).map(([key, value]) => [
+            key,
+            dirty(value),
+          ]),
+        ),
       );
-      stores[name].setState(sujeira);
     }
-    clearSessionData();
+  };
+
+  /** Os campos que não voltaram ao inicial, e os que voltaram. */
+  const medir = (name: string) => {
+    const state = stores[name].getState();
+    const sujos: string[] = [];
+    const limpos: string[] = [];
+    for (const key of Object.keys(initial[name])) {
+      try {
+        expect(state[key]).toEqual(initial[name][key]);
+        limpos.push(key);
+      } catch {
+        sujos.push(key);
+      }
+    }
+    return { sujos, limpos };
+  };
+
+  describe("depois da saída e da entrada de OUTRA pessoa", () => {
+    beforeAll(() => {
+      sujar();
+      clearSessionData();
+      clearPersonalData();
+    });
+
+    it.each(names)("%s", (name) => {
+      const kept = KEPT_ON_DEVICE[name] ?? [];
+      const { sujos, limpos } = medir(name);
+
+      // `sobrou`: campo com dado de quem saiu que o reset não apagou. Ou o
+      // reset do store esqueceu dele, ou ele é do aparelho e entra em
+      // KEPT_ON_DEVICE com o porquê.
+      // `limpoSemPrecisar`: a lista diz que fica e ele foi apagado.
+      expect({
+        sobrou: sujos.filter((key) => !kept.includes(key)),
+        limpoSemPrecisar: limpos.filter((key) => kept.includes(key)),
+      }).toEqual({ sobrou: [], limpoSemPrecisar: [] });
+    });
   });
 
-  it.each(names)("%s", (name) => {
-    const kept = KEPT_ON_DEVICE[name] ?? [];
-    const state = stores[name].getState();
-    const sobrou: string[] = [];
-    const limpoSemPrecisar: string[] = [];
+  describe("só a saída", () => {
+    beforeAll(() => {
+      sujar();
+      clearSessionData();
+    });
 
-    for (const key of Object.keys(initial[name])) {
-      const voltou = (() => {
-        try {
-          expect(state[key]).toEqual(initial[name][key]);
-          return true;
-        } catch {
-          return false;
-        }
-      })();
-      if (!voltou && !kept.includes(key)) sobrou.push(key);
-      if (voltou && kept.includes(key)) limpoSemPrecisar.push(key);
-    }
+    afterAll(() => {
+      clearPersonalData();
+    });
 
-    // `sobrou`: campo com dado de quem saiu que o reset não apagou. Ou o
-    // reset do store esqueceu dele, ou ele é do aparelho e entra em
-    // KEPT_ON_DEVICE com o porquê.
-    // `limpoSemPrecisar`: a lista diz que fica e ele foi apagado.
-    expect({ sobrou, limpoSemPrecisar }).toEqual({
-      sobrou: [],
-      limpoSemPrecisar: [],
+    it.each(Object.keys(PERSONAL_RESETS))(
+      "%s não é tocado: é da pessoa e espera a volta dela",
+      (name) => {
+        expect(medir(name).limpos).toEqual([]);
+      },
+    );
+
+    it("o aviso na tela some na saída e fica na entrada", () => {
+      // na entrada o Login acabou de mostrar "biometria ativada"
+      stores.toastStore.setState({ visible: true, message: "Biometria ativada." });
+      clearSessionData("entry");
+      expect(stores.toastStore.getState().message).toBe("Biometria ativada.");
+
+      clearSessionData("exit");
+      expect(stores.toastStore.getState().visible).toBe(false);
+      expect(stores.toastStore.getState().message).toBe("");
     });
   });
 
@@ -213,5 +311,109 @@ describe("todo campo de dado volta ao inicial", () => {
 
     bank.setState({ reset: resetOriginal });
     erro.mockRestore();
+  });
+});
+
+/**
+ * A limpeza que chega ANTES de o store terminar de ler o disco.
+ *
+ * O store persistido começa a hidratar quando o módulo é carregado, e a
+ * leitura é assíncrona. Aqui a limpeza é justamente quem carrega o módulo (o
+ * `require` tardio do manifesto), com o disco ainda cheio do que a pessoa
+ * anterior deixou: sem a segunda passada no fim da hidratação, a leitura
+ * chegava depois do `reset` e repunha tudo.
+ */
+describe("limpeza com o store ainda não hidratado", () => {
+  type Storage = { getItem: jest.Mock; setItem: jest.Mock };
+
+  /** Sobe módulos novos com o disco preso: `entregar` solta a leitura. */
+  function comDiscoPreso(key: string, saved: unknown) {
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const storage = require("@react-native-async-storage/async-storage") as Storage;
+    let entregar!: () => void;
+    storage.getItem.mockImplementation((asked: string) =>
+      asked === key
+        ? new Promise<string>((resolve) => {
+            entregar = () =>
+              resolve(JSON.stringify({ state: saved, version: 0 }));
+          })
+        : Promise.resolve(null),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const manifest = require("../sessionReset") as typeof import("../sessionReset");
+    const ultimoGravado = () => {
+      const calls = storage.setItem.mock.calls.filter(([k]) => k === key);
+      return String(calls[calls.length - 1]?.[1]);
+    };
+    return { manifest, entregar: () => entregar(), ultimoGravado };
+  }
+
+  const assentar = async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  };
+
+  it("a conversa de quem saiu não volta do disco depois do reset", async () => {
+    const { manifest, entregar, ultimoGravado } = comDiscoPreso(
+      "@ai_chat_storage",
+      {
+        messages: [
+          { id: "m1", text: "gastei 89,90 — DE-ANA", isUser: true, timestamp: 1 },
+        ],
+      },
+    );
+
+    manifest.clearPersonalData();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAiStore } = require("../aiStore") as typeof import("../aiStore");
+    // o cenário só vale se a limpeza realmente chegou antes da leitura
+    expect(useAiStore.persist.hasHydrated()).toBe(false);
+
+    entregar();
+    await assentar();
+
+    expect(useAiStore.persist.hasHydrated()).toBe(true);
+    expect(JSON.stringify(useAiStore.getState().messages)).not.toContain("DE-ANA");
+    expect(ultimoGravado()).not.toContain("DE-ANA");
+  });
+
+  it("o carrinho de quem saiu também não (cache de sessão)", async () => {
+    const { manifest, entregar, ultimoGravado } = comDiscoPreso(
+      "@shopping_storage",
+      {
+        trips: [{ clientId: "c1", storeName: "Mercado DE-ANA", items: [] }],
+        priceCache: {},
+        lastSyncAt: 1,
+        syncFailed: false,
+      },
+    );
+
+    manifest.clearSessionData();
+    const { useShoppingStore } =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("../shoppingStore") as typeof import("../shoppingStore");
+    expect(useShoppingStore.persist.hasHydrated()).toBe(false);
+
+    entregar();
+    await assentar();
+
+    expect(useShoppingStore.getState().trips).toEqual([]);
+    expect(ultimoGravado()).not.toContain("DE-ANA");
+  });
+
+  it("sem limpeza pendente, a hidratação repõe o disco normalmente", async () => {
+    // a outra metade: a segunda passada não pode virar "todo store nasce vazio"
+    const { entregar } = comDiscoPreso("@ai_chat_storage", {
+      messages: [{ id: "m1", text: "DE-ANA", isUser: true, timestamp: 1 }],
+    });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAiStore } = require("../aiStore") as typeof import("../aiStore");
+
+    entregar();
+    await assentar();
+
+    expect(JSON.stringify(useAiStore.getState().messages)).toContain("DE-ANA");
   });
 });
