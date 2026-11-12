@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -20,6 +20,7 @@ import ShieldCheck from "lucide-react-native/dist/esm/icons/shield-check";
 import Languages from "lucide-react-native/dist/esm/icons/languages";
 import LogOut from "lucide-react-native/dist/esm/icons/log-out";
 import Mail from "lucide-react-native/dist/esm/icons/mail";
+import MonitorSmartphone from "lucide-react-native/dist/esm/icons/monitor-smartphone";
 import Pencil from "lucide-react-native/dist/esm/icons/pencil";
 import ReceiptText from "lucide-react-native/dist/esm/icons/receipt-text";
 import SlidersHorizontal from "lucide-react-native/dist/esm/icons/sliders-horizontal";
@@ -54,6 +55,8 @@ import {
   usePreferencesStore,
 } from "../store/preferencesStore";
 import { useToastStore } from "../store/toastStore";
+import { getApiErrorStatus, logoutAllSessions } from "../services/api";
+import { describeSaveFailure } from "../services/requestFailure";
 import { usePremiumOffer } from "../hooks/usePremiumOffer";
 import * as Haptics from "../utils/haptics";
 import {
@@ -360,6 +363,50 @@ export default function Profile() {
       confirmLabel: "Sair",
       destructive: true,
       onConfirm: () => logout(),
+    });
+  };
+
+  // Trava de duplo toque: o `busy` do diálogo cobre o botão de confirmar,
+  // mas não o caminho até ele — e dois pedidos de "sair de tudo" em voo
+  // dariam dois logouts e dois toasts
+  const loggingOutAllRef = useRef(false);
+
+  const handleLogoutAll = () => {
+    if (loggingOutAllRef.current) return;
+    askConfirm({
+      title: "Sair de todos os aparelhos",
+      message:
+        "Todos os aparelhos, inclusive este, saem da conta, e o código de verificação em duas etapas será pedido de novo no próximo login.",
+      confirmLabel: "Sair de todos",
+      destructive: true,
+      onConfirm: async () => {
+        if (loggingOutAllRef.current) return;
+        loggingOutAllRef.current = true;
+        try {
+          await logoutAllSessions();
+          // Mesmo logout local de sempre: o servidor já matou este token, e
+          // ficar com ele só adiaria a saída para o primeiro 401
+          logout();
+        } catch (e) {
+          // 404: servidor antigo, sem a rota. Não é falha de rede nem da
+          // pessoa — a função só não existe lá ainda, e dizer "tente de
+          // novo" seria mentir. Em qualquer falha a sessão fica: sair aqui
+          // daria a impressão de que os outros aparelhos saíram também
+          if (getApiErrorStatus(e) === 404) {
+            showToast("Esta função ainda não está disponível.", "info");
+          } else {
+            showToast(
+              describeSaveFailure(
+                e,
+                "Não foi possível sair de todos os aparelhos.",
+              ),
+              "error",
+            );
+          }
+        } finally {
+          loggingOutAllRef.current = false;
+        }
+      },
     });
   };
 
@@ -907,6 +954,13 @@ export default function Profile() {
             label="Sair"
             destructive
             onPress={handleLogout}
+          />
+          <ActionRow
+            Icon={MonitorSmartphone}
+            label="Sair de todos os aparelhos"
+            description="Encerra a sessão em todo lugar onde a conta está aberta"
+            destructive
+            onPress={handleLogoutAll}
           />
         </Animated.View>
         {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
