@@ -175,6 +175,57 @@ describe("Desejos", () => {
     );
   });
 
+  it("dois toques rápidos no salvar criam UM desejo", async () => {
+    // A criação fica pendurada: o `isSaving` do store só chegaria no render
+    // seguinte, e é a trava por ref que segura o segundo toque
+    let concluir: () => void = () => {};
+    const create = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          concluir = () => resolve({ ok: true, message: "Desejo salvo." });
+        }),
+    );
+    useWishStore.setState({ ...BASE_VAZIA, create } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText("Cadastrar desejo")));
+    fireEvent.changeText(getByLabelText("O que você quer"), "Bicicleta");
+    fireEvent.changeText(getByLabelText("Quanto custa"), "2400");
+    const salvar = getByLabelText("Salvar desejo");
+    fireEvent.press(salvar);
+    fireEvent.press(salvar);
+
+    expect(create).toHaveBeenCalledTimes(1);
+    concluir();
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  });
+
+  it("depois de guardar, a folha recebe o desejo atualizado do store", async () => {
+    useWishStore.setState({
+      ...BASE_VAZIA,
+      baseline: BASELINE,
+      wishes: [desejo("w1", "Moto", 18000, "GOAL")],
+    } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText(/^Moto,/)));
+    fireEvent.press(getByLabelText("Guardar dinheiro para Moto"));
+    await waitFor(() =>
+      expect((WishContributionSheet as unknown as jest.Mock).mock.calls.at(-1)?.[0])
+        .toMatchObject({ visible: true, wish: { id: "w1", savedAmount: 0 } }),
+    );
+
+    // a recarga depois do aporte troca o objeto no store; a folha não pode
+    // seguir com a cópia de antes
+    const atualizado = { ...(desejo("w1", "Moto", 18000, "GOAL") as object), savedAmount: 500 };
+    useWishStore.setState({ wishes: [atualizado] } as never);
+
+    await waitFor(() =>
+      expect((WishContributionSheet as unknown as jest.Mock).mock.calls.at(-1)?.[0])
+        .toMatchObject({ wish: { id: "w1", savedAmount: 500 } }),
+    );
+  });
+
   it("busca a lista na primeira abertura", async () => {
     const fetch = jest.fn().mockResolvedValue(undefined);
     useWishStore.setState({ ...BASE_VAZIA, hasLoadedOnce: false, fetch } as never);

@@ -10,6 +10,7 @@ import {
   useAnalyticsStore,
 } from "../analyticsStore";
 import { usePreferencesStore } from "../preferencesStore";
+import { SessionEndedError } from "../../services/requestFailure";
 import { useRecurrenceStore } from "../recurrenceStore";
 
 jest.mock("../../services/api", () => ({
@@ -77,7 +78,9 @@ beforeEach(() => {
     isLoading: false,
     error: null,
     homeData: null,
+    homeDataAt: null,
     isHomeLoading: false,
+    homeError: null,
   });
 });
 
@@ -279,6 +282,52 @@ describe("fetchHomeMonthly — desempate da janela vazia", () => {
     await useAnalyticsStore.getState().fetchHomeMonthly();
 
     expect(mockedMonthly).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fetchHomeMonthly — falha", () => {
+  it("guarda o erro e mantém o mês que já estava na tela", async () => {
+    // A Home precisa saber que NÃO SABE: sem o erro, quem entrou de novo com a
+    // API fora caía no convite para importar o primeiro extrato
+    const anterior = analytics();
+    useAnalyticsStore.setState({ homeData: anterior });
+    mockedMonths.mockRejectedValue(new Error("offline"));
+    mockedMonthly.mockRejectedValue(new Error("offline"));
+
+    await useAnalyticsStore.getState().fetchHomeMonthly();
+
+    const estado = useAnalyticsStore.getState();
+    expect(estado.homeError).toBeTruthy();
+    expect(estado.homeData).toBe(anterior);
+    expect(estado.isHomeLoading).toBe(false);
+  });
+
+  it("a busca seguinte que dá certo apaga o erro", async () => {
+    useAnalyticsStore.setState({ homeError: "Não foi possível carregar o seu mês." });
+    mockedMonths.mockResolvedValue(["2026-08"]);
+    mockedMonthly.mockResolvedValue(analytics());
+
+    await useAnalyticsStore.getState().fetchHomeMonthly();
+
+    expect(useAnalyticsStore.getState().homeError).toBeNull();
+  });
+
+  it("resposta de sessão encerrada não vira erro na Home de quem entrou", async () => {
+    mockedMonths.mockResolvedValue([]);
+    mockedMonthly.mockRejectedValue(new SessionEndedError());
+
+    await useAnalyticsStore.getState().fetchHomeMonthly();
+
+    expect(useAnalyticsStore.getState().homeError).toBeNull();
+    expect(useAnalyticsStore.getState().isHomeLoading).toBe(false);
+  });
+
+  it("o fim da sessão limpa o erro", () => {
+    useAnalyticsStore.setState({ homeError: "falhou" });
+
+    useAnalyticsStore.getState().reset();
+
+    expect(useAnalyticsStore.getState().homeError).toBeNull();
   });
 });
 

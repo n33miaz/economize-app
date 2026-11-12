@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import WishContributionSheet from "../WishContributionSheet";
@@ -178,6 +178,33 @@ describe("Folha de aporte da meta", () => {
     await waitFor(() =>
       expect(guardar).toHaveBeenCalledWith("w1", { amount: 300, cycleMonth: null }),
     );
+  });
+
+  it("dois toques rápidos no guardar viram UM aporte", async () => {
+    // A gravação fica pendurada: o segundo toque chega antes de o estado
+    // "salvando" existir no render, e só a trava por ref o segura
+    let concluir: () => void = () => {};
+    guardar.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          concluir = () =>
+            resolve({ contribution: {} as WishContribution, savedAmount: 1500 });
+        }),
+    );
+    const { getByLabelText } = montar();
+
+    fireEvent.changeText(await waitFor(() => getByLabelText(/Quanto guardar/)), "300,00");
+    const botao = getByLabelText("Guardar o valor informado");
+    // Os dois toques no MESMO ato, sem render no meio: é o caso em que o
+    // `isSaving` do estado ainda é `false` para os dois, e só a ref segura
+    act(() => {
+      fireEvent.press(botao);
+      fireEvent.press(botao);
+    });
+
+    expect(guardar).toHaveBeenCalledTimes(1);
+    concluir();
+    await waitFor(() => expect(historico).toHaveBeenCalledTimes(2));
   });
 
   it("campo vazio pede o número e aponta o caminho da correção", async () => {

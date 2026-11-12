@@ -8,6 +8,7 @@ import {
   isSessionEnded,
   SessionEndedError,
 } from "../api";
+import { summarizeErrorForLog } from "../requestFailure";
 
 const config = {
   headers: new AxiosHeaders(),
@@ -290,5 +291,47 @@ describe("describeSaveFailure — o erro de quem grava", () => {
       response: { status: 400, data: { detail: "De quem saiu." } },
     });
     expect(describeSaveFailure(erro, "Falha ao criar categoria.")).toBe("");
+  });
+});
+
+describe("summarizeErrorForLog", () => {
+  it("leva status, código e mensagem — nunca o token nem o corpo enviado", () => {
+    const comSegredo = new AxiosError(
+      "Request failed with status code 500",
+      "ERR_BAD_RESPONSE",
+      {
+        ...config,
+        headers: new AxiosHeaders({ Authorization: "Bearer segredo.jwt" }),
+        data: JSON.stringify({ message: "quanto devo no cartão?" }),
+      } as InternalAxiosRequestConfig,
+      {},
+      {
+        status: 500,
+        statusText: "x",
+        headers: {},
+        config,
+        data: {},
+      },
+    );
+
+    const resumo = summarizeErrorForLog(comSegredo);
+
+    expect(resumo).toBe(
+      "status=500 code=ERR_BAD_RESPONSE Request failed with status code 500",
+    );
+    expect(resumo).not.toContain("segredo");
+    expect(resumo).not.toContain("cartão");
+  });
+
+  it("sem resposta, fica o código; sem nada, uma frase neutra", () => {
+    expect(summarizeErrorForLog(semResposta("ECONNABORTED"))).toBe(
+      "code=ECONNABORTED Network Error",
+    );
+    expect(summarizeErrorForLog(undefined)).toBe("erro sem detalhes");
+  });
+
+  it("corta mensagem longa: o log não é lugar de texto arbitrário", () => {
+    const resumo = summarizeErrorForLog(new Error("x".repeat(500)));
+    expect(resumo.length).toBeLessThanOrEqual(121);
   });
 });

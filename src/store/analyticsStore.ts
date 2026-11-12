@@ -70,6 +70,13 @@ interface AnalyticsState {
    * quem precisa saber a diferença sem comparar datas.
    */
   hasHomeLoadedOnce: boolean;
+  /**
+   * Por que a última busca da Home falhou; null quando deu certo. Sem isto a
+   * falha sumia em silêncio, e quem entrou de novo (instantâneo limpo) com a
+   * API fora caía no "Tudo começa com um extrato" — um convite para importar
+   * dirigido a quem tem anos de extrato. A tela precisa saber que NÃO SABE.
+   */
+  homeError: string | null;
 
   fetchMonths: () => Promise<void>;
   fetchMonthly: (month?: string) => Promise<void>;
@@ -122,6 +129,7 @@ const createAnalyticsState: StateCreator<AnalyticsState> = (set, get) => ({
   homeDataAt: null,
   isHomeLoading: false,
   hasHomeLoadedOnce: false,
+  homeError: null,
 
   /**
    * Fim de sessão. Os ids de requisição avançam para que uma busca em voo,
@@ -144,6 +152,7 @@ const createAnalyticsState: StateCreator<AnalyticsState> = (set, get) => ({
       homeDataAt: null,
       isHomeLoading: false,
       hasHomeLoadedOnce: false,
+      homeError: null,
     });
   },
 
@@ -255,11 +264,23 @@ const createAnalyticsState: StateCreator<AnalyticsState> = (set, get) => ({
         homeDataAt: new Date().toISOString(),
         isHomeLoading: false,
         hasHomeLoadedOnce: true,
+        homeError: null,
       });
-    } catch {
+    } catch (e) {
       // a Home segue com a última consolidação boa em vez de zerar a tela
       if (requestId !== homeRequestId) return;
-      set({ isHomeLoading: false });
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível carregar o seu mês.",
+      );
+      // Frase vazia é sessão encerrada: a resposta não tem destinatário, e
+      // gravar um erro aqui faria a Home de quem entrou acusar uma falha que
+      // não é dela
+      if (!message) {
+        set({ isHomeLoading: false });
+        return;
+      }
+      set({ isHomeLoading: false, homeError: message });
     }
   },
 });

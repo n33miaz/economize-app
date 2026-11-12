@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 
+import { summarizeErrorForLog } from "../services/requestFailure";
 import { useConfirmStore } from "../store/confirmStore";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, shadow, spacing } from "../theme/ds";
@@ -58,7 +59,9 @@ export default function ConfirmDialog() {
       // mostra o toast). Aqui só não pode ESCAPAR: um handler de toque que
       // rejeita vira unhandled rejection, que no navegador é erro de console
       // sem nada na tela — e o diálogo já fechou pelo `finally`
-      console.error("Ação confirmada falhou:", error);
+      // Só o resumo: a ação quase sempre é uma chamada à API, e o erro do
+      // axios inteiro despejaria o Bearer e o corpo enviado no console
+      console.error("Ação confirmada falhou:", summarizeErrorForLog(error));
     } finally {
       setBusy(false);
       dismiss();

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BadgeCheck from "lucide-react-native/dist/esm/icons/badge-check";
 import Banknote from "lucide-react-native/dist/esm/icons/banknote";
@@ -185,6 +185,11 @@ export default function IncomeSettings() {
     setFormOpen(true);
   };
 
+  // Trava contra o duplo toque: o estado de "salvando" só vale no render
+  // seguinte, e dois toques no mesmo quadro cadastravam a fonte duas vezes —
+  // renda em dobro no cálculo da hora de trabalho
+  const salvandoFonteRef = useRef(false);
+
   const salvarFonte = async () => {
     if (!nome.trim()) {
       showToast("Dê um nome à fonte de renda.", "warning");
@@ -196,14 +201,20 @@ export default function IncomeSettings() {
       showToast("O dia deve estar entre 1 e 31.", "warning");
       return;
     }
-    const result = await addIncome({
-      kind,
-      name: nome.trim(),
-      expectedAmount: montante,
-      anchorDay: diaNum,
-    });
-    showToast(result.message, result.ok ? "success" : "error");
-    if (result.ok) setFormOpen(false);
+    if (salvandoFonteRef.current) return;
+    salvandoFonteRef.current = true;
+    try {
+      const result = await addIncome({
+        kind,
+        name: nome.trim(),
+        expectedAmount: montante,
+        anchorDay: diaNum,
+      });
+      showToast(result.message, result.ok ? "success" : "error");
+      if (result.ok) setFormOpen(false);
+    } finally {
+      salvandoFonteRef.current = false;
+    }
   };
 
   const salvarJornada = async () => {

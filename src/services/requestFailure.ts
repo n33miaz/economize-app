@@ -277,3 +277,34 @@ export function describeSaveFailure(error: unknown, fallback: string): string {
   if (isSessionEnded(error)) return "";
   return readDetail(error) ?? describeLoadFailure(error, fallback);
 }
+
+/** Teto da mensagem no log: o bastante para reconhecer, curto para não vazar. */
+const LOG_MESSAGE_MAX = 120;
+
+/**
+ * Resumo de uma falha para o console, sem o que não pode sair do aparelho.
+ *
+ * <p>O erro do axios carrega `config.headers.Authorization` (o Bearer da
+ * sessão) e `config.data` (a pergunta feita à IA, o valor digitado). Passar o
+ * objeto inteiro ao `console.error` despejava tudo isso no logcat, no console
+ * do navegador e em qualquer coletor de log ligado neles. Daqui sai só o que
+ * ajuda a diagnosticar: status, código e a mensagem curta.
+ */
+export function summarizeErrorForLog(error: unknown): string {
+  const status = readStatus(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const message =
+    raw.length > LOG_MESSAGE_MAX ? `${raw.slice(0, LOG_MESSAGE_MAX)}…` : raw;
+  const parts = [
+    status !== null ? `status=${status}` : null,
+    typeof code === "string" ? `code=${code}` : null,
+    message ? message : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" ") : "erro sem detalhes";
+}

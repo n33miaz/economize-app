@@ -93,6 +93,8 @@ function prepararStores() {
   useAuthStore.setState({ token: "t", userName: "Neemias" } as never);
   useAnalyticsStore.setState({
     homeData: MES,
+    homeDataAt: null,
+    homeError: null,
     isHomeLoading: false,
     months: ["2026-08"],
     fetchHomeMonthly: jest.fn().mockResolvedValue(undefined),
@@ -131,6 +133,8 @@ function prepararStores() {
     potAnnouncementSeen: true,
     mealVoucherPromptDismissedFor: "always",
     cycleAnchorDay: 1,
+    // explícito: os testes da variação ligam o avançado, e o store é global
+    viewDepth: "simple",
     hasHydrated: true,
     sessionCount: 1,
   } as never);
@@ -269,6 +273,88 @@ describe("Início", () => {
 
     await waitFor(() => expect(getByText(/Olá/)).toBeTruthy());
     expect(queryByText("Seu pote conta o mês")).toBeNull();
+  });
+
+  it("sem mês na mão e com a busca caída, diz que não carregou — não manda importar", async () => {
+    // Quem entrou de novo tem o instantâneo limpo: sem o erro no store, a
+    // Home convidava a importar o primeiro extrato quem tem anos dele
+    const fetchHomeMonthly = jest.fn().mockResolvedValue(undefined);
+    useAnalyticsStore.setState({
+      homeData: null,
+      months: [],
+      homeError: "O servidor está acordando. Aguarde alguns segundos e tente de novo.",
+      fetchHomeMonthly,
+    } as never);
+
+    const { getByText, getByLabelText, queryByText } = montar();
+
+    await waitFor(() =>
+      expect(getByText("Não foi possível carregar o seu mês")).toBeTruthy(),
+    );
+    expect(queryByText("Tudo começa com um extrato")).toBeNull();
+    fetchHomeMonthly.mockClear();
+    fireEvent.press(getByLabelText("Tentar de novo"));
+    expect(fetchHomeMonthly).toHaveBeenCalledTimes(1);
+  });
+
+  it("instantâneo zerado e a busca caída também não viram onboarding", async () => {
+    // `months` não persiste: reabrindo com a API fora, um mês zerado no disco
+    // parecia "conta sem extrato" e voltava o convite para importar
+    useAnalyticsStore.setState({
+      homeData: { ...MES, totalIncome: 0, totalExpense: 0, net: 0 },
+      months: [],
+      homeError: "O servidor está acordando. Aguarde alguns segundos e tente de novo.",
+    } as never);
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() =>
+      expect(getByText("Não foi possível carregar o seu mês")).toBeTruthy(),
+    );
+    expect(queryByText("Tudo começa com um extrato")).toBeNull();
+  });
+
+  it("com mês na mão e a busca caída, o número fica e o aviso entra por cima", async () => {
+    useAnalyticsStore.setState({
+      homeError: "Você está offline. Verifique a conexão e tente de novo.",
+      homeDataAt: "2026-08-31T10:00:00Z",
+    } as never);
+
+    const { getByText, getByLabelText } = montar();
+
+    await waitFor(() =>
+      expect(
+        getByText("Você está offline. Verifique a conexão e tente de novo."),
+      ).toBeTruthy(),
+    );
+    expect(getByLabelText("Tentar de novo")).toBeTruthy();
+    // o mês continua na tela
+    expect(getByText(/Faltou em/)).toBeTruthy();
+  });
+
+  it("variação de saídas abaixo de meio ponto é \"Igual\", sem \"-0%\"", async () => {
+    usePreferencesStore.setState({ viewDepth: "advanced" } as never);
+    useAnalyticsStore.setState({
+      homeData: {
+        ...MES,
+        // 0,3% a menos: o `toFixed(0)` escrevia "-0%" com seta verde
+        previous: { ...MES.previous, totalExpense: MES.totalExpense * 1.003 },
+      },
+    } as never);
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText("Igual")).toBeTruthy());
+    expect(queryByText(/-0%/)).toBeNull();
+  });
+
+  it("variação de saídas sai no formato do app, com sinal", async () => {
+    usePreferencesStore.setState({ viewDepth: "advanced" } as never);
+
+    const { getByText } = montar();
+
+    // 6.862,70 contra 4.391,99: 56% a mais
+    await waitFor(() => expect(getByText("+56%")).toBeTruthy());
   });
 
   it("abre com o mês respondido", async () => {

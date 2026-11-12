@@ -354,10 +354,15 @@ export default function BankIntegration() {
   const [anchorSheetOpen, setAnchorSheetOpen] = useState(false);
   const [memberFilter, setMemberFilter] = useState(MEMBER_ALL);
 
+  // O dia de hoje, relido a cada foco (ver o `useFocusEffect` abaixo). Com
+  // `todayIso()` preso num `useMemo` de âncora, a tela aberta de 31/10 para
+  // 01/11 seguia pedindo o ciclo de outubro. Em estado, o ciclo só muda quando
+  // o dia muda — e a busca da família recarrega sozinha pela dependência
+  const [diaDeHoje, setDiaDeHoje] = useState(() => todayIso());
   // O ciclo corrente do usuário, pela mesma âncora da Home e da Análise
   const familyMonth = useMemo(
-    () => cycleMonthKeyContaining(anchorDay, todayIso()),
-    [anchorDay],
+    () => cycleMonthKeyContaining(anchorDay, diaDeHoje),
+    [anchorDay, diaDeHoje],
   );
   const familyWindow = useMemo(
     () => cycleWindowForMonth(anchorDay, familyMonth),
@@ -558,6 +563,8 @@ export default function BankIntegration() {
   // na montagem deixaria a contagem pendente e os pontinhos de aviso velhos
   useFocusEffect(
     useCallback(() => {
+      // Mesmo valor não re-renderiza; dia novo troca o ciclo da família
+      setDiaDeHoje(todayIso());
       fetchTransactions().finally(() => setHasLoadedOnce(true));
       // categorias alimentam os chips das linhas do extrato
       fetchCategories();
