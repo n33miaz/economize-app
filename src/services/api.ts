@@ -1921,6 +1921,10 @@ export interface WishBaseline {
   lastClosedCycle?: {
     /** `YYYY-MM` da janela que fechou, igual ao ciclo do aporte medido. */
     cycleMonth: string;
+    /** Primeiro dia do ciclo (`YYYY-MM-DD`); ausente em servidores anteriores. */
+    start?: string | null;
+    /** Último dia do ciclo, INCLUSIVO (`YYYY-MM-DD`); ausente em servidores anteriores. */
+    end?: string | null;
     /** Entradas menos saídas realmente apuradas naquele ciclo. */
     leftover: number;
   } | null;

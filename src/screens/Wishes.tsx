@@ -63,7 +63,12 @@ export default function Wishes({ navigation }: any) {
     // "medido": só o ciclo já fechado carrega um fato para o histórico.
     const ciclo = baseline?.lastClosedCycle;
     if (!ciclo || ciclo.leftover <= 0) return null;
-    return { amount: ciclo.leftover, cycleMonth: ciclo.cycleMonth };
+    return {
+      amount: ciclo.leftover,
+      cycleMonth: ciclo.cycleMonth,
+      start: ciclo.start ?? null,
+      end: ciclo.end ?? null,
+    };
   }, [baseline]);
 
   // Puxar para atualizar: o gesto que a plataforma inteira ensinou

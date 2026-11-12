@@ -29,7 +29,7 @@ const META = {
   status: "GOAL",
 } as Wish;
 
-const SOBRA = { amount: 420.5, cycleMonth: "2026-09" };
+const SOBRA = { amount: 420.5, cycleMonth: "2026-09", start: "2026-09-05", end: "2026-10-04" };
 
 const montar = (
   props: Partial<React.ComponentProps<typeof WishContributionSheet>> = {},
@@ -59,11 +59,68 @@ describe("Folha de aporte da meta", () => {
     historico.mockResolvedValue([]);
   });
 
-  it("a sobra medida vira uma proposta de um toque, com o ciclo dito", async () => {
-    const { getByText } = montar();
+  it("a sobra medida vira uma proposta de um toque, com o período dito em datas", async () => {
+    const { getByText, queryByText } = montar();
 
     await waitFor(() => expect(getByText(/Guardar a sobra de R\$\s?420,50/)).toBeTruthy());
-    expect(getByText(/ciclo 2026-09, medido no seu extrato/)).toBeTruthy();
+    // o período que a pessoa viveu, com o fim inclusivo; nunca a chave "2026-09"
+    expect(getByText(/sobrou de 05\/09 a 04\/10, medido no seu extrato/)).toBeTruthy();
+    expect(queryByText(/2026-09/)).toBeNull();
+  });
+
+  it("sem as datas (API anterior), fala o mês por extenso em vez da chave", async () => {
+    const { getByText } = montar({ leftover: { amount: 420.5, cycleMonth: "2026-09" } });
+
+    await waitFor(() => expect(getByText(/sobrou em setembro de 2026/)).toBeTruthy());
+  });
+
+  it("sobra zero ou negativa não vira proposta", async () => {
+    const { queryByText, getByLabelText } = montar({ leftover: { ...SOBRA, amount: 0 } });
+
+    await waitFor(() => expect(getByLabelText(/Quanto guardar/)).toBeTruthy());
+    expect(queryByText(/Guardar a sobra/)).toBeNull();
+  });
+
+  it("trocar de meta descarta o extrato da anterior antes de carregar o novo", async () => {
+    let entregarSegunda: (linhas: WishContribution[]) => void = () => {};
+    historico
+      .mockResolvedValueOnce([
+        {
+          id: "c1",
+          amount: 420.5,
+          origin: "MEASURED",
+          cycleMonth: "2026-09",
+          note: null,
+          createdAt: "2026-09-11T10:00:00Z",
+        },
+      ])
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { entregarSegunda = resolve; }),
+      );
+    const { getByText, queryByText, rerender } = montar();
+    await waitFor(() => expect(getByText(/sobra medida do ciclo 2026-09/)).toBeTruthy());
+    // a meta 1 já guardou esta sobra: a proposta some
+    expect(queryByText(/Guardar a sobra/)).toBeNull();
+
+    rerender(
+      <SafeAreaProvider initialMetrics={METRICAS}>
+        <WishContributionSheet
+          visible
+          wish={{ ...META, id: "w2", name: "Viagem" } as Wish}
+          leftover={SOBRA}
+          onClose={jest.fn()}
+          onSaved={jest.fn()}
+        />
+      </SafeAreaProvider>,
+    );
+
+    // o extrato da meta 2 ainda não chegou, e o da meta 1 já não está na tela
+    await waitFor(() => expect(historico).toHaveBeenLastCalledWith("w2"));
+    expect(queryByText(/sobra medida do ciclo 2026-09/)).toBeNull();
+    expect(getByText(/Guardar a sobra de R\$\s?420,50/)).toBeTruthy();
+
+    entregarSegunda([]);
+    await waitFor(() => expect(getByText(/Guardar a sobra de R\$\s?420,50/)).toBeTruthy());
   });
 
   it("guardar a sobra manda o ciclo — é ele que trava a repetição", async () => {
@@ -74,7 +131,7 @@ describe("Folha de aporte da meta", () => {
     const { getByLabelText } = montar();
 
     fireEvent.press(
-      await waitFor(() => getByLabelText(/Guardar a sobra de R\$\s?420,50 do ciclo 2026-09/)),
+      await waitFor(() => getByLabelText(/Guardar a sobra de R\$\s?420,50, de 5 de setembro a 4 de outubro de 2026/)),
     );
 
     await waitFor(() =>
@@ -167,7 +224,7 @@ describe("Folha de aporte da meta", () => {
     const { getByLabelText, findByText } = montar();
 
     fireEvent.press(
-      await waitFor(() => getByLabelText(/Guardar a sobra de R\$\s?420,50 do ciclo 2026-09/)),
+      await waitFor(() => getByLabelText(/Guardar a sobra de R\$\s?420,50, de 5 de setembro a 4 de outubro de 2026/)),
     );
 
     expect(await findByText(/já foi guardada nesta meta/)).toBeTruthy();

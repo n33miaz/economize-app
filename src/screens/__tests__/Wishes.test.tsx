@@ -66,7 +66,7 @@ const BASELINE = {
   monthlyExpense: 2207.5,
   cyclesConsidered: 3,
   gaps: [],
-  lastClosedCycle: { cycleMonth: "2026-10", leftover: 300 },
+  lastClosedCycle: { cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04", leftover: 300 },
 };
 
 const desejo = (id: string, nome: string, valor: number, status: "WISH" | "GOAL" = "WISH") =>
@@ -148,7 +148,30 @@ describe("Desejos", () => {
 
     await waitFor(() =>
       expect((WishContributionSheet as unknown as jest.Mock).mock.calls.at(-1)?.[0])
-        .toMatchObject({ leftover: { amount: 300, cycleMonth: "2026-10" } }),
+        .toMatchObject({
+          leftover: { amount: 300, cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04" },
+        }),
+    );
+  });
+
+  it.each([
+    ["sem ciclo fechado com dados", null],
+    ["ciclo fechado sem sobra", { cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04", leftover: 0 }],
+    ["ciclo fechado no vermelho", { cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04", leftover: -120 }],
+  ])("%s: nada é proposto, mesmo com mediana positiva", async (_caso, ciclo) => {
+    useWishStore.setState({
+      ...BASE_VAZIA,
+      baseline: { ...BASELINE, monthlyLeftover: 420.5, lastClosedCycle: ciclo },
+      wishes: [desejo("w1", "Moto", 18000, "GOAL")],
+    } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText(/^Moto,/)));
+    fireEvent.press(getByLabelText("Guardar dinheiro para Moto"));
+
+    await waitFor(() =>
+      expect((WishContributionSheet as unknown as jest.Mock).mock.calls.at(-1)?.[0])
+        .toMatchObject({ visible: true, leftover: null }),
     );
   });
 
