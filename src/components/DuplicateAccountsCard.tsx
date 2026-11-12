@@ -5,6 +5,7 @@ import Merge from "lucide-react-native/dist/esm/icons/merge";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, spacing } from "../theme/ds";
 import type { AccountMergeSuggestion } from "../services/api";
+import { formatDecimal } from "../utils/money";
 
 /**
  * "Estas duas parecem a mesma conta."
@@ -185,6 +186,6 @@ export default function DuplicateAccountsCard({
 
 /** "1 lançamento" / "1.632 lançamentos" — plural e milhar na mesma frase. */
 function contar(quantidade: number): string {
-  const numero = quantidade.toLocaleString("pt-BR");
+  const numero = formatDecimal(quantidade, 0);
   return quantidade === 1 ? `${numero} lançamento` : `${numero} lançamentos`;
 }

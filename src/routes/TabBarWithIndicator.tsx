@@ -14,7 +14,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { motion, radius } from "../theme/ds";
 import { selectionEasing } from "../theme/motionPresets";
 import { useTabBarStore } from "../store/tabBarStore";
-import { ILHA_ALTURA, ILHA_LATERAL, ILHA_RESPIRO } from "./tabBarHeight";
+import { ILHA_ALTURA, ILHA_LATERAL, ilhaBottom, ilhaCoverage } from "./tabBarHeight";
 
 // Quanto a pílula estica no meio do trajeto (10%) antes de voltar ao tamanho:
 // é o "estica-e-volta" de um deslize com peso, sem mola nem quique
@@ -101,14 +101,16 @@ export default function TabBarWithIndicator(props: BottomTabBarProps) {
         });
   }, [escondida, reducedMotion, oculta]);
 
+  // Quanto descer para sumir: tudo o que a ilha cobre (com o inset real, a
+  // mesma conta do `bottom` dela) e mais um pouco, para levar a sombra junto
+  const descida = ilhaCoverage(props.insets.bottom) + 16;
   const estiloIlha = useAnimatedStyle(() => ({
-    // o deslocamento passa da própria altura: some junto com a sombra
     transform: [
       {
         translateY: interpolate(
           oculta.value,
           [0, 1],
-          [0, ILHA_ALTURA + ILHA_RESPIRO + 16],
+          [0, descida],
         ),
       },
     ],
@@ -130,7 +132,7 @@ export default function TabBarWithIndicator(props: BottomTabBarProps) {
           position: "absolute",
           left: ILHA_LATERAL,
           right: ILHA_LATERAL,
-          bottom: (props.insets.bottom || 0) + ILHA_RESPIRO,
+          bottom: ilhaBottom(props.insets.bottom),
           height: ILHA_ALTURA,
           borderRadius: radius["2xl"],
           backgroundColor: t.background.elevated,

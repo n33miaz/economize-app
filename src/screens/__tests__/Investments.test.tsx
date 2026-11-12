@@ -333,6 +333,19 @@ describe("Investments", () => {
     expect(api.getNewsByTopics).toHaveBeenCalledWith(PERFIL.topics, 5);
   });
 
+  it("resultado desconhecido (profit nulo): o cabeçalho mostra um traço e a tela fica de pé", async () => {
+    // O que a API manda quando nenhuma posição tem valor atual. Medido em
+    // 12/11/2026: este corpo derrubava o app inteiro ao abrir a aba
+    comDados();
+    api.getInvestmentSummary.mockResolvedValue({ ...RESUMO, profit: null, profitPercent: null });
+
+    const { getByText, getByLabelText } = montar();
+
+    await waitFor(() => expect(getByLabelText("Resultado: desconhecido")).toBeTruthy());
+    expect(getByText("—")).toBeTruthy();
+    expect(getByText(/investido R\$\s15\.000,00/)).toBeTruthy();
+  });
+
   it("tocar num indicador explica por que ele importa PARA ESTE usuário", async () => {
     comDados();
 
@@ -434,5 +447,96 @@ describe("Investments", () => {
     fireEvent.press(getByLabelText("Editar Vanguard Total World"));
 
     expect(await findByText("Editar posição")).toBeTruthy();
+  });
+
+  // --- Moeda estrangeira: a posição em dólar do conector saía com "R$" ---
+
+  const DOLAR: InvestmentPosition = {
+    ...CDB,
+    id: "pos-usd",
+    name: "Apple Inc",
+    code: "AAPL",
+    type: "EQUITY",
+    subtype: null,
+    indexer: null,
+    rate: null,
+    institution: "Avenue",
+    currency: "USD",
+    investedAmount: 800,
+    currentValue: 1000,
+    maturityDate: null,
+  };
+  // Meio-dia UTC: a data não vira o dia em nenhum fuso do Brasil
+  const CAMBIO = { currency: "USD", rate: 5.4, asOf: "2026-11-04T15:00:00Z", stale: false };
+
+  const comDolar = (resumo: Partial<InvestmentSummary>) => {
+    comDados();
+    api.getInvestmentSummary.mockResolvedValue({ ...RESUMO, ...resumo });
+    api.getInvestmentPositions.mockResolvedValue([CDB, DOLAR]);
+  };
+
+  it("posição em dólar convertida: mostra US$ e o equivalente em reais, sem aviso", async () => {
+    comDolar({ exchangeRates: [CAMBIO], unconverted: [] });
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText(/^US\$\s1\.000,00$/)).toBeTruthy());
+    expect(getByText(/^≈\sR\$\s5\.400,00$/)).toBeTruthy();
+    expect(getByText(/^\+US\$\s200,00 \(\+25,00%\)$/)).toBeTruthy();
+    // A regressão: o valor em dólar com símbolo de real
+    expect(queryByText(/^R\$\s1\.000,00$/)).toBeNull();
+    expect(queryByText("sem cotação · fora do total")).toBeNull();
+    expect(queryByText(/^Câmbio /)).toBeNull();
+  });
+
+  it("posição sem câmbio: fica na lista em dólar, com o aviso que diz o que falta", async () => {
+    comDolar({
+      exchangeRates: [],
+      unconverted: [
+        { id: "pos-usd", name: "Apple Inc", code: "AAPL", currency: "USD", investedAmount: 800, currentValue: 1000 },
+      ],
+    });
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText(/^US\$\s1\.000,00$/)).toBeTruthy());
+    // O valor em dólar existe: o que falta é câmbio, e é isso que a marca diz
+    expect(getByText("sem câmbio · fora do total")).toBeTruthy();
+    expect(queryByText("sem cotação · fora do total")).toBeNull();
+    // Nem pelo dólar do bloco macro: o total do servidor não tem esta posição
+    expect(queryByText(/^≈/)).toBeNull();
+    expect(queryByText(/^R\$\s1\.000,00$/)).toBeNull();
+  });
+
+  it("cotação velha: aviso discreto com a data do câmbio", async () => {
+    comDolar({ exchangeRates: [{ ...CAMBIO, stale: true }] });
+
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Câmbio US$ de 04/11/2026")).toBeTruthy());
+    expect(getByText(/^≈\sR\$\s5\.400,00$/)).toBeTruthy();
+  });
+
+  it("resposta antiga, sem os campos novos: nada quebra e o dólar não vira real", async () => {
+    comDolar({});
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText(/^US\$\s1\.000,00$/)).toBeTruthy());
+    expect(getByText(/10\.450,50/)).toBeTruthy();
+    expect(queryByText(/^≈/)).toBeNull();
+    expect(queryByText("sem cotação · fora do total")).toBeNull();
+    expect(queryByText(/^Câmbio /)).toBeNull();
+    expect(queryByText(/^R\$\s1\.000,00$/)).toBeNull();
+  });
+
+  it("resumo falhou e as posições chegaram: a lista se comporta como na resposta antiga", async () => {
+    comDolar({});
+    api.getInvestmentSummary.mockRejectedValue(problem(500));
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText(/^US\$\s1\.000,00$/)).toBeTruthy());
+    expect(queryByText(/^≈/)).toBeNull();
   });
 });

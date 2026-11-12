@@ -7,7 +7,7 @@ import Animated from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { ds } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
-import { formatBRLCompact, formatPercent } from "../utils/money";
+import { formatBRLCompact, formatDecimal, formatPercent, SEM_VALOR } from "../utils/money";
 
 interface HighlightCardProps {
   title: string;
@@ -59,7 +59,9 @@ export default function HighlightCard({
   // mil, abreviado dali em diante ("R$ 612,3 mil"), porque o slot é estreito
   const formattedValue =
     type === "index"
-      ? `${value.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} pts`
+      ? Number.isFinite(value)
+        ? `${formatDecimal(value, 0)} pts`
+        : SEM_VALOR
       : formatBRLCompact(value);
 
   const largura = compact ? CARD_WIDTH_COMPACT : CARD_WIDTH;
