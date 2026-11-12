@@ -335,6 +335,11 @@ function MainTabs() {
           fontFamily: "Roboto_700Bold",
           fontSize: 11,
           marginTop: 4,
+          // Sem isto o rótulo é espremido pelo item (10 px de altura para
+          // uma fonte de 11) e a caixa de uma linha corta os descendentes:
+          // a cedilha de "Finanças" sumia e a aba lia "Financas"
+          lineHeight: 14,
+          flexShrink: 0,
         },
       }}
     >
