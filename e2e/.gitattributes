@@ -1,0 +1,2 @@
+# Script de shell com CRLF não roda: fim de linha fixo, seja qual for o autocrlf
+*.sh text eol=lf
