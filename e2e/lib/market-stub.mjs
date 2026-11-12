@@ -55,7 +55,12 @@ createServer((req, res) => {
     : url.pathname.startsWith("/q/l")
       ? stooq(url)
       : null;
-  console.log(`${req.method} ${req.url} -> ${resposta ? 200 : 404}`);
+  // O log só leva o que foi casado contra uma lista fechada: nada que venha
+  // da requisição é escrito como chegou (quebra de linha forjaria entradas)
+  const rota = url.pathname.startsWith("/awesome/all") ? "câmbio" : url.pathname.startsWith("/q/l") ? "cotação" : "desconhecida";
+  const pedido = (url.searchParams.get("s") ?? "").toLowerCase();
+  const simbolo = Object.keys(COTACOES).find((conhecido) => conhecido === pedido) ?? "fora da lista";
+  console.log(`${rota}${rota === "cotação" ? ` de ${simbolo}` : ""} -> ${resposta ? 200 : 404}`);
   if (!resposta) {
     res.writeHead(404);
     res.end();
@@ -65,5 +70,5 @@ createServer((req, res) => {
   res.end(resposta.corpo);
 }).listen(Number(portArg), "127.0.0.1", () => {
   if (pidFile) writeFileSync(pidFile, String(process.pid));
-  console.log(`dublê de mercado em http://127.0.0.1:${portArg} (pid ${process.pid})`);
+  console.log(`dublê de mercado em http://127.0.0.1:${Number(portArg)} (pid ${process.pid})`);
 });

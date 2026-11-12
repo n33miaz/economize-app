@@ -12,6 +12,7 @@ import {
   captura,
   centralizar,
   dispensarFolhaDoPote,
+  ehProducao,
   entrar,
   irPara,
   Vigia,
@@ -79,5 +80,5 @@ test("e. Investimentos com câmbio: a posição em dólar ganha o equivalente em
 });
 
 test("g. nenhuma requisição saiu da máquina", async () => {
-  expect(vigia.externos.filter((u) => /onrender\.com/.test(u)), "chamada a produção").toEqual([]);
+  expect(vigia.externos.filter(ehProducao), "chamada a produção").toEqual([]);
 });

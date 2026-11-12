@@ -25,13 +25,52 @@ export async function abrirContexto(browser: Browser): Promise<BrowserContext> {
   });
 }
 
-/** "R$ 4.650,00", aceitando o espaço comum ou o não-separável que o Intl põe. */
-export function brl(valor: number): RegExp {
-  const texto = Math.abs(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return new RegExp(`R\\$\\s?${texto.replace(/\./g, "\\.")}(?!\\d)`);
+/**
+ * Texto literal dentro de uma expressão regular: escapa TODO metacaractere,
+ * a barra invertida inclusive. É a única função de escape do harness — trocar
+ * só o ponto deixava passar qualquer outro símbolo que o texto trouxesse.
+ */
+export function literal(texto: string): string {
+  return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export const JSQR_DO_CDN = /^https:\/\/cdn\.jsdelivr\.net\/npm\/jsqr@/;
+/** "1.234,56" em pt-BR, sempre com duas casas e sem sinal. */
+export function numero(valor: number): string {
+  return Math.abs(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Valor com símbolo de moeda, aceitando o espaço comum ou o não separável. */
+export function dinheiro(simbolo: string, valor: number): RegExp {
+  return new RegExp(`${literal(simbolo)}\\s?${literal(numero(valor))}(?!\\d)`);
+}
+
+/** "R$ 4.650,00". */
+export const brl = (valor: number): RegExp => dinheiro("R$", valor);
+
+/** O host de uma URL, ou "" se ela não for uma URL. */
+export function hostDe(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/** A URL aponta para a produção (qualquer serviço no Render)? Decide pelo HOST. */
+export function ehProducao(url: string): boolean {
+  const host = hostDe(url);
+  return host === "onrender.com" || host.endsWith(".onrender.com");
+}
+
+/** O pedido do jsQR ao CDN, que o app faz ao abrir. Decide por host e caminho. */
+export function ehJsqrDoCdn(url: string): boolean {
+  try {
+    const alvo = new URL(url);
+    return alvo.protocol === "https:" && alvo.host === "cdn.jsdelivr.net" && alvo.pathname.startsWith("/npm/jsqr@");
+  } catch {
+    return false;
+  }
+}
 
 type Evento = { tipo: "console" | "excecao" | "resposta" | "externo"; texto: string; url?: string; status?: number };
 
@@ -47,12 +86,12 @@ const CONHECIDOS: { id: string; motivo: string; casa: (e: Evento) => boolean }[]
       "GET /family responde 404 para quem não tem família. O app trata como 'sem família' (sem erro na " +
       "tela), mas o navegador registra todo 404 no console por conta própria; só a API mudando o contrato " +
       "tira a linha",
-    casa: (e) => e.status === 404 && /\/api\/v1\/family$/.test(e.url ?? ""),
+    casa: (e) => e.status === 404 && e.url === `${API_URL}/api/v1/family`,
   },
   {
     id: "EXTERNO-JSQR",
     motivo: "o app pede jsQR a cdn.jsdelivr.net ao abrir; o roteiro bloqueia toda saída da máquina",
-    casa: (e) => JSQR_DO_CDN.test(e.url ?? ""),
+    casa: (e) => ehJsqrDoCdn(e.url ?? ""),
   },
 ];
 
@@ -79,7 +118,7 @@ export class Vigia {
         // O jsQR do CDN é pedido na abertura do app: recebe um script vazio
         // (a requisição não sai da máquina do mesmo jeito) para a falha de
         // rede provocada por este bloqueio não virar exceção na página
-        if (JSQR_DO_CDN.test(url)) return route.fulfill({ status: 200, contentType: "text/javascript", body: "" });
+        if (ehJsqrDoCdn(url)) return route.fulfill({ status: 200, contentType: "text/javascript", body: "" });
         return route.abort();
       },
     );

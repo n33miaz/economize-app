@@ -29,7 +29,9 @@ import {
   dispensarFolhaDoPote,
   entrar,
   irPara,
-  JSQR_DO_CDN,
+  ehJsqrDoCdn,
+  ehProducao,
+  literal,
   quemEstaNoCentro,
   rolarAteOFim,
   sair,
@@ -130,7 +132,7 @@ test("b. importa o extrato OFX sintético pela tela de Extrato", async () => {
   const total = extrato.lancamentos.length;
   await expect(page.getByText(`${total} transações em ${total} grupos`)).toBeVisible();
   for (const l of extrato.lancamentos) {
-    const grupo = page.getByRole("button", { name: new RegExp(`^Grupo ${l.memo}, 1 transação`) });
+    const grupo = page.getByRole("button", { name: new RegExp(`^Grupo ${literal(l.memo)}, 1 transação`) });
     await expect(grupo, `grupo de ${l.memo}`).toBeVisible();
     await expect(grupo).toContainText(brl(l.valor));
     if (l.valor < 0) await expect(grupo).toContainText(/-\s?R\$/);
@@ -142,7 +144,7 @@ test("b. importa o extrato OFX sintético pela tela de Extrato", async () => {
   await expect(page.getByText("Lançamentos", { exact: true })).toBeVisible();
   for (const l of extrato.lancamentos) {
     const sentido = l.valor < 0 ? "saída" : "entrada";
-    const linha = page.getByRole("button", { name: new RegExp(`^${l.memo}, .*${sentido} de `) });
+    const linha = page.getByRole("button", { name: new RegExp(`^${literal(l.memo)}, .*${sentido} de `) });
     await expect(linha, `lançamento ${l.memo}`).toHaveCount(1);
     await expect(linha).toHaveAccessibleName(brl(l.valor));
   }
@@ -193,12 +195,12 @@ test("d. Revisão: confirmar uma categoria faz a contagem pendente cair", async 
 
   const [confirmacao] = await Promise.all([
     page.waitForResponse((r) => r.url().includes("/transactions/") && r.request().method() !== "GET"),
-    botao(page, new RegExp(`^Confirmar grupo ${compra.memo} como `), false).click(),
+    botao(page, new RegExp(`^Confirmar grupo ${literal(compra.memo)} como `), false).click(),
   ]);
   expect(confirmacao.status(), `${confirmacao.request().method()} ${confirmacao.url()}`).toBeLessThan(300);
 
   await expect(page.getByText(`${total - 1} transações em ${total - 1} grupos`)).toBeVisible();
-  await expect(page.getByRole("button", { name: new RegExp(`^Grupo ${compra.memo},`) })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: new RegExp(`^Grupo ${literal(compra.memo)},`) })).toHaveCount(0);
   await vigia.conferirTela(page, "Revisão");
 
   await botao(page, "Fechar revisão").click();
@@ -393,10 +395,10 @@ test("e2. posição manual sem valor atual: resultado desconhecido, tela de pé"
 test("g. nenhuma requisição saiu da máquina", async () => {
   const externos = [...new Set(vigia.externos)];
   // Produção nunca, em hipótese nenhuma
-  expect(externos.filter((u) => /onrender\.com/.test(u)), "chamada a produção").toEqual([]);
+  expect(externos.filter(ehProducao), "chamada a produção").toEqual([]);
   // O único pedido externo conhecido é o jsQR do CDN (bloqueado); outro é novidade
   expect(
-    externos.filter((u) => !JSQR_DO_CDN.test(u)),
+    externos.filter((u) => !ehJsqrDoCdn(u)),
     "pedido externo que o roteiro não conhecia (todos foram bloqueados)",
   ).toEqual([]);
   vigia.observacoes["pedidos externos bloqueados"] = externos;

@@ -1,5 +1,6 @@
 // A carteira sintética do roteiro, compartilhada pelas duas fases.
 import { COTACOES, DOLAR } from "../lib/market-cotacoes.mjs";
+import { dinheiro } from "./apoio";
 
 export const CDB = { nome: "CDB Banco Sintetico", investido: 1000, atual: 1050 };
 
@@ -21,7 +22,4 @@ export const ETF = {
 export const DOLAR_EM_REAIS = DOLAR;
 
 /** "US$ 221,00", aceitando o espaço comum ou o não separável que a tela põe. */
-export function usd(valor: number): RegExp {
-  const texto = Math.abs(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return new RegExp(`US\\$\\s?${texto.replace(/\./g, "\\.")}(?!\\d)`);
-}
+export const usd = (valor: number): RegExp => dinheiro("US$", valor);
