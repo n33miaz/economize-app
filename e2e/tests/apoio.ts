@@ -37,20 +37,17 @@ type Evento = { tipo: "console" | "excecao" | "resposta" | "externo"; texto: str
 
 /**
  * Ruído que o roteiro CONHECE e por isso não derruba a conferência de cada
- * tela. Cada item tem dono: ou é defeito registrado (e cobrado num `test.fail`
- * próprio, mais abaixo no roteiro), ou é consequência assumida do ambiente.
- * Nada entra aqui por conveniência.
+ * tela. Cada item diz por que é inevitável aqui. Nada entra por conveniência:
+ * defeito do app não mora nesta lista, mora num teste que falha.
  */
 const CONHECIDOS: { id: string; motivo: string; casa: (e: Evento) => boolean }[] = [
   {
-    id: "D3",
-    motivo: "GET /family responde 404 para quem não tem família, e o navegador registra erro no console",
+    id: "RUIDO-FAMILIA",
+    motivo:
+      "GET /family responde 404 para quem não tem família. O app trata como 'sem família' (sem erro na " +
+      "tela), mas o navegador registra todo 404 no console por conta própria; só a API mudando o contrato " +
+      "tira a linha",
     casa: (e) => e.status === 404 && /\/api\/v1\/family$/.test(e.url ?? ""),
-  },
-  {
-    id: "AMBIENTE-COTACAO",
-    motivo: "sem provedor de mercado (URLs em .test), a cotação do ticker responde 404",
-    casa: (e) => e.status === 404 && /\/api\/v1\/indicators\/quote\//.test(e.url ?? ""),
   },
   {
     id: "EXTERNO-JSQR",
@@ -151,7 +148,7 @@ export class Vigia {
     ).toBeLessThanOrEqual(larguras.janela);
   }
 
-  gravar() {
+  gravar(arquivo = "registro.json") {
     mkdirSync(ARTIFACTS, { recursive: true });
     const porId: Record<string, { motivo: string; vezes: number; telas: string[] }> = {};
     for (const t of this.tolerados) {
@@ -160,7 +157,7 @@ export class Vigia {
       if (!item.telas.includes(t.tela)) item.telas.push(t.tela);
     }
     writeFileSync(
-      join(ARTIFACTS, "registro.json"),
+      join(ARTIFACTS, arquivo),
       JSON.stringify({ observacoes: this.observacoes, tolerados: porId, externos: [...new Set(this.externos)] }, null, 2),
     );
   }
@@ -188,6 +185,26 @@ export async function quemEstaNoCentro(alvo: Locator): Promise<string> {
  */
 export async function aberturaTerminou(alvo: Locator) {
   await expect.poll(() => quemEstaNoCentro(alvo), { timeout: 10_000 }).toBe("o próprio elemento");
+}
+
+/**
+ * Rola até o fim a lista que contém o elemento, como faria um dedo. O
+ * `scrollIntoViewIfNeeded` do Playwright não serve aqui: para ele um botão
+ * debaixo da barra de abas já "está na tela".
+ */
+export async function rolarAteOFim(alvo: Locator) {
+  await alvo.evaluate((el) => {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if (o === "auto" || o === "scroll") p.scrollTop = p.scrollHeight;
+    }
+  });
+  await alvo.page().waitForTimeout(600);
+}
+
+/** O aviso flutuante já saiu da tela? (ele fica no DOM, transladado para fora) */
+export async function avisoSaiuDaTela(page: Page, texto: string) {
+  await expect(page.getByText(texto, { exact: true })).not.toBeInViewport({ timeout: 10_000 });
 }
 
 // ----------------------------------------------------------------- os gestos

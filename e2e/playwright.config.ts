@@ -18,7 +18,8 @@ export default defineConfig({
   retries: 0,
   timeout: 90_000,
   expect: { timeout: 15_000 },
-  reporter: [["list"], ["json", { outputFile: "./artifacts/resultado.json" }]],
+  // um relatório por fase do run.sh, para a segunda não apagar a primeira
+  reporter: [["list"], ["json", { outputFile: `./artifacts/resultado-${process.env.E2E_FASE ?? "avulso"}.json` }]],
   use: {
     baseURL: webUrl,
     // WebKit porque o alvo do dono é o Safari do iPhone 12. Viewport (390x664),
