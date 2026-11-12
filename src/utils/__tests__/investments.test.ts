@@ -1055,8 +1055,8 @@ describe("moeda estrangeira — a posição na moeda dela", () => {
     );
     expect(peloDolar.positions.map((p) => p.id)).toEqual(["vt", "brl"]);
 
-    // O TAMANHO da instituição não muda com a cotação: B segue valendo zero
-    // na soma (decisão do total ainda é do dono), e A continua na frente
+    // O TAMANHO da instituição não usa a cotação (o total ainda é decisão do
+    // dono): se usasse, B valeria R$ 1.200 e passaria na frente de A, R$ 500
     const grupos = groupPositionsByInstitution([cotada, reais], resumo, cotacoes);
     expect(grupos.map((g) => g.key)).toEqual(["A", "B"]);
   });
