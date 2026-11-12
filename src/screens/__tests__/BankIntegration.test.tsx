@@ -1,6 +1,6 @@
 import React from "react";
 import { SectionList, StyleSheet } from "react-native";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -76,6 +76,8 @@ function prepararStores() {
     isImporting: false,
     error: null,
     fetchedAt: Date.now(),
+    historyComplete: true,
+    isLoadingHistory: false,
     fetchTransactions: jest.fn().mockResolvedValue(undefined),
     importStatement: jest.fn(),
     arquivoRecebido: null,
@@ -142,6 +144,52 @@ describe("Extrato", () => {
     const { getByText } = montar();
 
     await waitFor(() => expect(getByText("SUPERMERCADO SERO")).toBeTruthy());
+  });
+
+  it("com só a lista recente, o rodapé avisa e os totais esperam", async () => {
+    useBankStore.setState({
+      historyComplete: false,
+      isLoadingHistory: true,
+      fetchedAt: null,
+    } as never);
+
+    const { getByText, queryByText } = montar();
+
+    await waitFor(() => expect(getByText("SUPERMERCADO SERO")).toBeTruthy());
+    expect(getByText("Carregando lançamentos mais antigos…")).toBeTruthy();
+    // Somar três meses e chamar de "Saídas" seria afirmar um número que muda
+    expect(queryByText("Saídas")).toBeNull();
+  });
+
+  it("se o resto do histórico falhou, o rodapé diz e oferece tentar de novo", async () => {
+    const buscar = jest.fn().mockResolvedValue(undefined);
+    useBankStore.setState({
+      historyComplete: false,
+      isLoadingHistory: false,
+      fetchedAt: null,
+      fetchTransactions: buscar,
+    } as never);
+
+    const { getByText, queryByText } = montar();
+
+    const aviso = await waitFor(() =>
+      getByText(/lançamentos mais antigos não carregaram/),
+    );
+    // Sem esqueleto parado e sem total afirmado sobre a lista parcial
+    expect(queryByText("Saídas")).toBeNull();
+    expect(queryByText("Carregando lançamentos mais antigos…")).toBeNull();
+
+    buscar.mockClear();
+    fireEvent.press(aviso);
+    expect(buscar).toHaveBeenCalledWith(true);
+  });
+
+  it("com o histórico inteiro, totais na tela e sem aviso no rodapé", async () => {
+    const { getAllByText, queryByText } = montar();
+
+    // "Saídas" aparece no card e na legenda da rosca
+    await waitFor(() => expect(getAllByText("Saídas").length).toBeGreaterThan(0));
+    expect(queryByText("Carregando lançamentos mais antigos…")).toBeNull();
   });
 
   it("busca extrato, categorias e contas ao ganhar foco", async () => {

@@ -208,22 +208,28 @@ function MetricCard({
   );
 }
 
+/** Linha de mini-cards de métricas (Entradas | Saídas | Líquido) em espera. */
+function MetricRowSkeleton() {
+  return (
+    <View className="flex-row gap-2 mb-4">
+      {[0, 1, 2].map((i) => (
+        <View
+          key={i}
+          className="flex-1 bg-surface rounded-2xl border border-border items-center px-1 py-4"
+        >
+          <Skeleton width={56} height={10} className="mb-2" />
+          <Skeleton width={68} height={18} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /** Esqueletos do primeiro carregamento, imitando a geometria do conteúdo. */
 function StatementSkeleton() {
   return (
     <View className="px-5 pt-4">
-      {/* linha de mini-cards de métricas (Entradas | Saídas | Líquido) */}
-      <View className="flex-row gap-2 mb-4">
-        {[0, 1, 2].map((i) => (
-          <View
-            key={i}
-            className="flex-1 bg-surface rounded-2xl border border-border items-center px-1 py-4"
-          >
-            <Skeleton width={56} height={10} className="mb-2" />
-            <Skeleton width={68} height={18} />
-          </View>
-        ))}
-      </View>
+      <MetricRowSkeleton />
 
       {/* atalhos de acesso rápido */}
       <Skeleton width={112} height={16} className="mt-4 mb-3" />
@@ -293,6 +299,8 @@ export default function BankIntegration() {
     error: bankError,
     fetchTransactions,
     importStatement,
+    historyComplete,
+    isLoadingHistory,
   } = useBankStore();
   const applyTransaction = useBankStore((s) => s.applyTransaction);
   const arquivoRecebido = useBankStore((s) => s.arquivoRecebido);
@@ -1067,7 +1075,9 @@ export default function BankIntegration() {
                   options={originOptions.map((option) => ({
                     key: option.key,
                     label: option.label,
-                    count: option.count,
+                    // Com só a lista recente, a contagem por origem seria um
+                    // número que ainda vai mudar: fica de fora até o resto chegar
+                    count: historyComplete ? option.count : undefined,
                     // EC-229: reconhecer o roxo do Nubank e mais rapido do
                     // que ler o nome do cartao numa fileira rolante. "Tudo"
                     // e "Sem origem" nao tem conta, entao ficam sem logo
@@ -1135,50 +1145,61 @@ export default function BankIntegration() {
                 cada um mostra, e importar extrato é ato individual */}
             {!inFamilyScope && (
               <>
-                <Animated.View entering={cardEntering} className="mb-4">
-                  {/* EC-225: o bloco inteiro gira, e não cada número. Os três saem
-                  do MESMO conjunto de linhas, então três versos iguais seriam
-                  a mesma resposta repetida — um gesto, uma resposta */}
-                  <FlipCard
-                    flipped={origemAberta}
-                    back={<ProvenanceBack summary={procedencia} />}
-                    front={
-                      <TouchableOpacity
-                        onPress={virarOrigem}
-                        activeOpacity={0.9}
-                        accessibilityRole="button"
-                        accessibilityLabel="Ver de onde estes números foram somados"
-                      >
-                        {/* Os números vêm prontos do escopo: três no idioma da conta
-                  (Entradas/Saídas/Líquido), dois no idioma do cartão
-                  (Compras/Estornos e pagamentos). Alta/baixa usa
-                  chart.up/chart.down; accent nunca marca alta/baixa */}
-                        <View className="flex-row gap-2">
-                          {metricRows.map((metric) => (
-                            <MetricCard
-                              key={metric.key}
-                              label={metric.label}
-                              value={metric.value}
-                              color={toneColor(metric)}
-                            />
-                          ))}
-                        </View>
-                        {scopeNote && (
-                          // A ressalva escrita, do mesmo jeito que o card de fatura
-                          // declara que pagamento não entra no total
-                          <Text
-                            className="text-textTertiary mt-2"
-                            style={{ fontSize: 11, lineHeight: 16 }}
-                          >
-                            {scopeNote}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    }
-                  />
-                </Animated.View>
+                {/* Os totais somam o histórico INTEIRO: com só a lista recente
+                    eles afirmariam um número que ainda vai mudar. Esperam em
+                    esqueleto, como na primeira abertura, enquanto o resto vem;
+                    se o resto falhou, somem (esqueleto parado promete uma
+                    carga que não está acontecendo) e o rodapé explica */}
+                {!historyComplete ? (
+                  isLoadingHistory ? (
+                    <MetricRowSkeleton />
+                  ) : null
+                ) : (
+                  <Animated.View entering={cardEntering} className="mb-4">
+                    {/* EC-225: o bloco inteiro gira, e não cada número. Os três saem
+                    do MESMO conjunto de linhas, então três versos iguais seriam
+                    a mesma resposta repetida — um gesto, uma resposta */}
+                    <FlipCard
+                      flipped={origemAberta}
+                      back={<ProvenanceBack summary={procedencia} />}
+                      front={
+                        <TouchableOpacity
+                          onPress={virarOrigem}
+                          activeOpacity={0.9}
+                          accessibilityRole="button"
+                          accessibilityLabel="Ver de onde estes números foram somados"
+                        >
+                          {/* Os números vêm prontos do escopo: três no idioma da conta
+                    (Entradas/Saídas/Líquido), dois no idioma do cartão
+                    (Compras/Estornos e pagamentos). Alta/baixa usa
+                    chart.up/chart.down; accent nunca marca alta/baixa */}
+                          <View className="flex-row gap-2">
+                            {metricRows.map((metric) => (
+                              <MetricCard
+                                key={metric.key}
+                                label={metric.label}
+                                value={metric.value}
+                                color={toneColor(metric)}
+                              />
+                            ))}
+                          </View>
+                          {scopeNote && (
+                            // A ressalva escrita, do mesmo jeito que o card de fatura
+                            // declara que pagamento não entra no total
+                            <Text
+                              className="text-textTertiary mt-2"
+                              style={{ fontSize: 11, lineHeight: 16 }}
+                            >
+                              {scopeNote}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      }
+                    />
+                  </Animated.View>
+                )}
 
-                {chartData.length > 0 && (
+                {historyComplete && chartData.length > 0 && (
                   <View className="bg-surface rounded-3xl p-4 border border-border">
                     <Text className="text-sm font-bold text-textPrimary mb-2">
                       Análise de Fluxo
@@ -1450,10 +1471,14 @@ export default function BankIntegration() {
                       // janela do ciclo faz na Análise: total sem período (ou sem
                       // origem) declarado é total que ninguém consegue conferir
                       <Text className="text-textSecondary text-xs mb-2">
-                        {`Mostrando só ${describeOriginFilter(activeOrigin, originOptions)} · ${visibleTransactions.length} ${plural(visibleTransactions.length, "lançamento", "lançamentos")}`}
+                        {historyComplete
+                          ? `Mostrando só ${describeOriginFilter(activeOrigin, originOptions)} · ${visibleTransactions.length} ${plural(visibleTransactions.length, "lançamento", "lançamentos")}`
+                          : `Mostrando só ${describeOriginFilter(activeOrigin, originOptions)}`}
                       </Text>
                     )}
-                    {pendingCount > 0 && (
+                    {/* A contagem é da fila global: com a lista recente ela
+                        anunciaria menos pendências do que a Revisão mostra */}
+                    {historyComplete && pendingCount > 0 && (
                       // Sem uploadId: a Revisão abre a fila global de pendências
                       <Animated.View style={bannerPress.pressStyle}>
                         <TouchableOpacity
@@ -1520,6 +1545,39 @@ export default function BankIntegration() {
                 }
               />
             </Animated.View>
+          )
+        }
+        // A lista recente chega antes do histórico inteiro: o fim dela diz,
+        // discretamente, que o resto está a caminho — sem isso o último
+        // lançamento de três meses atrás pareceria o primeiro da conta. Se o
+        // resto falhou, a mesma linha diz isso e vira o "tentar de novo"
+        ListFooterComponent={
+          inFamilyScope ||
+          historyComplete ||
+          transactions.length === 0 ? null : isLoadingHistory ? (
+            <Text
+              className="text-textTertiary text-center mt-4"
+              style={{ fontSize: 11, lineHeight: 16 }}
+            >
+              Carregando lançamentos mais antigos…
+            </Text>
+          ) : (
+            <TouchableOpacity
+              onPress={() => fetchTransactions(true)}
+              disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Os lançamentos mais antigos não carregaram. Tentar de novo"
+              className="mt-4"
+              style={{ minHeight: 44, justifyContent: "center" }}
+            >
+              <Text
+                className="text-textTertiary text-center"
+                style={{ fontSize: 11, lineHeight: 16 }}
+              >
+                Os lançamentos mais antigos não carregaram. Toque para tentar de
+                novo.
+              </Text>
+            </TouchableOpacity>
           )
         }
       />
