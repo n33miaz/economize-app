@@ -102,8 +102,9 @@ export default function Watchmen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             showToast("Passada desfeita. Os números voltaram ao que eram.", "success");
             // A Análise e a Previsão leem estes números: sem recarregar, a
-            // tela seguinte mostraria o de antes
-            await useBankStore.getState().fetchTransactions();
+            // tela seguinte mostraria o de antes. `force`: o desfazer é escrita
+            // no servidor, e a lista em cache (ou em voo) é anterior a ele
+            await useBankStore.getState().fetchTransactions(true);
             await carregar();
           } catch {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
