@@ -36,8 +36,13 @@ import {
   normalizeTicker,
   parseDateInput,
   parseDecimalInput,
+  currencyOf,
+  exchangeRateFor,
+  formatMoney,
   positionCurrentValue,
   positionNeedsQuote,
+  positionValueView,
+  staleExchangeNotices,
   positionSubtitle,
   positionToFormValues,
   profitOf,
@@ -296,6 +301,14 @@ describe("profitOf e formatProfit", () => {
     expect(profitOf(100, null)).toBeNull();
     // Investido zero: o valor existe, o percentual não
     expect(profitOf(0, 50)).toEqual({ value: 50, percent: null });
+  });
+
+  it("resultado desconhecido vira traço, na moeda que for", () => {
+    // O resumo da API manda profit:null quando nenhuma posição tem preço
+    expect(formatProfit({ value: null, percent: null })).toBe("—");
+    expect(formatProfit({ value: null, percent: 5 }, "USD")).toBe("—");
+    expect(formatMoney(null as unknown as number, "USD")).toBe("—");
+    expect(formatMoney(undefined as unknown as number, "BRL")).toBe("—");
   });
 
   it("formata com sinal nos dois números", () => {
@@ -762,5 +775,222 @@ describe("formulário da posição manual", () => {
     expect(INTEREST_OPTIONS.map((o) => o.code)).toEqual(
       expect.arrayContaining(["CDI", "SELIC", "IPCA", "USD"]),
     );
+  });
+});
+
+describe("moeda estrangeira — a posição na moeda dela", () => {
+  // O Intl separa símbolo e número com espaço não separável; as expectativas
+  // ficam legíveis com espaço comum
+  const limpo = (texto: string | null) => texto?.replace(/\u00A0/g, " ") ?? null;
+
+  const DOLAR = position({
+    id: "pos-usd",
+    source: "CONNECTOR",
+    currency: "USD",
+    investedAmount: 800,
+    currentValue: 1000,
+  });
+  const CAMBIO = { currency: "USD", rate: 5.4, asOf: "2026-11-04T15:00:00Z", stale: false };
+
+  it("formata na moeda certa, e moeda desconhecida sai pelo código — nunca R$", () => {
+    expect(limpo(formatMoney(1234.5, "USD"))).toBe("US$ 1.234,50");
+    expect(limpo(formatMoney(-10, "eur"))).toBe("-€ 10,00");
+    expect(limpo(formatMoney(10, "CHF"))).toBe("CHF 10,00");
+    expect(limpo(formatMoney(10, "BRL"))).toBe("R$ 10,00");
+    // Código torto do conector não derruba a lista
+    expect(limpo(formatMoney(10, "??"))).toBe("?? 10,00");
+    expect(currencyOf({ currency: null })).toBe("BRL");
+    expect(currencyOf({ currency: " usd " })).toBe("USD");
+    expect(limpo(formatProfit({ value: 200, percent: 25 }, "USD"))).toBe(
+      "+US$ 200,00 (+25,00%)",
+    );
+  });
+
+  it("convertida: valor em dólar, equivalente em reais pelo câmbio do servidor", () => {
+    const view = positionValueView(DOLAR, { exchangeRates: [CAMBIO] });
+    expect(limpo(view.primary)).toBe("US$ 1.000,00");
+    expect(limpo(view.equivalent)).toBe("≈ R$ 5.400,00");
+    // Resultado dólar contra dólar: misturar com reais daria +4.600
+    expect(limpo(view.profitLabel)).toBe("+US$ 200,00 (+25,00%)");
+    expect(view.excluded).toBe(false);
+  });
+
+  it("sem cotação: só a moeda de origem, marcada como fora do total", () => {
+    const view = positionValueView(
+      DOLAR,
+      {
+        unconverted: [
+          { id: "pos-usd", name: "x", code: null, currency: "USD", investedAmount: 800, currentValue: 1000 },
+        ],
+        exchangeRates: [],
+      },
+      {},
+      // O dólar do bloco macro está à mão, e mesmo assim não entra: o total
+      // do servidor não tem esta posição
+      5.41,
+    );
+    expect(limpo(view.primary)).toBe("US$ 1.000,00");
+    expect(view.equivalent).toBeNull();
+    expect(view.excluded).toBe(true);
+  });
+
+  it("manual sem cotação também não ganha reais do dólar local", () => {
+    const manual = { ...DOLAR, source: "MANUAL" as const };
+    const view = positionValueView(
+      manual,
+      { unconverted: [{ id: "pos-usd", name: "x", code: null, currency: "USD", investedAmount: null, currentValue: null }] },
+      {},
+      5.41,
+    );
+    expect(limpo(view.primary)).toBe("US$ 1.000,00");
+    expect(view.equivalent).toBeNull();
+    expect(view.excluded).toBe(true);
+  });
+
+  it("resposta antiga (sem os campos): dólar do conector aparece em dólar, sem equivalente", () => {
+    [null, undefined, {}].forEach((summary) => {
+      const view = positionValueView(DOLAR, summary);
+      expect(limpo(view.primary)).toBe("US$ 1.000,00");
+      expect(view.equivalent).toBeNull();
+      expect(view.excluded).toBe(false);
+    });
+    expect(staleExchangeNotices(null)).toEqual([]);
+    expect(staleExchangeNotices({})).toEqual([]);
+    expect(exchangeRateFor({}, "USD")).toBeNull();
+  });
+
+  it("resposta antiga: reais e manual em dólar continuam como eram", () => {
+    const reais = positionValueView(position({ investedAmount: 100, currentValue: 120 }), undefined);
+    expect(limpo(reais.primary)).toBe("R$ 120,00");
+    expect(limpo(reais.profitLabel)).toBe("+R$ 20,00 (+20,00%)");
+
+    const manual = position({
+      source: "MANUAL",
+      currency: "USD",
+      code: "VT",
+      quantity: 10,
+      investedAmount: null,
+      currentValue: null,
+    });
+    const comCotacao = positionValueView(manual, undefined, { VT: quote({ priceBrl: 640 }) });
+    // O papel é cotado em dólar: o número da posição é em dólar, e os reais
+    // são conta derivada — antes saía "R$ 6.400,00" como se fosse o valor dela
+    expect(limpo(comCotacao.primary)).toBe("US$ 1.183,20");
+    expect(limpo(comCotacao.equivalent)).toBe("≈ R$ 6.400,00");
+    expect(positionValueView(manual, undefined).primary).toBeNull();
+  });
+
+  describe("posição manual de ticker no exterior", () => {
+    // O que o formulário grava: quantidade, custo em REAIS e nenhum valor
+    // atual — quem dá o valor é a cotação do papel, na moeda dele
+    const VT = position({
+      id: "pos-vt",
+      source: "MANUAL",
+      currency: "USD",
+      code: "VT",
+      quantity: 2,
+      unitPrice: 100,
+      investedAmount: 1000,
+      currentValue: null,
+    });
+
+    it("com cotação e sem câmbio: valor em dólar, sem reais, fora do total por falta de CÂMBIO", () => {
+      // Medido em 12/11/2026: a API devolvia price 110,5 / priceBrl null e a
+      // tela dizia "cotação indisponível" — a cotação existia, faltava o dólar
+      const view = positionValueView(VT, { exchangeRates: [] }, { VT: quote({ price: 110.5, priceBrl: null }) });
+      expect(limpo(view.primary)).toBe("US$ 221,00");
+      expect(view.equivalent).toBeNull();
+      expect(view.excluded).toBe(true);
+      expect(view.missing).toBe("fx");
+      // Custo em reais contra valor em dólar não é resultado de nada
+      expect(view.profitLabel).toBeNull();
+    });
+
+    it("com cotação e câmbio do servidor (priceBrl): dólar, ≈ reais e resultado em reais", () => {
+      const view = positionValueView(VT, undefined, { VT: quote({ price: 110.5, priceBrl: 600 }) });
+      expect(limpo(view.primary)).toBe("US$ 221,00");
+      expect(limpo(view.equivalent)).toBe("≈ R$ 1.200,00");
+      expect(view.excluded).toBe(false);
+      expect(view.missing).toBeNull();
+      // Investido R$ 1.000 contra R$ 1.200: os dois lados em reais
+      expect(limpo(view.profitLabel)).toBe("+R$ 200,00 (+20,00%)");
+    });
+
+    it("com cotação em dólar e só o dólar do bloco macro: converte por ele", () => {
+      const view = positionValueView(VT, undefined, { VT: quote({ price: 110.5, priceBrl: null }) }, 5);
+      expect(limpo(view.primary)).toBe("US$ 221,00");
+      expect(limpo(view.equivalent)).toBe("≈ R$ 1.105,00");
+      expect(view.excluded).toBe(false);
+    });
+
+    it("sem a cotação do papel: sem valor, fora do total por falta de COTAÇÃO", () => {
+      const view = positionValueView(VT, { exchangeRates: [] }, {}, 5);
+      expect(view.primary).toBeNull();
+      expect(view.equivalent).toBeNull();
+      expect(view.excluded).toBe(true);
+      expect(view.missing).toBe("quote");
+    });
+
+    it("cotação em outra moeda que não o dólar: o dólar macro não serve de câmbio", () => {
+      const view = positionValueView(
+        { ...VT, currency: "EUR" },
+        undefined,
+        { VT: quote({ price: 50, currency: "EUR", priceBrl: null }) },
+        5,
+      );
+      expect(limpo(view.primary)).toBe("€ 100,00");
+      expect(view.equivalent).toBeNull();
+      expect(view.missing).toBe("fx");
+    });
+  });
+
+  it("conector em dólar sem valor atual cai em quantidade × preço, ainda em dólar", () => {
+    const view = positionValueView(
+      { ...DOLAR, currentValue: null, quantity: 4, unitPrice: 50 },
+      { exchangeRates: [CAMBIO] },
+    );
+    expect(limpo(view.primary)).toBe("US$ 200,00");
+    expect(limpo(view.equivalent)).toBe("≈ R$ 1.080,00");
+  });
+
+  it("câmbio inválido não vira equivalente", () => {
+    [0, -1, NaN].forEach((rate) => {
+      const view = positionValueView(DOLAR, { exchangeRates: [{ ...CAMBIO, rate }] });
+      expect(view.equivalent).toBeNull();
+    });
+    expect(exchangeRateFor({ exchangeRates: [{ ...CAMBIO, currency: "usd" }] }, "USD")?.rate).toBe(5.4);
+  });
+
+  it("cotação velha: aviso com a data, só para stale", () => {
+    expect(
+      staleExchangeNotices({
+        exchangeRates: [
+          { ...CAMBIO, stale: true },
+          { currency: "EUR", rate: 6.1, asOf: "2026-11-10T15:00:00Z", stale: false },
+        ],
+      }),
+    ).toEqual(["Câmbio US$ de 04/11/2026"]);
+    expect(
+      staleExchangeNotices({ exchangeRates: [{ ...CAMBIO, asOf: null, stale: true }] }),
+    ).toEqual(["Câmbio US$ desatualizado"]);
+  });
+
+  it("a ordem da lista compara em reais; sem câmbio a posição fica por último", () => {
+    const reais = position({ id: "brl", currentValue: 1200 });
+    const semCambio = position({ id: "eur", currency: "EUR", currentValue: 9999 });
+    const [grupo] = groupPositionsByType([reais, semCambio, DOLAR], {
+      exchangeRates: [CAMBIO],
+    });
+    // US$ 1.000 × 5,4 = R$ 5.400 passa na frente de R$ 1.200
+    expect(grupo.positions.map((p) => p.id)).toEqual(["pos-usd", "brl", "eur"]);
+
+    const grupos = groupPositionsByInstitution(
+      [
+        { ...reais, institution: "A" },
+        { ...DOLAR, institution: "B" },
+      ],
+      { exchangeRates: [CAMBIO] },
+    );
+    expect(grupos.map((g) => g.key)).toEqual(["B", "A"]);
   });
 });

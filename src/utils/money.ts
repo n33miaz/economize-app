@@ -16,6 +16,24 @@ const COMPACT_FLOOR = 100_000;
 const NBSP = "\u00A0";
 
 /**
+ * O que a tela mostra no lugar de um número que não existe.
+ *
+ * Campo opcional da API chega `null` mesmo onde o tipo promete `number` (o
+ * resumo de investimentos manda `profit: null` sem posição com preço), e
+ * `null.toLocaleString` é exceção de renderização: em 12/11/2026 isso levava
+ * o app inteiro para a tela de abertura. Os formatadores de DINHEIRO devolvem
+ * este traço para nulo, indefinido, NaN e infinito. Nunca zero: "R$ 0,00"
+ * afirmaria um valor que ninguém mediu. (Percentual e número solto seguem a
+ * regra antiga deles, zero: nunca lançaram, e o resultado é colado a unidades
+ * — "% a.a.", "pts" — onde um traço no meio da frase leria pior.)
+ */
+export const SEM_VALOR = "—";
+
+/** Número de verdade: nem nulo, nem NaN, nem infinito. */
+const temValor = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+/**
  * Valor completo em BRL (ex.: "R$ 1.234,56"), sempre com 2 casas.
  * `opts` permite ajustes pontuais de Intl sem sair do padrão pt-BR.
  */
@@ -23,6 +41,7 @@ export function formatBRL(
   value: number,
   opts?: Intl.NumberFormatOptions,
 ): string {
+  if (!temValor(value)) return SEM_VALOR;
   return value.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
@@ -37,6 +56,7 @@ export function formatBRL(
  * pt-BR e sinal negativo preservado antes do "R$", como no Intl.
  */
 export function formatBRLCompact(value: number): string {
+  if (!temValor(value)) return SEM_VALOR;
   const abs = Math.abs(value);
   if (abs < COMPACT_FLOOR) return formatBRL(value);
 

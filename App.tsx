@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Routes from "./src/routes";
+import ScreenErrorBoundary from "./src/components/ScreenErrorBoundary";
 import Toast from "./src/components/Toast";
 import ConfirmDialog from "./src/components/ConfirmDialog";
 import ServerWakeOverlay from "./src/components/ServerWakeOverlay";
@@ -111,7 +112,11 @@ export default function App() {
               {/* Faixa "nova versão" no fluxo, acima das rotas — empurra o
                   conteúdo em vez de cobrir. Só desenha quando há o que avisar */}
               <UpdateBanner />
-              <Routes />
+              {/* Última linha de defesa: cada tela já tem o próprio limite; este
+                  segura o que falhar FORA delas (barra, cabeçalho, folhas) */}
+              <ScreenErrorBoundary>
+                <Routes />
+              </ScreenErrorBoundary>
               {/* A folha anuncia a versão nova uma vez; a faixa acima insiste
                   depois disso. Dentro do gate de senha de propósito: quem
                   ainda precisa trocar a senha provisória tem uma tarefa mais

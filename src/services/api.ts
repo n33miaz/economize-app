@@ -3039,7 +3039,11 @@ export interface InvestmentMovementTotals {
 export interface InvestmentSummary {
   totalInvested: number;
   currentValue: number;
-  profit: number;
+  /**
+   * Nulo quando nenhuma posição tem valor atual E investido: resultado
+   * desconhecido, não zero. O servidor manda `null` de verdade.
+   */
+  profit: number | null;
   /** Nulo quando não há base de custo — zero afirmaria "nada rendeu". */
   profitPercent: number | null;
   positionsCount: number;
@@ -3055,7 +3059,32 @@ export interface InvestmentSummary {
    * em reais quando a cotação do papel chega (`getForeignQuote`).
    */
   needsQuote: string[];
+  /**
+   * Posições em moeda estrangeira SEM câmbio: ficam fora dos totais em reais
+   * e vêm com os valores na moeda de origem. Ausente no servidor antigo.
+   */
+  unconverted?: InvestmentUnconvertedPosition[];
+  /** Câmbio que o servidor usou nos totais, por moeda. Ausente no servidor antigo. */
+  exchangeRates?: InvestmentExchangeRate[];
   movements12m: InvestmentMovementTotals & { net: number };
+}
+
+export interface InvestmentUnconvertedPosition {
+  id: string;
+  name: string;
+  code: string | null;
+  currency: string;
+  investedAmount: number | null;
+  currentValue: number | null;
+}
+
+export interface InvestmentExchangeRate {
+  currency: string;
+  /** Reais por unidade da moeda. */
+  rate: number;
+  asOf: string | null;
+  /** Veio do último snapshot guardado (até 7 dias), não da cotação do dia. */
+  stale: boolean;
 }
 
 export interface InvestmentPosition {
@@ -3077,7 +3106,7 @@ export interface InvestmentPosition {
   quantity: number | null;
   unitPrice: number | null;
   investedAmount: number | null;
-  /** Em reais para tudo que vem do banco; na manual em moeda estrangeira pode vir nulo. */
+  /** Na moeda de `currency` — o conector também traz posição em dólar; na manual estrangeira pode vir nulo. */
   currentValue: number | null;
   maturityDate: string | null;
   positionDate: string | null;

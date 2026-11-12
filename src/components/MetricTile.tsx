@@ -9,6 +9,7 @@ import FlipCard, { useFlip } from "./FlipCard";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacing } from "../theme/ds";
 import { usePressScale } from "../theme/motionPresets";
+import { formatBRL } from "../utils/money";
 
 interface Props {
   /** UMA palavra ou sintagma curto. Se precisar de frase, não é um tile. */
@@ -158,5 +159,5 @@ export default function MetricTile({
 
 /** O valor por extenso para o leitor de tela, sem abreviação. */
 function valorFalado(value: number): string {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return formatBRL(value);
 }

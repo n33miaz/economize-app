@@ -1,4 +1,5 @@
 import React from "react";
+import { SectionList, StyleSheet } from "react-native";
 import { render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
@@ -6,6 +7,8 @@ import {
 } from "react-native-safe-area-context";
 
 import BankIntegration from "../BankIntegration";
+import { BOTTOM_BAR_HEIGHT, TabBarHeightContext } from "../../routes/tabBarHeight";
+import { spacing } from "../../theme/ds";
 import { useAccountsStore } from "../../store/accountsStore";
 import { useBankStore } from "../../store/bankStore";
 import { useCategoriesStore } from "../../store/categoriesStore";
@@ -154,6 +157,29 @@ describe("Extrato", () => {
     await waitFor(() => expect(fetchTransactions).toHaveBeenCalled());
     expect(fetchCategories).toHaveBeenCalled();
     expect(fetchAccounts).toHaveBeenCalled();
+  });
+
+  it("a lista reserva margem lateral e o rodapé da barra de abas", async () => {
+    // Medido em 12/11/2026 no navegador: o `contentContainerClassName` desta
+    // SectionList computava padding ZERO. O conteúdo encostava nas bordas, a
+    // lista rolava 23 px e o "Importar extrato" do estado vazio ficava
+    // debaixo da barra de abas em 390x664, sem como alcançar.
+    useBankStore.setState({ transactions: [] } as never);
+    const alturaDaBarra = BOTTOM_BAR_HEIGHT + 34;
+
+    const { UNSAFE_getByType } = render(
+      <SafeAreaProvider initialMetrics={METRICAS}>
+        <TabBarHeightContext.Provider value={alturaDaBarra}>
+          <BankIntegration />
+        </TabBarHeightContext.Provider>
+      </SafeAreaProvider>,
+    );
+
+    const estilo = StyleSheet.flatten(
+      UNSAFE_getByType(SectionList).props.contentContainerStyle,
+    );
+    expect(estilo.paddingHorizontal).toBe(spacing[5]);
+    expect(estilo.paddingBottom).toBeGreaterThan(alturaDaBarra);
   });
 
   it("extrato vazio não vira tela quebrada", async () => {

@@ -1,0 +1,13 @@
+{
+  "name": "economize-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Validação de ponta a ponta do Economize (web + API local). Fora do bundle do app.",
+  "scripts": {
+    "e2e": "bash ./run.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}
