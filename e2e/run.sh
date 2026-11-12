@@ -224,7 +224,10 @@ start_api() {
     export DB_URL="jdbc:postgresql://127.0.0.1:$PG_PORT/economize"
     export DB_USER=economize DB_PASSWORD=economize
     JWT_SECRET="e2e-$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
-    SECRET_ENCRYPTION_KEY="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64"))')"
+    # A chave nunca começa com "/": o Git Bash converteria o valor em caminho
+    # do Windows ao passar a variável para a JVM, e a API recusaria subir com
+    # "não é Base64 válido" (aconteceu uma vez em ~30 subidas)
+    SECRET_ENCRYPTION_KEY="$(node -e 'let k; do { k = require("crypto").randomBytes(32).toString("base64"); } while (k.startsWith("/")); console.log(k)')"
     export JWT_SECRET SECRET_ENCRYPTION_KEY
     export BRAPI_TOKEN=token-de-teste
     exec java -Xmx384m -XX:+UseSerialGC -Dfile.encoding=UTF-8 "@$(to_native "$ARGFILE")" \

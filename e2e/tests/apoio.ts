@@ -146,6 +146,7 @@ export class Vigia {
       Math.max(larguras.documento, larguras.corpo),
       `${tela}: a página rola na horizontal (${JSON.stringify(larguras)})`,
     ).toBeLessThanOrEqual(larguras.janela);
+    await conferirAlinhamento(page, tela);
   }
 
   gravar(arquivo = "registro.json") {
@@ -163,7 +164,95 @@ export class Vigia {
   }
 }
 
+/**
+ * O conteúdo está no lugar na horizontal? Duas coisas denunciam uma tela
+ * deslocada, e as duas são cobradas em toda tela visitada e antes de toda
+ * captura:
+ *
+ * 1. um contêiner de página (cena, paginador) com `overflow: hidden` rolado
+ *    para o lado. Ninguém rola
+ *    isso com o dedo; quando acontece (um `scrollIntoView`, um foco) a tela
+ *    inteira fica deslocada e não volta sozinha;
+ * 2. um bloco de conteúdo VISÍVEL cortado pela borda da tela — começa antes
+ *    de 0 ou termina depois da largura. Ficam de fora as faixas de rolagem horizontal
+ *    intencionais (chips, atalhos de banco, cartões de indicador), onde o
+ *    corte é o convite a arrastar, e o que está inteiro fora da tela (as
+ *    outras abas do paginador, a folha recolhida).
+ */
+export async function conferirAlinhamento(page: Page, tela: string) {
+  // deixa a troca de aba e as folhas terminarem de assentar
+  let anterior = "";
+  let achados = { rolados: [] as string[], cortados: [] as string[] };
+  for (let i = 0; i < 12; i++) {
+    achados = await page.evaluate(() => {
+      const largura = window.innerWidth;
+      const altura = window.innerHeight;
+      const nome = (el: Element) =>
+        `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"`;
+
+      // Faixa: uma tira baixa que rola para o lado (chips, atalhos de banco,
+      // a régua das abas). Cena e paginador são altos — ocupam a tela
+      const ehFaixa = (p: Element) => p.clientHeight < altura / 3;
+
+      const rolados: string[] = [];
+      for (const el of document.querySelectorAll("*")) {
+        if (el.scrollLeft !== 0 && getComputedStyle(el).overflowX === "hidden" && !ehFaixa(el)) {
+          rolados.push(`${nome(el)} scrollLeft=${Math.round(el.scrollLeft)}`);
+        }
+      }
+
+      const emFaixa = (el: Element) => {
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          if (getComputedStyle(p).overflowX !== "visible" && p.scrollWidth > p.clientWidth + 2 && ehFaixa(p)) return true;
+        }
+        return false;
+      };
+
+      const cortados: string[] = [];
+      // Campo de texto fica de fora: o <input> do react-native-web é mais largo
+      // que a moldura do campo (o 'Preço unitário' vai a 423 px numa tela de
+      // 390) sem que nada apareça cortado
+      for (const el of document.querySelectorAll('[role="button"], button, [role="heading"], [role="tab"]')) {
+        const caixa = el.getBoundingClientRect();
+        if (caixa.width === 0 || caixa.height === 0 || caixa.bottom <= 0 || caixa.top >= altura) continue;
+        // O que se vê do elemento: um campo de texto pode ser mais largo que a
+        // moldura que o recorta, e isso não é conteúdo fora da tela. Só vale o
+        // recorte de molduras PEQUENAS; o da página inteira é justamente o
+        // que esconderia uma tela deslocada
+        const r = { left: caixa.left, right: caixa.right, top: caixa.top, bottom: caixa.bottom };
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          const q = p.getBoundingClientRect();
+          if (getComputedStyle(p).overflowX !== "visible" && q.width < largura * 0.9) {
+            r.left = Math.max(r.left, q.left);
+            r.right = Math.min(r.right, q.right);
+          }
+        }
+        if (r.right <= r.left) continue;
+        const naTela = r.right > 1 && r.left < largura - 1;
+        const cortado = r.left < -1 || r.right > largura + 1;
+        if (!naTela || !cortado || emFaixa(el)) continue;
+        // Só conta o que a pessoa de fato vê: a cena da outra aba fica
+        // estacionada ao lado, invisível, e não é conteúdo cortado
+        const x = Math.min(Math.max((r.left + r.right) / 2, 2), largura - 2);
+        const y = Math.min(Math.max((r.top + r.bottom) / 2, 2), altura - 2);
+        const topo = document.elementFromPoint(x, y);
+        if (topo && (el.contains(topo) || topo.contains(el))) {
+          cortados.push(`${nome(el)} x=${Math.round(r.left)}..${Math.round(r.right)}`);
+        }
+      }
+      return { rolados, cortados };
+    });
+    const agora = JSON.stringify(achados);
+    if (agora === anterior) break;
+    anterior = agora;
+    await page.waitForTimeout(250);
+  }
+  expect(achados.rolados, `${tela}: contêiner de overflow escondido rolado para o lado`).toEqual([]);
+  expect(achados.cortados, `${tela}: conteúdo cortado pela borda da tela (largura ${VIEWPORT.width})`).toEqual([]);
+}
+
 export async function captura(page: Page, nome: string) {
+  await conferirAlinhamento(page, `captura ${nome}`);
   mkdirSync(ARTIFACTS, { recursive: true });
   await page.screenshot({ path: join(ARTIFACTS, `${nome}.png`) });
 }
@@ -222,6 +311,17 @@ export async function centralizar(alvo: Locator) {
   await alvo.page().waitForTimeout(400);
 }
 
+/**
+ * Toca num botão que pode estar baixo na lista: primeiro o traz para o meio
+ * rolando só na vertical, como um dedo. Sem isso o `click()` do Playwright,
+ * ao achar o botão debaixo da barra de abas, tenta outros alinhamentos de
+ * `scrollIntoView` e acaba rolando para o LADO o contêiner das abas.
+ */
+export async function tocar(alvo: Locator) {
+  await centralizar(alvo);
+  await alvo.click();
+}
+
 /** O aviso flutuante já saiu da tela? (ele fica no DOM, transladado para fora) */
 export async function avisoSaiuDaTela(page: Page, texto: string) {
   await expect(page.getByText(texto, { exact: true })).not.toBeInViewport({ timeout: 10_000 });
@@ -257,9 +357,40 @@ export async function sair(page: Page) {
   await expect(botao(page, "Entrar")).toBeVisible();
 }
 
+/** Espera o elemento parar de se mexer (duas medidas iguais seguidas). */
+export async function assentou(alvo: Locator) {
+  let anterior = "";
+  await expect
+    .poll(
+      async () => {
+        const caixa = JSON.stringify(await alvo.boundingBox());
+        const parado = caixa === anterior;
+        anterior = caixa;
+        return parado;
+      },
+      { intervals: [120], timeout: 10_000 },
+    )
+    .toBe(true);
+}
+
+/**
+ * Toca numa aba (de baixo ou de cima) depois de ela parar no lugar.
+ *
+ * Não é zelo: o `click()` do Playwright rola o alvo para a tela ANTES de
+ * clicar. Com a régua das abas de cima ainda entrando, ele rolava o contêiner
+ * das abas (`overflow: hidden`, 1560 px de conteúdo em 390) em 118 px, e a
+ * tela ficava deslocada de vez — medido em 12/11/2026. Um dedo não faz isso:
+ * o toque por coordenada, no mesmo instante, deixa tudo no lugar.
+ */
+export async function tocarAba(page: Page, nome: string) {
+  const aba = page.getByRole("tab", { name: nome, exact: true });
+  await assentou(aba);
+  await aba.click();
+}
+
 export async function irPara(page: Page, aba: "Finanças" | "Início" | "Mercado", interna?: string) {
-  await page.getByRole("tab", { name: aba, exact: true }).click();
-  if (interna) await page.getByRole("tab", { name: interna, exact: true }).click();
+  await tocarAba(page, aba);
+  if (interna) await tocarAba(page, interna);
 }
 
 /**

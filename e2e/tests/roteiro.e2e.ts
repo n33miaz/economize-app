@@ -33,6 +33,8 @@ import {
   quemEstaNoCentro,
   rolarAteOFim,
   sair,
+  tocar,
+  tocarAba,
   Vigia,
 } from "./apoio";
 
@@ -235,7 +237,7 @@ test("e. Investimentos: posição manual em BRL e em USD", async () => {
   await vigia.conferirTela(page, "Investimentos sem posições");
 
   // A posição em BRL, a primeira da carteira
-  await botao(page, "Cadastrar à mão").click();
+  await tocar(botao(page, "Cadastrar à mão"));
   await campo(page, "Nome").fill(CDB.nome);
   await campo(page, "Valor investido (R$)").fill(String(CDB.investido));
   await campo(page, "Valor atual (R$, opcional)").fill(String(CDB.atual));
@@ -251,7 +253,7 @@ test("e. Investimentos: posição manual em BRL e em USD", async () => {
   await expect(page.getByText("1 posição", { exact: true })).toBeVisible();
 
   // A posição em USD: ETF com ticker de fora
-  await botao(page, "Cadastrar posição à mão").click();
+  await tocar(botao(page, "Cadastrar posição à mão"));
   await botao(page, "Tipo: ETFs").click();
   await campo(page, "Nome").fill(ETF.nome);
   await campo(page, "Código do ativo").fill(ETF.codigo);
@@ -342,11 +344,11 @@ test("f. troca de conta: nada do primeiro usuário aparece para o segundo", asyn
   await vigia.conferirTela(page, "Extrato do segundo usuário");
 
   // Carteira e Investimentos
-  await page.getByRole("tab", { name: "Carteira", exact: true }).click();
+  await tocarAba(page, "Carteira");
   await nadaDaAlice("Carteira do segundo usuário");
   await vigia.conferirTela(page, "Carteira do segundo usuário");
 
-  await page.getByRole("tab", { name: "Investimentos", exact: true }).click();
+  await tocarAba(page, "Investimentos");
   await expect(page.getByText("Ainda não encontramos investimentos")).toBeVisible();
   await nadaDaAlice("Investimentos do segundo usuário");
   await vigia.conferirTela(page, "Investimentos do segundo usuário");
@@ -363,7 +365,7 @@ test("f. troca de conta: nada do primeiro usuário aparece para o segundo", asyn
 
 test("e2. posição manual sem valor atual: resultado desconhecido, tela de pé", async () => {
   await abrirInvestimentos();
-  await botao(page, "Cadastrar à mão").click();
+  await tocar(botao(page, "Cadastrar à mão"));
   await campo(page, "Nome").fill("Tesouro Sintetico");
   await campo(page, "Valor investido (R$)").fill("500");
   await salvarPosicao();
