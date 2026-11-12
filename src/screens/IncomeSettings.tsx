@@ -14,7 +14,7 @@ import { useAccountsStore } from "../store/accountsStore";
 import { useWishStore } from "../store/wishStore";
 import { askConfirm } from "../store/confirmStore";
 import { useToastStore } from "../store/toastStore";
-import { formatBRL } from "../utils/money";
+import { formatBRL, parseAmount } from "../utils/money";
 import { preferenceSummary } from "../utils/purchaseDay";
 import {
   describeSalaryTiming,
@@ -44,16 +44,6 @@ const KINDS: IncomeSourceKind[] = [
   "ADVANCE",
   "OTHER",
 ];
-
-function parseAmount(raw: string): number | null {
-  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
-  if (!cleaned) return null;
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
-}
 
 function KindChip({
   kind,

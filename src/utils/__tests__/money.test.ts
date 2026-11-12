@@ -3,6 +3,7 @@ import {
   formatBRLCompact,
   formatDecimal,
   formatPercent,
+  parseAmount,
   SEM_VALOR,
 } from "../money";
 
@@ -115,6 +116,47 @@ describe("formatDecimal", () => {
   it("valor inválido vira zero", () => {
     expect(formatDecimal(NaN)).toBe("0,00");
   });
+});
+
+describe("parseAmount — a única leitura de valor digitado", () => {
+  it.each([
+    // pt-BR com vírgula decimal
+    ["1.234,56", 1234.56],
+    ["1234,56", 1234.56],
+    ["21,90", 21.9],
+    ["0,5", 0.5],
+    // ponto que não forma grupo de 3 é decimal de quem cola número
+    ["1234.56", 1234.56],
+    ["12.34", 12.34],
+    ["2.5", 2.5],
+    ["1234.567", 1234.567],
+    // grupo começando em zero não é milhar: cripto e fração de dólar
+    ["0.500", 0.5],
+    ["0.001", 0.001],
+    // ponto em grupos de 3 é milhar — "2.500" virava R$ 2,50
+    ["2.500", 2500],
+    ["1.234.567", 1234567],
+    // o ambíguo: vale milhar, como `parseAmountInput` já fazia
+    ["1.234", 1234],
+    // inteiro, "R$", espaços e negativos
+    ["100", 100],
+    ["R$ 1.234,56", 1234.56],
+    ["  2.500  ", 2500],
+    ["R$ 18.000,50", 18000.5],
+    ["-1.234,56", -1234.56],
+    ["R$ -1.234,56", -1234.56],
+    ["-2.500", -2500],
+    ["-12.5", -12.5],
+  ])("%j → %p", (entrada, esperado) => {
+    expect(parseAmount(entrada)).toBe(esperado);
+  });
+
+  it.each(["", "   ", "R$", "R$ ", "-", ",", ".", "abc", "1,234,567", "1-2"])(
+    "%j → null",
+    (entrada) => {
+      expect(parseAmount(entrada)).toBeNull();
+    },
+  );
 });
 
 /**

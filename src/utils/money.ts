@@ -113,18 +113,51 @@ export function formatDecimal(value: number, decimals = 2): string {
   });
 }
 
+// Ponto em grupos de 3 sem vírgula: "2.500", "1.234.567". O primeiro grupo
+// não começa com zero — "0.500" e "0.001" são decimais (quantidade de cripto,
+// fração de dólar) e lê-los como milhar multiplicaria o valor por mil
+const MILHAR_SO_COM_PONTO = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
+
 /**
- * Aceita "18.000,50" e "18000.50" — ninguém digita moeda de um jeito só.
+ * Texto do campo de valor → número. A ÚNICA leitura de valor digitado do app:
+ * cada tela tinha a sua, e a que tratava "2.500" como R$ 2,50 gravava o valor
+ * mil vezes menor em silêncio em orçamento, reserva, desejo e renda.
+ *
+ * Regra (pt-BR primeiro, sem esquecer quem cola número do navegador):
+ *
+ * | Entrada        | Lê       | Por quê                                     |
+ * |----------------|----------|---------------------------------------------|
+ * | "1.234,56"     | 1234.56  | vírgula decimal, ponto de milhar            |
+ * | "1234,56"      | 1234.56  | vírgula decimal                             |
+ * | "1234.56"      | 1234.56  | ponto que não forma grupo de 3 é decimal    |
+ * | "2.5", "12.34" | decimal  | idem                                        |
+ * | "0.500"        | 0.5      | grupo começando em 0 não é milhar           |
+ * | "2.500"        | 2500     | ponto em grupos de 3 é milhar               |
+ * | "1.234.567"    | 1234567  | idem                                        |
+ * | "1.234"        | 1234     | AMBÍGUO: vale milhar, como `parseAmountInput`|
+ * |                |          | já fazia — em pt-BR "1.234" é mil e tanto   |
+ * | "R$ -1.234,56" | -1234.56 | "R$", espaço e sinal são tolerados          |
+ * | "", "-", ","   | null     | não sobra número                            |
+ * | "1,234,567"    | null     | duas vírgulas não é valor que se leia       |
+ *
  * Devolve `null` quando não dá para ler um número, para quem chama decidir a
- * mensagem: "informe um valor" e "valor inválido" são erros diferentes.
+ * mensagem: "informe um valor" e "valor inválido" são erros diferentes — e o
+ * campo vazio não pode virar 0 e ser aceito pelo servidor como valor.
  */
 export function parseAmount(raw: string): number | null {
   const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
-  if (!cleaned) return null;
-  // Com vírgula, o ponto é separador de milhar; sem vírgula, o ponto é decimal
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
+  if (!/\d/.test(cleaned)) return null;
+  let normalized: string;
+  if (cleaned.includes(",")) {
+    // Vírgula é o decimal em pt-BR; o ponto que sobra é de milhar. Mais de
+    // uma vírgula vira NaN no Number abaixo e sai null
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (MILHAR_SO_COM_PONTO.test(cleaned)) {
+    normalized = cleaned.replace(/\./g, "");
+  } else {
+    // ponto solto ("1234.56", "2.5") segue sendo decimal de quem cola número
+    normalized = cleaned;
+  }
   const value = Number(normalized);
   return Number.isFinite(value) ? value : null;
 }

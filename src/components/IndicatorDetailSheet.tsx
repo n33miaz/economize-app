@@ -25,7 +25,12 @@ import {
   toggleFavoriteWithSnapshot,
   useFavoritesStore,
 } from "../store/favoritesStore";
-import { formatBRL, formatDecimal, formatPercent } from "../utils/money";
+import {
+  formatBRL,
+  formatDecimal,
+  formatPercent,
+  parseAmount,
+} from "../utils/money";
 import { assetNews } from "../utils/assetNews";
 import { useIndicatorStore } from "../store/indicatorStore";
 import useNewsData from "../hooks/useNewsData";
@@ -138,8 +143,10 @@ export default function IndicatorDetailSheet({
 
   const handleConvert = async () => {
     if (!isCurrency || !amount) return;
-    const numericAmount = parseFloat(amount.replace(",", "."));
-    if (isNaN(numericAmount)) return;
+    // Leitura comum de valor: o `parseFloat` com troca de vírgula lia
+    // "1.000" como 1 e "1.234,56" como 1,234 — a conversão saía mil vezes menor
+    const numericAmount = parseAmount(amount);
+    if (numericAmount === null) return;
     setLoadingConversion(true);
     const result = await convertCurrency(indicator.code, numericAmount);
     if (result) setConversionResult(result.result);
@@ -334,7 +341,7 @@ export default function IndicatorDetailSheet({
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
-                placeholder="0.00"
+                placeholder="0,00"
                 placeholderTextColor={t.text.tertiary}
                 accessibilityLabel="Valor em reais para converter"
               />
