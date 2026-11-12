@@ -724,6 +724,19 @@ export default function BankIntegration() {
         tipo = "info";
       }
       const puladas = result.skippedConnections ?? [];
+      const abrirRevisaoDaSincronizacao = () => {
+        if (result.suggested + result.uncategorized === 0) return;
+        if (result.uploadIds?.length) {
+          (navigation as any).navigate(APP_ROUTES.revisao, {
+            uploadIds: result.uploadIds,
+          });
+          return;
+        }
+        // API publicada antes de uploadIds: preserva o único id que ela dava.
+        (navigation as any).navigate(APP_ROUTES.revisao, {
+          uploadId: result.uploadId,
+        });
+      };
       if (puladas.length > 0) {
         // Banco pulado é sincronização PARCIAL: "3 importadas" sozinho fazia a
         // pessoa achar que todos os bancos estavam em dia. Vai na MESMA frase
@@ -733,12 +746,14 @@ export default function BankIntegration() {
         // A API já gravou a saúde dessas conexões; recarregar mantém a lista
         // (e o "sincronizado em") coerente com o que acabou de acontecer
         await fetchItems();
+        abrirRevisaoDaSincronizacao();
         return;
       }
       if (tipo === "success") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       showToast(resumo, tipo);
+      abrirRevisaoDaSincronizacao();
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast(

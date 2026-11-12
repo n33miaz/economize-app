@@ -13,6 +13,8 @@ import { useToastStore } from "../../store/toastStore";
 
 import type { Category, ReviewGroup } from "../../services/api";
 
+let mockRouteParams: Record<string, unknown> = {};
+
 jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
 
 jest.mock("@react-navigation/native", () => ({
@@ -24,7 +26,7 @@ jest.mock("@react-navigation/native", () => ({
     canGoBack: () => true,
     getState: () => ({ index: 1, routes: [{ name: "Main" }, { name: "Revisao" }] }),
   }),
-  useRoute: () => ({ params: {} }),
+  useRoute: () => ({ params: mockRouteParams }),
   useIsFocused: () => true,
   useFocusEffect: (efeito: () => void | (() => void)) => {
     const React = require("react");
@@ -79,6 +81,7 @@ const grupo = (
 const BASE = {
   groups: [] as ReviewGroup[],
   uploadId: null,
+  uploadIds: null,
   pendingCount: 0,
   applyProgress: null,
   isLoading: false,
@@ -105,6 +108,7 @@ const montar = () =>
 describe("Revisão do extrato", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteParams = {};
     useReviewStore.setState({ ...BASE } as never);
     useCategoriesStore.setState({
       items: [ALIMENTACAO],
@@ -198,5 +202,27 @@ describe("Revisão do extrato", () => {
     // Sem o catálogo, o chip de categoria não teria nome para mostrar
     await waitFor(() => expect(fetchQueue).toHaveBeenCalled());
     expect(fetchCategorias).toHaveBeenCalled();
+  });
+
+  it("abre a revisão de todos os uploads retornados pela sincronização", async () => {
+    const fetchQueue = jest.fn().mockResolvedValue(undefined);
+    mockRouteParams = { uploadIds: ["upload-1", "upload-2"] };
+    useReviewStore.setState({ ...BASE, fetchQueue } as never);
+
+    montar();
+
+    await waitFor(() =>
+      expect(fetchQueue).toHaveBeenCalledWith(["upload-1", "upload-2"]),
+    );
+  });
+
+  it("abre o upload único no formato da API anterior", async () => {
+    const fetchQueue = jest.fn().mockResolvedValue(undefined);
+    mockRouteParams = { uploadId: "upload-legado" };
+    useReviewStore.setState({ ...BASE, fetchQueue } as never);
+
+    montar();
+
+    await waitFor(() => expect(fetchQueue).toHaveBeenCalledWith("upload-legado"));
   });
 });

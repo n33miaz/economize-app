@@ -771,6 +771,11 @@ export interface SkippedConnection {
  * API anterior ao PR #130 não os manda, e o app tem de conviver com as duas.
  */
 export interface ConnectorSyncResult extends StatementUploadResult {
+  /**
+   * Todos os uploads que receberam lançamentos novos nesta sincronização.
+   * Ausente na API anterior: nesse caso, `uploadId` continua sendo o escopo.
+   */
+  uploadIds?: string[];
   /** Quantas conexões foram lidas nesta rodada. */
   itemsSynced?: number;
   /** Bancos pulados; lista vazia quando nenhum ficou de fora. */
@@ -1267,11 +1272,25 @@ export const deleteCategory = async (
 };
 
 // --- Revisão de categorização ---
+export type ReviewUploadScope = string | string[];
+
+/** Mantém uploadId único e serializa vários como ?uploadId=a&uploadId=b. */
+const reviewScopeConfig = (scope?: ReviewUploadScope) => {
+  if (!scope) return undefined;
+  if (typeof scope === "string") return { params: { uploadId: scope } };
+  if (scope.length === 0) return undefined;
+  return {
+    params: { uploadId: scope },
+    // `null` evita uploadId[]: Spring recebe o mesmo nome repetido.
+    paramsSerializer: { indexes: null },
+  };
+};
+
 export const getReviewQueue = async (
-  uploadId?: string,
+  uploadIds?: ReviewUploadScope,
 ): Promise<ReviewGroup[]> => {
   const response = await api.get<ReviewGroup[]>("/transactions/review", {
-    params: uploadId ? { uploadId } : undefined,
+    ...reviewScopeConfig(uploadIds),
   });
   return response.data;
 };
@@ -1309,9 +1328,12 @@ export const recategorizePending = async (): Promise<RecategorizeOutcome> => {
  * Buscando a fila inteira, isso custava 92 KB agrupados (1.656 pendentes) e
  * 2,1 s a cada abertura do app. A tela de revisão continua usando a fila.
  */
-export const getReviewCount = async (): Promise<number> => {
+export const getReviewCount = async (
+  uploadIds?: ReviewUploadScope,
+): Promise<number> => {
   const response = await api.get<{ count: number }>(
     "/transactions/review/count",
+    reviewScopeConfig(uploadIds),
   );
   return response.data.count;
 };
@@ -1326,12 +1348,12 @@ export const applyReview = async (
 };
 
 export const confirmAllReview = async (
-  uploadId?: string,
+  uploadIds?: ReviewUploadScope,
 ): Promise<ReviewOutcome> => {
   const response = await api.post<ReviewOutcome>(
     "/transactions/review/confirm-all",
     null,
-    { params: uploadId ? { uploadId } : undefined },
+    reviewScopeConfig(uploadIds),
   );
   return response.data;
 };

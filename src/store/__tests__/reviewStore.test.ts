@@ -48,6 +48,7 @@ describe("reviewStore", () => {
     useReviewStore.setState({
       groups: [],
       uploadId: null,
+      uploadIds: null,
       pendingCount: null,
       applyProgress: null,
       isLoading: false,
@@ -63,6 +64,25 @@ describe("reviewStore", () => {
 
     expect(useReviewStore.getState().pendingCount).toBe(5);
     expect(mockCount).not.toHaveBeenCalled();
+  });
+
+  it("carrega a revisão de todos os uploads recém-sincronizados", async () => {
+    mockQueue.mockResolvedValue([grupo("a")]);
+
+    await useReviewStore.getState().fetchQueue(["upload-1", "upload-2"]);
+
+    expect(mockQueue).toHaveBeenCalledWith(["upload-1", "upload-2"]);
+    expect(useReviewStore.getState().uploadIds).toEqual(["upload-1", "upload-2"]);
+  });
+
+  it("mantém uploadId único quando a resposta não traz uploadIds", async () => {
+    mockQueue.mockResolvedValue([grupo("a")]);
+
+    await useReviewStore.getState().fetchQueue("upload-legado");
+
+    expect(mockQueue).toHaveBeenCalledWith("upload-legado");
+    expect(useReviewStore.getState().uploadId).toBe("upload-legado");
+    expect(useReviewStore.getState().uploadIds).toEqual(["upload-legado"]);
   });
 
   it("a Home pede só o número", async () => {
