@@ -116,6 +116,13 @@ describe("formatDecimal", () => {
   it("valor inválido vira zero", () => {
     expect(formatDecimal(NaN)).toBe("0,00");
   });
+
+  // Quantidade de ativo: sem casas fixas, até o teto pedido
+  it("aceita mínimo e teto de casas diferentes", () => {
+    expect(formatDecimal(0.5, 0, 8)).toBe("0,5");
+    expect(formatDecimal(1234, 0, 8)).toBe("1.234");
+    expect(formatDecimal(0.00012345, 0, 8)).toBe("0,00012345");
+  });
 });
 
 describe("parseAmount — a única leitura de valor digitado", () => {

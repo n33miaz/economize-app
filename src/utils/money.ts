@@ -105,11 +105,17 @@ export function formatPercent(
  * Número solto em pt-BR, para o que não é moeda nem porcentagem (cotação com
  * símbolo à parte, resultado de conversão). Mesma razão do `formatPercent`.
  */
-export function formatDecimal(value: number, decimals = 2): string {
+export function formatDecimal(
+  value: number,
+  decimals = 2,
+  // Teto opcional de casas: quantidade de ativo não tem número fixo de casas
+  // ("0,5" dólar, "0,00012345" bitcoin) e min = max cortaria a cripto em zero
+  maxDecimals = decimals,
+): string {
   const safe = Number.isFinite(value) ? value : 0;
   return safe.toLocaleString("pt-BR", {
     minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    maximumFractionDigits: Math.max(decimals, maxDecimals),
   });
 }
 
