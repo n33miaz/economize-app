@@ -51,6 +51,7 @@ import {
   slideRightTransition,
 } from "./transitions";
 import SegmentedTopTabBar from "./SegmentedTopTabBar";
+import { pagerScrollLockStyle } from "./pagerScrollLock";
 import TabBarWithIndicator from "./TabBarWithIndicator";
 import AnimatedTabIcon from "./AnimatedTabIcon";
 import SideRail from "./SideRail";
@@ -181,6 +182,11 @@ const renderSegmented = (props: MaterialTopTabBarProps) => (
   <SegmentedTopTabBar {...props} />
 );
 
+// Na web, o contêiner das abas de Finanças não pode ser rolado pelo navegador
+// (scrollIntoView, foco de teclado): ver o porquê em `pagerScrollLock.ts`. Em
+// escopo de módulo para o navegador receber sempre o mesmo objeto.
+const financePagerStyle = pagerScrollLockStyle();
+
 // Moedas e Índices
 function IndicatorsTabs() {
   const reducedMotion = useReducedMotion();
@@ -239,6 +245,7 @@ function FinanceTabs() {
       <TopTab.Navigator
         initialLayout={{ width: larguraDaJanela }}
         tabBar={renderSegmented}
+        style={financePagerStyle}
         screenOptions={{
           // Mesmo gate do bloco de Mercado: com "reduzir movimento" ativo a
           // troca de aba é seca em todo o app
