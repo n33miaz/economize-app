@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Target from "lucide-react-native/dist/esm/icons/target";
@@ -55,6 +55,17 @@ export default function Wishes({ navigation }: any) {
 
   // EC-205: a meta que está recebendo dinheiro. Null = folha fechada
   const [aportando, setAportando] = useState<Wish | null>(null);
+  // A folha lê o desejo vivo do store, como o `detalheVivo`: com a cópia
+  // congelada, depois de guardar o cabeçalho seguia com o "guardado" e o
+  // "faltam" de antes do aporte. A cópia só fica de reserva se a lista ainda
+  // não tiver o item, para a folha não abrir vazia
+  const aportandoVivo = useMemo(
+    () =>
+      aportando
+        ? (wishes.find((w) => w.id === aportando.id) ?? aportando)
+        : null,
+    [aportando, wishes],
+  );
 
   // A sobra efetivamente apurada no último ciclo fechado vira a proposta.
   // Null quando não há saldo positivo fechado: estimativa não vira lançamento.
@@ -80,6 +91,9 @@ export default function Wishes({ navigation }: any) {
   const [valor, setValor] = useState("");
   const [guardado, setGuardado] = useState("");
   const [detalhe, setDetalhe] = useState<Wish | null>(null);
+  // Trava contra o duplo toque no "salvar": o `isSaving` do store só chega no
+  // render seguinte, e dois toques no mesmo quadro criavam o desejo duas vezes
+  const salvandoRef = useRef(false);
 
   useEffect(() => {
     if (!hasLoadedOnce) fetch();
@@ -110,16 +124,23 @@ export default function Wishes({ navigation }: any) {
       showToast("Informe quanto custa.", "warning");
       return;
     }
-    const jaGuardado = parseAmount(guardado);
-    const result = await create({
-      name: nome.trim(),
-      targetAmount: alvo,
-      savedAmount: jaGuardado != null && jaGuardado > 0 ? jaGuardado : undefined,
-    });
-    showToast(result.message, result.ok ? "success" : "error");
-    if (result.ok) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setFormOpen(false);
+    if (salvandoRef.current) return;
+    salvandoRef.current = true;
+    try {
+      const jaGuardado = parseAmount(guardado);
+      const result = await create({
+        name: nome.trim(),
+        targetAmount: alvo,
+        savedAmount:
+          jaGuardado != null && jaGuardado > 0 ? jaGuardado : undefined,
+      });
+      showToast(result.message, result.ok ? "success" : "error");
+      if (result.ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setFormOpen(false);
+      }
+    } finally {
+      salvandoRef.current = false;
     }
   };
 
@@ -493,8 +514,8 @@ export default function Wishes({ navigation }: any) {
 
       {/* EC-205: guardar dinheiro numa meta, com o extrato do que já entrou */}
       <WishContributionSheet
-        visible={aportando !== null}
-        wish={aportando}
+        visible={aportandoVivo !== null}
+        wish={aportandoVivo}
         leftover={sobraMedida}
         onClose={() => setAportando(null)}
         onSaved={fetch}

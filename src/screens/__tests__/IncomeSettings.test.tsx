@@ -103,6 +103,30 @@ describe("Renda e jornada", () => {
     await waitFor(() => expect(getByText("Renda e jornada")).toBeTruthy());
   });
 
+  it("dois toques rápidos no salvar cadastram UMA fonte", async () => {
+    // Fonte em dobro é renda em dobro no valor da hora: a trava por ref segura
+    // o segundo toque enquanto a primeira gravação ainda está no ar
+    let concluir: () => void = () => {};
+    const addIncome = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          concluir = () => resolve({ ok: true, message: "Fonte salva." });
+        }),
+    );
+    useWishStore.setState({ ...BASE, addIncome } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText("Cadastrar fonte de renda")));
+    fireEvent.changeText(getByLabelText("Nome"), "Freela");
+    const salvar = getByLabelText("Salvar fonte de renda");
+    fireEvent.press(salvar);
+    fireEvent.press(salvar);
+
+    expect(addIncome).toHaveBeenCalledTimes(1);
+    concluir();
+    await waitFor(() => expect(addIncome).toHaveBeenCalledTimes(1));
+  });
+
   it("busca a renda ao abrir", async () => {
     const fetchIncome = jest.fn().mockResolvedValue(undefined);
     useWishStore.setState({

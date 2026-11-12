@@ -69,6 +69,9 @@ export default function WishContributionSheet({
 
   const [amount, setAmount] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  // Trava contra o duplo toque: `isSaving` é lido do fechamento do render, e
+  // dois toques no mesmo quadro viam os dois `false` — dois aportes iguais
+  const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   // O extrato guarda de qual meta ele é: trocar de meta descarta o da anterior
   // já no render, antes de o novo chegar. Sem isso a outra meta aparecia por um
@@ -97,16 +100,21 @@ export default function WishContributionSheet({
     setHistorico((atual) => (atual.wishId === wishId ? atual : { wishId, linhas: [] }));
   }, [wishId]);
 
+  // Pelo id, e não pelo objeto: a tela passa o desejo vivo do store, que vira
+  // outro objeto a cada recarga — depois de guardar, isso limparia o campo e
+  // destravaria o botão no meio de uma gravação
   useEffect(() => {
-    if (!visible || !wish) return;
+    if (!visible || !wishId) return;
     setAmount("");
     setError(null);
+    savingRef.current = false;
     setIsSaving(false);
-    carregarHistorico(wish.id);
-  }, [visible, wish, carregarHistorico]);
+    carregarHistorico(wishId);
+  }, [visible, wishId, carregarHistorico]);
 
   const guardar = async (valor: number, cycleMonth?: string) => {
-    if (!wish || isSaving) return;
+    if (!wish || savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
     setError(null);
     try {
@@ -127,6 +135,7 @@ export default function WishContributionSheet({
         await carregarHistorico(wish.id);
       }
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
