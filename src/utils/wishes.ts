@@ -1,3 +1,4 @@
+import { isSessionEnded } from "../services/requestFailure";
 import { readProblem } from "./recurrence";
 import { formatBRL } from "./money";
 
@@ -245,6 +246,8 @@ const ERROR_TRANSLATIONS: { match: RegExp; message: string }[] = [
 ];
 
 export function translateWishError(error: unknown, fallback: string): string {
+  // Resposta de quem saiu: frase vazia, e o store não grava nada
+  if (isSessionEnded(error)) return "";
   const problem = readProblem(error);
   if (!problem.detail) return fallback;
   const hit = ERROR_TRANSLATIONS.find((rule) =>

@@ -11,7 +11,7 @@ import {
   syncConnector,
   unlinkConnectorItem,
 } from "../services/api";
-import { describeLoadFailure } from "../services/requestFailure";
+import { describeSaveFailure } from "../services/requestFailure";
 
 /**
  * Onde mora a ponte da conexão bancária (`public/conectar-banco.html`).
@@ -65,20 +65,6 @@ const vazio = () => ({
   error: null as string | null,
 });
 
-/**
- * O `detail` do ProblemDetail é a mensagem boa. Sem ele, a leitura de
- * transporte (offline, servidor acordando) vale mais do que a frase padrão —
- * e a `message` do axios ("Request failed with status code 500") não entra:
- * é inglês de biblioteca, não resposta para o usuário.
- */
-function motivo(e: unknown, padrao: string): string {
-  const detail = (e as { response?: { data?: { detail?: unknown } } } | null)
-    ?.response?.data?.detail;
-  return typeof detail === "string" && detail.length > 0
-    ? detail
-    : describeLoadFailure(e, padrao);
-}
-
 // Estado do conector Open Finance. Nasce desligado: enquanto o servidor não
 // disser `enabled`, a tela de extrato não mostra nada de conexão bancária —
 // quem não configurou o conector não deve nem saber que ele existe.
@@ -128,9 +114,14 @@ export const useConnectorStore = create<ConnectorState>((set, get) => ({
       ].join("&");
       return `${WEB_BASE_URL}/${CONNECT_BRIDGE_PAGE}#${frag}`;
     } catch (e: any) {
+      const message = describeSaveFailure(
+        e,
+        "Não foi possível iniciar a conexão.",
+      );
+      if (!message) return null;
       set({
         isLinking: false,
-        error: motivo(e, "Não foi possível iniciar a conexão."),
+        error: message,
       });
       return null;
     }
@@ -155,9 +146,14 @@ export const useConnectorStore = create<ConnectorState>((set, get) => ({
         await Promise.all([get().checkStatus(), get().fetchItems()]);
         return true;
       }
+      const message = describeSaveFailure(
+        e,
+        "Não foi possível registrar a conexão.",
+      );
+      if (!message) return false;
       set({
         isLinking: false,
-        error: motivo(e, "Não foi possível registrar a conexão."),
+        error: message,
       });
       return false;
     }
@@ -171,7 +167,9 @@ export const useConnectorStore = create<ConnectorState>((set, get) => ({
       await get().checkStatus();
       return true;
     } catch (e: any) {
-      set({ error: motivo(e, "Não foi possível desconectar.") });
+      const message = describeSaveFailure(e, "Não foi possível desconectar.");
+      if (!message) return false;
+      set({ error: message });
       return false;
     }
   },
@@ -184,7 +182,9 @@ export const useConnectorStore = create<ConnectorState>((set, get) => ({
       set({ isSyncing: false });
       return result;
     } catch (e: any) {
-      set({ error: motivo(e, "Falha ao sincronizar"), isSyncing: false });
+      const message = describeSaveFailure(e, "Falha ao sincronizar");
+      if (!message) throw e;
+      set({ error: message, isSyncing: false });
       throw e;
     }
   },

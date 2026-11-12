@@ -69,12 +69,14 @@ export const useInstallmentsStore = create<InstallmentsState>((set, get) => ({
       // um 500 passageiro não pode apagar o bloco que já estava certo.
       // `hasLoadedOnce` não é marcado na falha pelo mesmo motivo do
       // accountsStore: falha não é resposta, e o próximo foco tenta de novo
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível carregar seus parcelamentos agora.",
+      );
+      if (!message) return;
       set({
         isLoading: false,
-        error: describeLoadFailure(
-          e,
-          "Não foi possível carregar seus parcelamentos agora.",
-        ),
+        error: message,
       });
     }
   },

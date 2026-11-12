@@ -353,6 +353,40 @@ export interface PositionValueView {
 }
 
 /**
+ * Valor na moeda da própria posição: o informado; na falta dele, e fora da
+ * manual, quantidade × preço, e por fim o investido. Um lugar só, para a
+ * linha e a ordem da lista não discordarem.
+ */
+function nativeValueOf(position: InvestmentPosition): number | null {
+  if (isFinite_(position.currentValue)) return position.currentValue;
+  if (position.source === "MANUAL") return null;
+  if (isFinite_(position.quantity) && isFinite_(position.unitPrice)) {
+    return position.quantity * position.unitPrice;
+  }
+  return isFinite_(position.investedAmount) ? position.investedAmount : null;
+}
+
+/**
+ * Reais de uma posição cujo valor vem da COTAÇÃO do papel. Câmbio: o que o
+ * servidor já aplicou na cotação; na falta, o dólar do bloco macro — que só
+ * serve se a cotação for em dólar. Um lugar só, para o "≈ R$" da linha e a
+ * ordem da lista saírem da mesma conta.
+ */
+function quotedBrl(
+  position: InvestmentPosition,
+  quote: ForeignQuote | undefined,
+  currency: string,
+  usdBrl: number | null,
+): number | null {
+  if (!quote || !isFinite_(quote.price) || !isFinite_(position.quantity)) return null;
+  if (isFinite_(quote.priceBrl)) return position.quantity * quote.priceBrl;
+  const quoteCurrency = (quote.currency ?? "").trim().toUpperCase() || currency;
+  return quoteCurrency === "USD" && isFinite_(usdBrl)
+    ? position.quantity * quote.price * usdBrl
+    : null;
+}
+
+/**
  * Valor da posição para a lista.
  *
  * O defeito que isto conserta: a posição em dólar do conector era devolvida
@@ -420,13 +454,7 @@ export function positionValueView(
     }
     const quoteCurrency = (quote.currency ?? "").trim().toUpperCase() || currency;
     const native = position.quantity * quote.price;
-    // Câmbio: o que o servidor já aplicou na cotação; na falta, o dólar do
-    // bloco macro — que só serve se a cotação for em dólar
-    const brl = isFinite_(quote.priceBrl)
-      ? position.quantity * quote.priceBrl
-      : quoteCurrency === "USD" && isFinite_(usdBrl)
-        ? native * usdBrl
-        : null;
+    const brl = quotedBrl(position, quote, currency, usdBrl);
     // "Valor investido" do formulário é em reais: o resultado só existe
     // contra o equivalente em reais, e é nessa moeda que ele é dito
     const profit = brl === null ? null : profitOf(position.investedAmount, brl);
@@ -442,16 +470,7 @@ export function positionValueView(
 
   const manual = position.source === "MANUAL";
   const rate = exchangeRateFor(summary, currency);
-  let native: number | null = isFinite_(position.currentValue)
-    ? position.currentValue
-    : null;
-  if (native === null && !manual) {
-    if (isFinite_(position.quantity) && isFinite_(position.unitPrice)) {
-      native = position.quantity * position.unitPrice;
-    } else if (isFinite_(position.investedAmount)) {
-      native = position.investedAmount;
-    }
-  }
+  const native = nativeValueOf(position);
 
   // Manual sem valor atual (ou servidor antigo, sem câmbio): só a cotação do
   // papel dá o valor, e ela já chega em reais
@@ -491,17 +510,55 @@ export function staleExchangeNotices(
 /**
  * Valor em REAIS só para ORDENAR a lista. Dólar comparado como real poria
  * US$ 1.000 abaixo de R$ 1.200; sem câmbio a posição não compete (`null`).
+ *
+ * Segue os MESMOS ramos de `positionValueView`, com as mesmas cotações: sem
+ * elas a manual em dólar que a linha mostra como "≈ R$ 1.200" caía para o fim
+ * da lista, abaixo de uma posição de R$ 500.
  */
 function orderingValue(
   position: InvestmentPosition,
   summary: FxSummary,
+  quotes: Record<string, ForeignQuote | undefined> = {},
+  usdBrl: number | null = null,
 ): number | null {
-  if (!isFinite_(position.currentValue)) return null;
   const currency = currencyOf(position);
-  if (currency === "BRL") return position.currentValue;
+  if (currency === "BRL") return positionCurrentValue(position, quotes, usdBrl);
   if ((summary?.unconverted ?? []).some((item) => item.id === position.id)) return null;
+  if (positionNeedsQuote(position) && !isFinite_(position.currentValue)) {
+    const quote = position.code ? quotes[position.code.toUpperCase()] : undefined;
+    return quotedBrl(position, quote, currency, usdBrl);
+  }
+  const native = nativeValueOf(position);
   const rate = exchangeRateFor(summary, currency);
-  return rate ? position.currentValue * rate.rate : null;
+  if (native === null || (position.source === "MANUAL" && !rate)) {
+    return positionCurrentValue(position, quotes, usdBrl);
+  }
+  return rate ? native * rate.rate : null;
+}
+
+/**
+ * Reais que entram no TAMANHO da instituição: só o que o servidor converteu,
+ * sem cotação da tela — a mesma régua do total do cabeçalho. Separado de
+ * `orderingValue` para a ordem das linhas poder seguir a cotação sem mexer
+ * na soma.
+ */
+function summedValue(position: InvestmentPosition, summary: FxSummary): number {
+  const currency = currencyOf(position);
+  if (currency === "BRL") return positionCurrentValue(position) ?? 0;
+  if ((summary?.unconverted ?? []).some((item) => item.id === position.id)) return 0;
+  const native = nativeValueOf(position);
+  const rate = exchangeRateFor(summary, currency);
+  return native !== null && rate ? native * rate.rate : 0;
+}
+
+/**
+ * Maior primeiro, sem valor por último. Escrito por extenso porque a subtração
+ * de dois `-Infinity` dá NaN, e comparador que devolve NaN deixa a ordem das
+ * posições sem valor por conta do motor.
+ */
+function byValueDesc(a: number | null, b: number | null): number {
+  if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
+  return b - a;
 }
 
 // --- Agrupamento ---
@@ -529,6 +586,8 @@ export const SEM_INSTITUICAO = "Sem instituição";
 export function groupPositionsByType(
   positions: InvestmentPosition[],
   summary?: FxSummary,
+  quotes: Record<string, ForeignQuote | undefined> = {},
+  usdBrl: number | null = null,
 ): PositionGroup[] {
   const buckets = new Map<InvestmentType, InvestmentPosition[]>();
   positions.forEach((position) => {
@@ -539,15 +598,15 @@ export function groupPositionsByType(
   });
 
   const valueOf = (position: InvestmentPosition) =>
-    orderingValue(position, summary) ?? -Infinity;
+    orderingValue(position, summary, quotes, usdBrl);
 
   return INVESTMENT_TYPE_ORDER.filter((type) => buckets.has(type)).map(
     (type) => ({
       key: type,
       type,
       label: TYPE_LABELS[type],
-      positions: [...(buckets.get(type) ?? [])].sort(
-        (a, b) => valueOf(b) - valueOf(a),
+      positions: [...(buckets.get(type) ?? [])].sort((a, b) =>
+        byValueDesc(valueOf(a), valueOf(b)),
       ),
     }),
   );
@@ -568,11 +627,13 @@ export function groupPositionsByType(
 export function groupPositionsByInstitution(
   positions: InvestmentPosition[],
   summary?: FxSummary,
+  quotes: Record<string, ForeignQuote | undefined> = {},
+  usdBrl: number | null = null,
 ): PositionGroup[] {
   const valueOf = (position: InvestmentPosition) =>
-    orderingValue(position, summary) ?? -Infinity;
+    orderingValue(position, summary, quotes, usdBrl);
   const somaDe = (lista: InvestmentPosition[]) =>
-    lista.reduce((total, p) => total + (orderingValue(p, summary) ?? 0), 0);
+    lista.reduce((total, p) => total + summedValue(p, summary), 0);
 
   const buckets = new Map<string, InvestmentPosition[]>();
   positions.forEach((position) => {
@@ -586,7 +647,7 @@ export function groupPositionsByInstitution(
     .map(([nome, lista]) => ({
       key: nome,
       label: nome,
-      positions: [...lista].sort((a, b) => valueOf(b) - valueOf(a)),
+      positions: [...lista].sort((a, b) => byValueDesc(valueOf(a), valueOf(b))),
     }))
     .sort((a, b) => {
       if (a.key === SEM_INSTITUICAO) return 1;
@@ -600,10 +661,12 @@ export function groupPositions(
   positions: InvestmentPosition[],
   cut: PositionCut,
   summary?: FxSummary,
+  quotes: Record<string, ForeignQuote | undefined> = {},
+  usdBrl: number | null = null,
 ): PositionGroup[] {
   return cut === "institution"
-    ? groupPositionsByInstitution(positions, summary)
-    : groupPositionsByType(positions, summary);
+    ? groupPositionsByInstitution(positions, summary, quotes, usdBrl)
+    : groupPositionsByType(positions, summary, quotes, usdBrl);
 }
 
 // --- Indicadores acompanhados ---

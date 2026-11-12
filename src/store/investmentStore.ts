@@ -30,6 +30,7 @@ import {
   type TreasuryBond,
 } from "../services/api";
 import { DEFAULT_FOREIGN_MARKET } from "../utils/investments";
+import { describeLoadFailure } from "../services/requestFailure";
 
 /**
  * Investimentos consolidados (EC-15x).
@@ -217,7 +218,13 @@ export const useInvestmentStore = create<InvestmentState>((set, get) => {
         setSlice(key, unavailable(empty));
         return;
       }
-      setSlice(key, { ...current, loading: false, error: failure });
+      const message = describeLoadFailure(e, failure);
+      if (!message) return;
+      setSlice(key, {
+        ...current,
+        loading: false,
+        error: message,
+      });
     }
   };
 
@@ -325,10 +332,12 @@ export const useInvestmentStore = create<InvestmentState>((set, get) => {
           });
           return;
         }
+        const message = describeLoadFailure(e, "Cotação indisponível agora.");
+        if (!message) return;
         setQuote(key, {
           ...current,
           loading: false,
-          error: "Cotação indisponível agora.",
+          error: message,
         });
       }
     },
@@ -393,14 +402,18 @@ export const useInvestmentStore = create<InvestmentState>((set, get) => {
         return result;
       } catch (e) {
         const status = getApiErrorStatus(e);
+        const message = describeLoadFailure(
+          e,
+          status === 503
+            ? "O conector do banco está desligado neste servidor."
+            : status === 404
+              ? "Este servidor ainda não sincroniza investimentos."
+              : "Não foi possível sincronizar agora.",
+        );
+        if (!message) return null;
         set({
           syncing: false,
-          syncError:
-            status === 503
-              ? "O conector do banco está desligado neste servidor."
-              : status === 404
-                ? "Este servidor ainda não sincroniza investimentos."
-                : "Não foi possível sincronizar agora.",
+          syncError: message,
         });
         return null;
       }

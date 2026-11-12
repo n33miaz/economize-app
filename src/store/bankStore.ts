@@ -5,7 +5,10 @@ import {
   getBankTransactions,
   uploadBankStatement,
 } from "../services/api";
-import { describeLoadFailure } from "../services/requestFailure";
+import {
+  describeLoadFailure,
+  describeSaveFailure,
+} from "../services/requestFailure";
 import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { calculateBankMetrics } from "../utils/bankMetrics";
@@ -184,8 +187,10 @@ export const useBankStore = create<BankState>((set, get) => ({
       // falha se explica no lugar, com "tentar de novo" ao lado.
       // `fetchedAt` NÃO avança: falha não vale como leitura boa, e o próximo
       // foco tem de tentar outra vez
+      const message = describeLoadFailure(e, "Falha ao carregar extrato.");
+      if (!message) return;
       set({
-        error: describeLoadFailure(e, "Falha ao carregar extrato."),
+        error: message,
         isLoading: false,
       });
     }
@@ -208,8 +213,12 @@ export const useBankStore = create<BankState>((set, get) => ({
       // com a mensagem certa e cobre formatos que o cliente nem conhece
       return await enviarArquivo(result.assets[0], get, set);
     } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || e.message || "Erro no upload", isImporting: false });
+      const message = describeSaveFailure(e, e?.message || "Erro no upload");
+      if (!message) throw e;
+      set({
+        error: message,
+        isImporting: false,
+      });
       throw e;
     }
   },
@@ -231,8 +240,12 @@ export const useBankStore = create<BankState>((set, get) => ({
       const asset = await descreverArquivoRecebido(uri);
       return await enviarArquivo(asset, get, set);
     } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || e.message || "Erro no upload", isImporting: false });
+      const message = describeSaveFailure(e, e?.message || "Erro no upload");
+      if (!message) throw e;
+      set({
+        error: message,
+        isImporting: false,
+      });
       throw e;
     }
   },

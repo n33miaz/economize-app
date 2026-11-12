@@ -1,3 +1,4 @@
+import { SessionEndedError } from "../../services/requestFailure";
 import type { Report } from "../reportsStore";
 import { useReportsStore } from "../reportsStore";
 
@@ -70,5 +71,31 @@ describe("remove — EC-038", () => {
     await useReportsStore.getState().remove("nao-existe");
 
     expect(useReportsStore.getState().items.map((r) => r.id)).toEqual(["a"]);
+  });
+});
+
+/**
+ * A resposta de quem saiu chega depois da limpeza, com outra pessoa em tela.
+ * O dublê imita isso: limpa o store como o logout faz e só então rejeita.
+ */
+describe("reportsStore — resposta de sessão encerrada", () => {
+  const limpo = { items: [], isLoading: false, isGenerating: false, error: null };
+  const rejeitaDepoisDaLimpeza = async (): Promise<never> => {
+    useReportsStore.setState(limpo);
+    throw new SessionEndedError();
+  };
+
+  it("gerar e remover não gravam erro em quem entrou", async () => {
+    api.post.mockImplementation(rejeitaDepoisDaLimpeza);
+    api.delete.mockImplementation(rejeitaDepoisDaLimpeza);
+    const store = useReportsStore.getState();
+
+    expect(
+      await store.generate("MONTHLY", "2026-08-12", "2026-09-11"),
+    ).toBeNull();
+    expect(useReportsStore.getState()).toMatchObject(limpo);
+
+    expect(await store.remove("r1")).toBe(false);
+    expect(useReportsStore.getState()).toMatchObject(limpo);
   });
 });
