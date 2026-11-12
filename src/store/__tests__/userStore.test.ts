@@ -1,3 +1,4 @@
+import { SessionEndedError } from "../../services/requestFailure";
 import { getUserMe, updateUserMe } from "../../services/api";
 import { useAuthStore } from "../authStore";
 import { useUserStore } from "../userStore";
@@ -62,5 +63,47 @@ describe("userStore", () => {
     expect(useUserStore.getState().error).toBe("Nome não pode ficar em branco");
     expect(useAuthStore.getState().userName).toBe("Antigo");
     expect(useUserStore.getState().isSaving).toBe(false);
+  });
+});
+
+/**
+ * A resposta de quem saiu chega depois da limpeza, com outra pessoa em tela.
+ * O dublê imita isso: limpa o store como o logout faz e só então rejeita.
+ */
+describe("userStore — resposta de sessão encerrada", () => {
+  const limpo = { me: null, isLoading: false, isSaving: false, error: null };
+  const rejeitaDepoisDaLimpeza = async (): Promise<never> => {
+    useUserStore.setState(limpo);
+    throw new SessionEndedError();
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useUserStore.setState(limpo);
+  });
+
+  it("carregar não grava erro no estado de quem entrou", async () => {
+    mockGet.mockImplementation(rejeitaDepoisDaLimpeza);
+
+    await useUserStore.getState().fetchMe();
+
+    expect(useUserStore.getState()).toMatchObject(limpo);
+  });
+
+  it("salvar o nome também não", async () => {
+    mockUpdate.mockImplementation(rejeitaDepoisDaLimpeza);
+
+    expect(await useUserStore.getState().updateName("Ana")).toBe(false);
+    expect(useUserStore.getState()).toMatchObject(limpo);
+  });
+
+  it("falha comum ao salvar segue mostrando o detalhe do servidor", async () => {
+    mockUpdate.mockRejectedValue({
+      response: { status: 400, data: { detail: "Nome muito curto." } },
+    });
+
+    await useUserStore.getState().updateName("A");
+
+    expect(useUserStore.getState().error).toBe("Nome muito curto.");
   });
 });

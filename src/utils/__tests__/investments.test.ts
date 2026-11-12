@@ -324,7 +324,8 @@ describe("groupPositionsByType", () => {
       position({ id: "a", type: "ETF", currentValue: 100 }),
       position({ id: "b", type: "FIXED_INCOME", currentValue: 50 }),
       position({ id: "c", type: "FIXED_INCOME", currentValue: 500 }),
-      position({ id: "d", type: "FIXED_INCOME", currentValue: null }),
+      // sem valor NENHUM: com o investido a linha mostraria esse número
+      position({ id: "d", type: "FIXED_INCOME", currentValue: null, investedAmount: null }),
       position({ id: "e", type: "XPTO" as never, currentValue: 1 }),
     ]);
     expect(groups.map((g) => g.type)).toEqual(["FIXED_INCOME", "ETF", "OTHER"]);
@@ -368,7 +369,7 @@ describe("groupPositionsByInstitution", () => {
 
   it("posição sem valor não empurra a instituição para cima", () => {
     const groups = groupPositionsByInstitution([
-      position({ id: "a", institution: "XP", currentValue: null }),
+      position({ id: "a", institution: "XP", currentValue: null, investedAmount: null }),
       position({ id: "b", institution: "Nubank", currentValue: 10 }),
     ]);
 
@@ -992,5 +993,91 @@ describe("moeda estrangeira — a posição na moeda dela", () => {
       { exchangeRates: [CAMBIO] },
     );
     expect(grupos.map((g) => g.key)).toEqual(["B", "A"]);
+  });
+
+  it("a ordem usa o valor que a linha mostra: quantidade × preço quando falta o valor atual", () => {
+    const resumo = { exchangeRates: [CAMBIO] };
+    // US$ 10 × 100 = US$ 1.000 → R$ 5.400, o mesmo número da linha
+    const porQuantidade = position({
+      id: "usd-qtd",
+      currency: "USD",
+      currentValue: null,
+      quantity: 10,
+      unitPrice: 100,
+      investedAmount: null,
+      institution: "B",
+    });
+    expect(positionValueView(porQuantidade, resumo).equivalent).toBe(
+      `≈ ${formatBRL(5400)}`,
+    );
+    const reais = position({ id: "brl", currentValue: 1200, institution: "A" });
+    const menor = position({ id: "brl-2", currentValue: 300, institution: "B" });
+
+    const [grupo] = groupPositionsByType([reais, menor, porQuantidade], resumo);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["usd-qtd", "brl", "brl-2"]);
+
+    const grupos = groupPositionsByInstitution([reais, menor, porQuantidade], resumo);
+    expect(grupos.map((g) => g.key)).toEqual(["B", "A"]);
+    expect(grupos[0].positions.map((p) => p.id)).toEqual(["usd-qtd", "brl-2"]);
+  });
+
+  it("a manual em dólar cotada pelo app compete pelo ≈ R$ que a linha mostra", () => {
+    const resumo = { exchangeRates: [CAMBIO] };
+    const cotada = position({
+      id: "vt",
+      source: "MANUAL",
+      code: "VT",
+      currency: "USD",
+      currentValue: null,
+      quantity: 2,
+      investedAmount: 1000,
+      institution: "B",
+    });
+    const cotacoes = { VT: quote({ priceBrl: 600 }) };
+    expect(positionValueView(cotada, resumo, cotacoes).equivalent).toBe(
+      `≈ ${formatBRL(1200)}`,
+    );
+    const reais = position({ id: "brl", currentValue: 500, institution: "A" });
+
+    // Sem as cotações ela ainda não tem valor e fica por último...
+    const [antes] = groupPositionsByType([cotada, reais], resumo);
+    expect(antes.positions.map((p) => p.id)).toEqual(["brl", "vt"]);
+    // ...com elas, R$ 1.200 passa na frente de R$ 500
+    const [grupo] = groupPositionsByType([reais, cotada], resumo, cotacoes);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["vt", "brl"]);
+
+    // Sem priceBrl vale o dólar do bloco macro: 2 × 118,32 × 5 = R$ 1.183,20
+    const [peloDolar] = groupPositionsByType(
+      [reais, cotada],
+      resumo,
+      { VT: quote({ priceBrl: null }) },
+      5,
+    );
+    expect(peloDolar.positions.map((p) => p.id)).toEqual(["vt", "brl"]);
+
+    // O TAMANHO da instituição não usa a cotação (o total ainda é decisão do
+    // dono): se usasse, B valeria R$ 1.200 e passaria na frente de A, R$ 500
+    const grupos = groupPositionsByInstitution([cotada, reais], resumo, cotacoes);
+    expect(grupos.map((g) => g.key)).toEqual(["A", "B"]);
+  });
+
+  it("posições sem valor ficam por último, na ordem em que vieram", () => {
+    const semValor = (id: string) =>
+      position({ id, currentValue: null, investedAmount: null });
+    const [grupo] = groupPositionsByType([
+      semValor("x"),
+      semValor("y"),
+      position({ id: "a", currentValue: 10 }),
+      semValor("z"),
+    ]);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["a", "x", "y", "z"]);
+  });
+
+  it("em reais também: sem valor atual, vale quantidade × preço", () => {
+    const [grupo] = groupPositionsByType([
+      position({ id: "a", currentValue: 500 }),
+      position({ id: "b", currentValue: null, quantity: 3, unitPrice: 400 }),
+    ]);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["b", "a"]);
   });
 });

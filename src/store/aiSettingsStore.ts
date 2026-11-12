@@ -12,6 +12,7 @@ import {
   saveAiSettings,
   testAiKey,
 } from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 
 interface AiSettingsState {
   catalog: AiProviderCatalog | null;
@@ -86,12 +87,14 @@ export const useAiSettingsStore = create<AiSettingsState>((set, get) => ({
     } catch (e) {
       // hasLoadedOnce continua falso: falha não é resposta, e marcar aqui
       // deixaria a tela presa no erro até o app reiniciar
+      const message = describeLoadFailure(
+        e,
+        describeFailure(e, "Não foi possível carregar as opções de IA."),
+      );
+      if (!message) return;
       set({
         isLoading: false,
-        error: describeFailure(
-          e,
-          "Não foi possível carregar as opções de IA.",
-        ),
+        error: message,
       });
     }
   },
@@ -104,9 +107,14 @@ export const useAiSettingsStore = create<AiSettingsState>((set, get) => ({
       set({ settings, isSaving: false, testResult: null });
       return true;
     } catch (e) {
+      const message = describeLoadFailure(
+        e,
+        describeFailure(e, "Não foi possível salvar a chave."),
+      );
+      if (!message) return false;
       set({
         isSaving: false,
-        error: describeFailure(e, "Não foi possível salvar a chave."),
+        error: message,
       });
       return false;
     }
@@ -122,9 +130,14 @@ export const useAiSettingsStore = create<AiSettingsState>((set, get) => ({
       set({ settings, isSaving: false, testResult: null });
       return true;
     } catch (e) {
+      const message = describeLoadFailure(
+        e,
+        describeFailure(e, "Não foi possível remover a chave."),
+      );
+      if (!message) return false;
       set({
         isSaving: false,
-        error: describeFailure(e, "Não foi possível remover a chave."),
+        error: message,
       });
       return false;
     }
@@ -140,9 +153,14 @@ export const useAiSettingsStore = create<AiSettingsState>((set, get) => ({
       set({ testResult: result, isTesting: false });
       return result;
     } catch (e) {
+      const message = describeLoadFailure(
+        e,
+        describeFailure(e, "Não foi possível testar a chave agora."),
+      );
+      if (!message) return null;
       set({
         isTesting: false,
-        error: describeFailure(e, "Não foi possível testar a chave agora."),
+        error: message,
       });
       return null;
     }

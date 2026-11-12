@@ -146,8 +146,13 @@ export const useWishStore = create<WishState>((set, get) => ({
         hasLoadedOnce: true,
       });
     } catch (e) {
+      const message = translateWishError(
+        e,
+        "Não foi possível carregar seus desejos.",
+      );
+      if (!message) return;
       set({
-        error: translateWishError(e, "Não foi possível carregar seus desejos."),
+        error: message,
         isLoading: false,
       });
     }
@@ -163,11 +168,13 @@ export const useWishStore = create<WishState>((set, get) => ({
         hasLoadedIncomeOnce: true,
       });
     } catch (e) {
+      const message = translateWishError(
+        e,
+        "Não foi possível carregar suas fontes de renda.",
+      );
+      if (!message) return;
       set({
-        incomeError: translateWishError(
-          e,
-          "Não foi possível carregar suas fontes de renda.",
-        ),
+        incomeError: message,
         isIncomeLoading: false,
       });
     }
@@ -183,11 +190,13 @@ export const useWishStore = create<WishState>((set, get) => ({
         hasLoadedCommittedOnce: true,
       });
     } catch (e) {
+      const message = translateWishError(
+        e,
+        "Não foi possível ver o que já está comprometido.",
+      );
+      if (!message) return;
       set({
-        committedError: translateWishError(
-          e,
-          "Não foi possível ver o que já está comprometido.",
-        ),
+        committedError: message,
         isCommittedLoading: false,
       });
     }
@@ -210,11 +219,13 @@ export const useWishStore = create<WishState>((set, get) => ({
       // Servidor de versão anterior responde 404: não é falha da tela, é
       // ausência da funcionalidade. Fica registrado, mas o padrão anterior
       // (se houver) continua de pé e nada vermelho aparece por causa disto
+      const message = translateWishError(
+        e,
+        "Não foi possível calcular o melhor dia para as compras.",
+      );
+      if (!message) return;
       set({
-        patternError: translateWishError(
-          e,
-          "Não foi possível calcular o melhor dia para as compras.",
-        ),
+        patternError: message,
         isPatternLoading: false,
         hasLoadedPatternOnce: true,
       });

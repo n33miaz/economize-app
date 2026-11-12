@@ -173,8 +173,13 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       });
     } catch (e) {
       if (requestId !== familyRequestId) return;
+      const message = translateFamilyError(
+        e,
+        "Não foi possível carregar sua casa.",
+      );
+      if (!message) return;
       set({
-        error: translateFamilyError(e, "Não foi possível carregar sua casa."),
+        error: message,
         isLoading: false,
       });
     }
@@ -357,11 +362,13 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
     } catch (e) {
       if (requestId !== analyticsRequestId) return;
       analyticsInFlight = null;
+      const message = translateFamilyError(
+        e,
+        "Não foi possível carregar a análise da casa.",
+      );
+      if (!message) return;
       set({
-        analyticsError: translateFamilyError(
-          e,
-          "Não foi possível carregar a análise da casa.",
-        ),
+        analyticsError: message,
         isAnalyticsLoading: false,
       });
     }
@@ -385,11 +392,13 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
     } catch (e) {
       if (requestId !== transactionsRequestId) return;
       transactionsInFlight = null;
+      const message = translateFamilyError(
+        e,
+        "Não foi possível carregar o extrato da casa.",
+      );
+      if (!message) return;
       set({
-        transactionsError: translateFamilyError(
-          e,
-          "Não foi possível carregar o extrato da casa.",
-        ),
+        transactionsError: message,
         isTransactionsLoading: false,
       });
     }

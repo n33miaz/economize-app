@@ -356,10 +356,38 @@ describe("datas de lançamento (UTC, nunca o fuso do aparelho)", () => {
 });
 
 describe("todayIso", () => {
-  it("usa os componentes UTC, e não o fuso do aparelho", () => {
-    // 23h de 31/12 em UTC-3 já é 1º de janeiro em UTC
-    expect(todayIso(new Date("2027-01-01T02:00:00Z"))).toBe("2027-01-01");
+  // Um relógio em que o dia local e o dia UTC discordam, sem depender do fuso
+  // de quem roda o teste: 23h30 de 31/03 no aparelho, 02h30 de 01/04 em UTC
+  const noiteDoDia31 = {
+    getFullYear: () => 2026,
+    getMonth: () => 2,
+    getDate: () => 31,
+    getUTCFullYear: () => 2026,
+    getUTCMonth: () => 3,
+    getUTCDate: () => 1,
+  } as unknown as Date;
+
+  it("é o dia do aparelho, e não o dia UTC", () => {
+    expect(todayIso(noiteDoDia31)).toBe("2026-03-31");
   });
+
+  it("à noite o ciclo ainda é o do dia local", () => {
+    expect(cycleMonthKeyContaining(1, todayIso(noiteDoDia31))).toBe("2026-03");
+  });
+
+  const emSaoPaulo =
+    Intl.DateTimeFormat().resolvedOptions().timeZone === "America/Sao_Paulo";
+  (emSaoPaulo ? it : it.skip)(
+    "23h30 em São Paulo ainda é o mesmo dia (relógio falso)",
+    () => {
+      jest.useFakeTimers().setSystemTime(new Date("2026-03-31T23:30:00-03:00"));
+      try {
+        expect(todayIso()).toBe("2026-03-31");
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
 });
 
 /**

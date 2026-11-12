@@ -9,7 +9,10 @@ import {
   getReviewQueue,
   recategorizePending,
 } from "../services/api";
-import { describeLoadFailure } from "../services/requestFailure";
+import {
+  describeLoadFailure,
+  describeSaveFailure,
+} from "../services/requestFailure";
 import { applyTransactionToGroups } from "../utils/transactions";
 
 /**
@@ -88,8 +91,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         pendingCount: groups.reduce((sum, g) => sum + g.transactions.length, 0),
       });
     } catch (e) {
+      const message = describeLoadFailure(
+        e,
+        "Falha ao carregar a fila de revisão.",
+      );
+      if (!message) return;
       set({
-        error: describeLoadFailure(e, "Falha ao carregar a fila de revisão."),
+        error: message,
         isLoading: false,
       });
     }
@@ -124,9 +132,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         pendingCount: groups.reduce((sum, g) => sum + g.transactions.length, 0),
       });
       return outcome.confirmed;
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || "Falha ao aplicar revisão.", isApplying: false });
+    } catch (e) {
+      const message = describeSaveFailure(e, "Falha ao aplicar revisão.");
+      if (!message) return 0;
+      set({
+        error: message,
+        isApplying: false,
+      });
       return 0;
     }
   },
@@ -155,9 +167,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         failedItems.push(...chunk);
         // Não interrompe: uma leva ruim (uma categoria apagada no meio) não é
         // razão para desistir das outras vinte que iriam passar
-        set({
-          error: describeLoadFailure(e, "Parte das escolhas não foi salva."),
-        });
+        const message = describeLoadFailure(
+          e,
+          "Parte das escolhas não foi salva.",
+        );
+        // Sessão encerrada: as levas seguintes seriam de quem já saiu
+        if (!message) return { confirmed, failedItems };
+        set({ error: message });
       }
       set({
         applyProgress: {
@@ -208,9 +224,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
             : "Nada novo: o motor não reconheceu nenhuma das que faltam.",
       };
     } catch (e) {
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível reexaminar a fila.",
+      );
+      if (!message) return { ok: false, resolved: 0, message: "" };
       set({
         isApplying: false,
-        error: describeLoadFailure(e, "Não foi possível reexaminar a fila."),
+        error: message,
       });
       return {
         ok: false,
@@ -243,9 +264,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         ),
       });
       return outcome.confirmed;
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || "Falha ao confirmar tudo.", isApplying: false });
+    } catch (e) {
+      const message = describeSaveFailure(e, "Falha ao confirmar tudo.");
+      if (!message) return 0;
+      set({
+        error: message,
+        isApplying: false,
+      });
       return 0;
     }
   },

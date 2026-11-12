@@ -5,6 +5,7 @@
 // "semanal não tem dia do mês" só depois de um 400 é jogar o erro do servidor
 // na cara de quem está preenchendo o formulário.
 
+import { isSessionEnded } from "../services/requestFailure";
 import type {
   DetectionSummary,
   ForecastItem,
@@ -582,6 +583,8 @@ export function translateRecurrenceError(
   error: unknown,
   fallback: string,
 ): string {
+  // Resposta de quem saiu: frase vazia, e o store não grava nada
+  if (isSessionEnded(error)) return "";
   const problem = readProblem(error);
   if (!problem.detail) return fallback;
   const hit = ERROR_TRANSLATIONS.find((rule) => rule.match.test(problem.detail as string));
