@@ -324,7 +324,8 @@ describe("groupPositionsByType", () => {
       position({ id: "a", type: "ETF", currentValue: 100 }),
       position({ id: "b", type: "FIXED_INCOME", currentValue: 50 }),
       position({ id: "c", type: "FIXED_INCOME", currentValue: 500 }),
-      position({ id: "d", type: "FIXED_INCOME", currentValue: null }),
+      // sem valor NENHUM: com o investido a linha mostraria esse número
+      position({ id: "d", type: "FIXED_INCOME", currentValue: null, investedAmount: null }),
       position({ id: "e", type: "XPTO" as never, currentValue: 1 }),
     ]);
     expect(groups.map((g) => g.type)).toEqual(["FIXED_INCOME", "ETF", "OTHER"]);
@@ -368,7 +369,7 @@ describe("groupPositionsByInstitution", () => {
 
   it("posição sem valor não empurra a instituição para cima", () => {
     const groups = groupPositionsByInstitution([
-      position({ id: "a", institution: "XP", currentValue: null }),
+      position({ id: "a", institution: "XP", currentValue: null, investedAmount: null }),
       position({ id: "b", institution: "Nubank", currentValue: 10 }),
     ]);
 
@@ -992,5 +993,39 @@ describe("moeda estrangeira — a posição na moeda dela", () => {
       { exchangeRates: [CAMBIO] },
     );
     expect(grupos.map((g) => g.key)).toEqual(["B", "A"]);
+  });
+
+  it("a ordem usa o valor que a linha mostra: quantidade × preço quando falta o valor atual", () => {
+    const resumo = { exchangeRates: [CAMBIO] };
+    // US$ 10 × 100 = US$ 1.000 → R$ 5.400, o mesmo número da linha
+    const porQuantidade = position({
+      id: "usd-qtd",
+      currency: "USD",
+      currentValue: null,
+      quantity: 10,
+      unitPrice: 100,
+      investedAmount: null,
+      institution: "B",
+    });
+    expect(positionValueView(porQuantidade, resumo).equivalent).toBe(
+      `≈ ${formatBRL(5400)}`,
+    );
+    const reais = position({ id: "brl", currentValue: 1200, institution: "A" });
+    const menor = position({ id: "brl-2", currentValue: 300, institution: "B" });
+
+    const [grupo] = groupPositionsByType([reais, menor, porQuantidade], resumo);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["usd-qtd", "brl", "brl-2"]);
+
+    const grupos = groupPositionsByInstitution([reais, menor, porQuantidade], resumo);
+    expect(grupos.map((g) => g.key)).toEqual(["B", "A"]);
+    expect(grupos[0].positions.map((p) => p.id)).toEqual(["usd-qtd", "brl-2"]);
+  });
+
+  it("em reais também: sem valor atual, vale quantidade × preço", () => {
+    const [grupo] = groupPositionsByType([
+      position({ id: "a", currentValue: 500 }),
+      position({ id: "b", currentValue: null, quantity: 3, unitPrice: 400 }),
+    ]);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["b", "a"]);
   });
 });

@@ -353,6 +353,20 @@ export interface PositionValueView {
 }
 
 /**
+ * Valor na moeda da própria posição: o informado; na falta dele, e fora da
+ * manual, quantidade × preço, e por fim o investido. Um lugar só, para a
+ * linha e a ordem da lista não discordarem.
+ */
+function nativeValueOf(position: InvestmentPosition): number | null {
+  if (isFinite_(position.currentValue)) return position.currentValue;
+  if (position.source === "MANUAL") return null;
+  if (isFinite_(position.quantity) && isFinite_(position.unitPrice)) {
+    return position.quantity * position.unitPrice;
+  }
+  return isFinite_(position.investedAmount) ? position.investedAmount : null;
+}
+
+/**
  * Valor da posição para a lista.
  *
  * O defeito que isto conserta: a posição em dólar do conector era devolvida
@@ -442,16 +456,7 @@ export function positionValueView(
 
   const manual = position.source === "MANUAL";
   const rate = exchangeRateFor(summary, currency);
-  let native: number | null = isFinite_(position.currentValue)
-    ? position.currentValue
-    : null;
-  if (native === null && !manual) {
-    if (isFinite_(position.quantity) && isFinite_(position.unitPrice)) {
-      native = position.quantity * position.unitPrice;
-    } else if (isFinite_(position.investedAmount)) {
-      native = position.investedAmount;
-    }
-  }
+  const native = nativeValueOf(position);
 
   // Manual sem valor atual (ou servidor antigo, sem câmbio): só a cotação do
   // papel dá o valor, e ela já chega em reais
@@ -496,12 +501,13 @@ function orderingValue(
   position: InvestmentPosition,
   summary: FxSummary,
 ): number | null {
-  if (!isFinite_(position.currentValue)) return null;
   const currency = currencyOf(position);
-  if (currency === "BRL") return position.currentValue;
+  // O mesmo valor que a linha mostra, sem as cotações que só a tela tem
+  if (currency === "BRL") return positionCurrentValue(position);
   if ((summary?.unconverted ?? []).some((item) => item.id === position.id)) return null;
+  const native = nativeValueOf(position);
   const rate = exchangeRateFor(summary, currency);
-  return rate ? position.currentValue * rate.rate : null;
+  return native !== null && rate ? native * rate.rate : null;
 }
 
 // --- Agrupamento ---
