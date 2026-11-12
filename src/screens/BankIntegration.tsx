@@ -43,6 +43,7 @@ import type {
   BalanceFinding,
   BankTransaction,
   FamilyTransaction,
+  SkippedConnection,
   StatementUploadResult,
 } from "../services/api";
 import FlipCard, { useFlip } from "../components/FlipCard";
@@ -155,6 +156,25 @@ const BANK_SHORTCUTS = [
 
 function plural(n: number, one: string, many: string) {
   return n === 1 ? one : many;
+}
+
+/**
+ * Frase curta para os bancos que a sincronização pulou. `NOT_FOUND` e
+ * `NEEDS_USER_ACTION` têm o mesmo remédio (reconectar), por isso a frase não
+ * distingue o motivo. Conexão antiga pode vir sem nome — vira "um banco", que
+ * ainda diz que algo ficou de fora.
+ */
+export function avisoDeBancosPulados(
+  puladas: readonly SkippedConnection[],
+): string {
+  const nomes = puladas.map((p) => p.name?.trim() || "um banco");
+  const lista =
+    nomes.length > 1
+      ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`
+      : nomes[0];
+  return nomes.length > 1
+    ? `${lista} ficaram de fora: reconecte para voltar a sincronizar.`
+    : `${lista} ficou de fora: reconecte para voltar a sincronizar.`;
 }
 
 // Tratamento numérico do app (família + tabular-nums via token); o corpo 24
@@ -690,27 +710,45 @@ export default function BankIntegration() {
       // recarregar aqui, o primeiro cartão conectado só apareceria (com selo,
       // filtro e faturas) depois de reabrir o app
       await fetchAccounts(true);
+      let resumo: string;
+      let tipo: "success" | "info";
       if (result.transactionsImported > 0) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast(
-          `${result.transactionsImported} ${plural(result.transactionsImported, "transação importada", "transações importadas")}.`,
-          "success",
-        );
+        resumo = `${result.transactionsImported} ${plural(result.transactionsImported, "transação importada", "transações importadas")}.`;
+        tipo = "success";
       } else if (result.reconciled > 0) {
         // reconciliada não é falha: o extrato já tinha o mesmo lançamento
-        showToast(
-          `Nada novo — ${result.reconciled} ${plural(result.reconciled, "lançamento já constava", "lançamentos já constavam")}.`,
-          "info",
-        );
+        resumo = `Nada novo — ${result.reconciled} ${plural(result.reconciled, "lançamento já constava", "lançamentos já constavam")}.`;
+        tipo = "info";
       } else {
-        showToast("Nenhuma transação nova no período.", "info");
+        resumo = "Nenhuma transação nova no período.";
+        tipo = "info";
       }
+      const puladas = result.skippedConnections ?? [];
+      if (puladas.length > 0) {
+        // Banco pulado é sincronização PARCIAL: "3 importadas" sozinho fazia a
+        // pessoa achar que todos os bancos estavam em dia. Vai na MESMA frase
+        // porque o toast tem uma vaga só — um segundo aviso apagaria o resumo
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        showToast(`${resumo} ${avisoDeBancosPulados(puladas)}`, "warning");
+        // A API já gravou a saúde dessas conexões; recarregar mantém a lista
+        // (e o "sincronizado em") coerente com o que acabou de acontecer
+        await fetchItems();
+        return;
+      }
+      if (tipo === "success") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      showToast(resumo, tipo);
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast(
         useConnectorStore.getState().error || "Falha ao sincronizar.",
         "error",
       );
+      // A falha pode ter mudado o estado das conexões no servidor (a API grava
+      // "precisa reconectar" ANTES de importar): sem recarregar, a lista
+      // seguiria mostrando o retrato de antes da tentativa
+      await fetchItems();
     }
   };
 
