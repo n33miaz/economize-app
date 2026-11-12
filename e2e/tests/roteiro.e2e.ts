@@ -25,6 +25,7 @@ import {
   cadastrar,
   campo,
   captura,
+  centralizar,
   dispensarFolhaDoPote,
   entrar,
   irPara,
@@ -153,7 +154,7 @@ test("b. importa o extrato OFX sintético pela tela de Extrato", async () => {
 
   await vigia.conferirTela(page, "Extrato com dados");
   // a captura mostra os lançamentos, não só o resumo do topo
-  await page.getByRole("button", { name: /Abrir detalhes e apelido$/ }).nth(2).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await centralizar(page.getByRole("button", { name: /Abrir detalhes e apelido$/ }).nth(2));
   await captura(page, "extrato-com-dados");
 });
 
@@ -290,8 +291,7 @@ test("e. Investimentos: posição manual em BRL e em USD", async () => {
   await vigia.conferirTela(page, "Investimentos com BRL e USD");
   // A captura mostra as duas posições, já sem o aviso de "cadastrada" por cima
   await avisoSaiuDaTela(page, "Posição cadastrada.");
-  await linhaCdb.evaluate((el) => el.scrollIntoView({ block: "start" }));
-  await linhaEtf.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await centralizar(linhaEtf);
   await captura(page, "investimentos-brl-e-usd-sem-cambio");
 });
 

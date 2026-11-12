@@ -10,6 +10,7 @@ import {
   botao,
   brl,
   captura,
+  centralizar,
   dispensarFolhaDoPote,
   entrar,
   irPara,
@@ -73,7 +74,7 @@ test("e. Investimentos com câmbio: a posição em dólar ganha o equivalente em
   await expect(page.getByLabel(/^Valor atual: /)).toHaveAccessibleName(brl(CDB.atual));
 
   await vigia.conferirTela(page, "Investimentos com câmbio");
-  await linhaEtf.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await centralizar(linhaEtf);
   await captura(page, "investimentos-brl-e-usd-com-cambio");
 });
 

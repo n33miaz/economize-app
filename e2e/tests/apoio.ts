@@ -202,6 +202,26 @@ export async function rolarAteOFim(alvo: Locator) {
   await alvo.page().waitForTimeout(600);
 }
 
+/**
+ * Traz o elemento para o meio da tela rolando SÓ na vertical. O
+ * `scrollIntoView` do navegador também arrasta o paginador das abas alguns
+ * pixels para o lado, e a captura sairia torta.
+ */
+export async function centralizar(alvo: Locator) {
+  await alvo.evaluate((el) => {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if ((o === "auto" || o === "scroll") && p.scrollHeight > p.clientHeight + 4) {
+        const r = el.getBoundingClientRect();
+        const pr = p.getBoundingClientRect();
+        p.scrollTop += r.top + r.height / 2 - (pr.top + pr.height / 2);
+        return;
+      }
+    }
+  });
+  await alvo.page().waitForTimeout(400);
+}
+
 /** O aviso flutuante já saiu da tela? (ele fica no DOM, transladado para fora) */
 export async function avisoSaiuDaTela(page: Page, texto: string) {
   await expect(page.getByText(texto, { exact: true })).not.toBeInViewport({ timeout: 10_000 });
