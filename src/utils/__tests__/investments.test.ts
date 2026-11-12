@@ -1021,6 +1021,58 @@ describe("moeda estrangeira — a posição na moeda dela", () => {
     expect(grupos[0].positions.map((p) => p.id)).toEqual(["usd-qtd", "brl-2"]);
   });
 
+  it("a manual em dólar cotada pelo app compete pelo ≈ R$ que a linha mostra", () => {
+    const resumo = { exchangeRates: [CAMBIO] };
+    const cotada = position({
+      id: "vt",
+      source: "MANUAL",
+      code: "VT",
+      currency: "USD",
+      currentValue: null,
+      quantity: 2,
+      investedAmount: 1000,
+      institution: "B",
+    });
+    const cotacoes = { VT: quote({ priceBrl: 600 }) };
+    expect(positionValueView(cotada, resumo, cotacoes).equivalent).toBe(
+      `≈ ${formatBRL(1200)}`,
+    );
+    const reais = position({ id: "brl", currentValue: 500, institution: "A" });
+
+    // Sem as cotações ela ainda não tem valor e fica por último...
+    const [antes] = groupPositionsByType([cotada, reais], resumo);
+    expect(antes.positions.map((p) => p.id)).toEqual(["brl", "vt"]);
+    // ...com elas, R$ 1.200 passa na frente de R$ 500
+    const [grupo] = groupPositionsByType([reais, cotada], resumo, cotacoes);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["vt", "brl"]);
+
+    // Sem priceBrl vale o dólar do bloco macro: 2 × 118,32 × 5 = R$ 1.183,20
+    const [peloDolar] = groupPositionsByType(
+      [reais, cotada],
+      resumo,
+      { VT: quote({ priceBrl: null }) },
+      5,
+    );
+    expect(peloDolar.positions.map((p) => p.id)).toEqual(["vt", "brl"]);
+
+    // O TAMANHO da instituição não muda com a cotação: B segue valendo zero
+    // na soma (decisão do total ainda é do dono), e A continua na frente
+    const grupos = groupPositionsByInstitution([cotada, reais], resumo, cotacoes);
+    expect(grupos.map((g) => g.key)).toEqual(["A", "B"]);
+  });
+
+  it("posições sem valor ficam por último, na ordem em que vieram", () => {
+    const semValor = (id: string) =>
+      position({ id, currentValue: null, investedAmount: null });
+    const [grupo] = groupPositionsByType([
+      semValor("x"),
+      semValor("y"),
+      position({ id: "a", currentValue: 10 }),
+      semValor("z"),
+    ]);
+    expect(grupo.positions.map((p) => p.id)).toEqual(["a", "x", "y", "z"]);
+  });
+
   it("em reais também: sem valor atual, vale quantidade × preço", () => {
     const [grupo] = groupPositionsByType([
       position({ id: "a", currentValue: 500 }),

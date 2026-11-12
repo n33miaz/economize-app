@@ -215,8 +215,8 @@ export default function Investments() {
     return nomes.size > 1;
   }, [positions.data]);
   const groups = useMemo(
-    () => groupPositions(positions.data ?? [], corte, summary.data),
-    [positions.data, corte, summary.data],
+    () => groupPositions(positions.data ?? [], corte, summary.data, quotes, usdBrl),
+    [positions.data, corte, summary.data, quotes, usdBrl],
   );
   const cambioVelho = useMemo(
     () => staleExchangeNotices(summary.data),
