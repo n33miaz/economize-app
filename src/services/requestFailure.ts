@@ -158,6 +158,50 @@ function readDetail(error: unknown): string | null {
     : null;
 }
 
+/**
+ * Prefixo do `type` dos ProblemDetail que a PRÓPRIA API escreve (o
+ * `GlobalExceptionHandler`). É o que separa "frase nossa, em pt-BR, pensada
+ * para a pessoa" de qualquer outro corpo de erro.
+ */
+const OWN_PROBLEM_TYPE_PREFIX = "https://economize.app/erros/";
+/**
+ * O `type` do 500 genérico e do `ResponseStatusException` 5xx: o `detail`
+ * dele é a frase fixa "erro inesperado" ou a reason phrase em inglês
+ * ("Service Unavailable") — nada que diga à pessoa o que fazer.
+ */
+const INTERNAL_ERROR_TYPE = `${OWN_PROBLEM_TYPE_PREFIX}erro-interno`;
+/**
+ * 503 que a API levantou de propósito (`ServiceUnavailableException`): a
+ * leitura de um banco falhou no provedor, ou falta configuração. O `detail`
+ * já nomeia o banco e diz quando tentar de novo.
+ */
+const SERVICE_UNAVAILABLE_TYPE = `${OWN_PROBLEM_TYPE_PREFIX}servico-indisponivel`;
+
+function readProblemType(error: unknown): string | null {
+  const type = (error as { response?: { data?: { type?: unknown } } } | null)
+    ?.response?.data?.type;
+  return typeof type === "string" ? type : null;
+}
+
+/**
+ * O `detail` de um 5xx, só quando dá para mostrá-lo.
+ *
+ * <p>Num 4xx o `detail` é sempre a resposta de negócio da API e já era
+ * mostrado. Num 5xx não: pode ser a reason phrase em inglês, a frase genérica
+ * do 500, ou o corpo de um proxy. A regra é confiar no `type` — o
+ * ProblemDetail tem de ser NOSSO (prefixo `economize.app/erros/`) e de uma
+ * categoria classificada, não o `erro-interno` de quando algo quebrou sem
+ * explicação. Foi assim que o 503 da sincronização ("Não foi possível ler
+ * Nubank no provedor agora; nada foi importado") deixou de virar "Não
+ * conseguimos concluir agora" e perder o nome do banco.
+ */
+function readTrustedServerDetail(error: unknown): string | null {
+  const type = readProblemType(error);
+  if (!type || !type.startsWith(OWN_PROBLEM_TYPE_PREFIX)) return null;
+  if (type === INTERNAL_ERROR_TYPE) return null;
+  return readDetail(error);
+}
+
 function browserIsOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
@@ -232,7 +276,15 @@ export function describeRequestFailure(error: unknown): RequestFailure {
   ) {
     return failure("waking", status, true);
   }
-  if (status >= 500) return failure("server", status, true);
+  if (status >= 500) {
+    const detail = readTrustedServerDetail(error);
+    if (detail === null) return failure("server", status, true);
+    // O 503 classificado diz "agora não, tente em alguns minutos": repetir
+    // em um segundo só refaria o trabalho todo (na sincronização, a leitura
+    // de cada banco no provedor, gastando cota) para cair no mesmo lugar
+    const retryable = readProblemType(error) !== SERVICE_UNAVAILABLE_TYPE;
+    return failure("server", status, retryable, { message: detail });
+  }
 
   return failure("client", status, false, {
     message: readDetail(error) ?? FAILURE_MESSAGES.client,
@@ -272,10 +324,19 @@ export function describeLoadFailure(error: unknown, fallback: string): string {
  * O `detail` do servidor diz a causa real — nome duplicado, por exemplo — e
  * vence a frase do domínio. Sem ele, vale a mesma leitura da falha de carga.
  * Vazia para a sessão encerrada: quem grava sai sem escrever nada.
+ *
+ * <p>Num 5xx o `detail` só vale se for confiável (ver
+ * `readTrustedServerDetail`): antes qualquer `detail` passava, e um
+ * `ResponseStatusException` chegava à tela como "Service Unavailable".
  */
 export function describeSaveFailure(error: unknown, fallback: string): string {
   if (isSessionEnded(error)) return "";
-  return readDetail(error) ?? describeLoadFailure(error, fallback);
+  const status = readStatus(error);
+  const detail =
+    status !== null && status >= 500
+      ? readTrustedServerDetail(error)
+      : readDetail(error);
+  return detail ?? describeLoadFailure(error, fallback);
 }
 
 /** Teto da mensagem no log: o bastante para reconhecer, curto para não vazar. */

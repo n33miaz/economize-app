@@ -215,9 +215,12 @@ api.interceptors.response.use(
 
     // 5xx que não é hibernação: uma repetição, em silêncio. `error.config`
     // pode vir undefined (falha antes do request montar); sem a guarda o
-    // TypeError aqui mascarava o erro original
+    // TypeError aqui mascarava o erro original. `retryable` fica de fora no
+    // 503 que a própria API classificou ("tente em alguns minutos"): repetir
+    // a sincronização em um segundo releria todos os bancos à toa
     if (
       failure.kind === "server" &&
+      failure.retryable &&
       originalRequest &&
       !originalRequest._retried
     ) {
