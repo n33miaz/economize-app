@@ -14,7 +14,8 @@ const RESOLVER_EXTENSIONS = [
 module.exports = {
   root: true,
   extends: ["expo"],
-  ignorePatterns: ["dist/*", "mock-worklets/*", "*.config.js"],
+  // `e2e/` é um pacote à parte (Playwright), com dependências próprias
+  ignorePatterns: ["dist/*", "mock-worklets/*", "*.config.js", "e2e/*"],
   overrides: [
     {
       files: ["**/*.ts", "**/*.tsx"],

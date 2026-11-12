@@ -44,3 +44,7 @@ yarn-error.*
 
 # Relatório de cobertura: gerado a cada `jest --coverage`, nunca versionado
 coverage/
+
+# e2e: saídas da rodada de ponta a ponta (capturas, logs, relatório)
+e2e/artifacts/
+e2e/node_modules/
