@@ -51,7 +51,10 @@ import {
   slideRightTransition,
 } from "./transitions";
 import SegmentedTopTabBar from "./SegmentedTopTabBar";
-import { pagerScrollLockStyle } from "./pagerScrollLock";
+import {
+  pagerScrollLockStyle,
+  restingShiftInterpolator,
+} from "./pagerScrollLock";
 import TabBarWithIndicator from "./TabBarWithIndicator";
 import AnimatedTabIcon from "./AnimatedTabIcon";
 import SideRail from "./SideRail";
@@ -187,6 +190,9 @@ const renderSegmented = (props: MaterialTopTabBarProps) => (
 // `pagerScrollLock.ts`. Em escopo de módulo para o navegador receber sempre o
 // mesmo objeto.
 const pinnedPagerStyle = pagerScrollLockStyle();
+// Pelo mesmo motivo, o "shift" da barra de baixo não deixa aba invisível
+// parada 50 px à direita na web — ver `restingShiftInterpolator`
+const bottomTabShift = restingShiftInterpolator();
 
 // Moedas e Índices
 function IndicatorsTabs() {
@@ -307,6 +313,7 @@ function MainTabs() {
         // "shift" desliza + esmaece na troca de tab — mesma família de movimento
         // da entrada do assistente, no lugar do corte seco do fade
         animation: reducedMotion ? "none" : "shift",
+        sceneStyleInterpolator: bottomTabShift,
         // Na web o React Navigation renderiza cada aba como <a href="/Main/...">
         // e o botão dele chama preventDefault no clique. Trocar por um
         // TouchableOpacity cru tirava esse preventDefault: o navegador seguia o
