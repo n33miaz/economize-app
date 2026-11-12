@@ -169,11 +169,19 @@ test("b2. abas de Finanças não saem do lugar com scrollIntoView ou foco", asyn
   // As abas de cima não publicam aria-selected no web (só a barra de baixo
   // publica): quem prova que a Carteira continua na tela é o elemento do
   // Extrato seguir inteiro fora dela, conferido no fim
-  await tocarAba(page, "Carteira");
+  // O `b` termina com o Extrato rolado, e rolar esconde a régua de cima junto
+  // com a ilha: como quem usa o app, volta a lista ao topo antes de tocar
   const doExtrato = page.getByRole("button", {
     name: "Ver de onde estes números foram somados",
     includeHidden: true,
   });
+  await doExtrato.evaluate((el) => {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if (o === "auto" || o === "scroll") p.scrollTop = 0;
+    }
+  });
+  await tocarAba(page, "Carteira");
   await expect(doExtrato).toHaveCount(1);
 
   await doExtrato.evaluate((el) => el.scrollIntoView({ block: "nearest", inline: "start" }));

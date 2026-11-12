@@ -291,6 +291,21 @@ describe("SegmentedTopTabBar", () => {
     expect(colapso).not.toMatch(/translate/);
   });
 
+  it("trocar de aba revela a régua e a ilha escondidas pela rolagem", () => {
+    // As cenas vizinhas continuam montadas: sem isto, rolar o Extrato e ir
+    // para uma aba curta deixava a navegação escondida sem ter o que rolar
+    const { props: p0 } = props(1);
+    const { rerender } = render(<SegmentedTopTabBar {...p0} />);
+    act(() => {
+      useTabBarStore.setState({ escondida: true });
+    });
+
+    const { props: p1 } = props(0);
+    rerender(<SegmentedTopTabBar {...p1} />);
+
+    expect(useTabBarStore.getState().escondida).toBe(false);
+  });
+
   it("com movimento reduzido o colapso é seco", () => {
     mockReducedMotion.mockReturnValue(true);
     montarMedido();
