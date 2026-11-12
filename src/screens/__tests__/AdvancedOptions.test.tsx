@@ -107,7 +107,7 @@ describe("Opções avançadas", () => {
     expect(useToastStore.getState().message).toContain("350 de investimento");
     expect(useToastStore.getState().message).toContain("8 estorno(s)");
     // sem recarregar, a An\u00e1lise mostraria o n\u00famero de antes
-    await waitFor(() => expect(buscar).toHaveBeenCalled());
+    await waitFor(() => expect(buscar).toHaveBeenCalledWith(true));
   });
 
   it("extrato j\u00e1 limpo n\u00e3o vira lista de zeros", async () => {

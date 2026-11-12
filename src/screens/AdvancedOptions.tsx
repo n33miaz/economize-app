@@ -99,8 +99,9 @@ export default function AdvancedOptions() {
         "success",
       );
       // A previsão e a Análise leem estes números: sem recarregar, a tela
-      // seguinte mostraria o de antes
-      await useBankStore.getState().fetchTransactions();
+      // seguinte mostraria o de antes. `force`: a faxina é escrita no servidor,
+      // e a lista em cache (ou em voo) é anterior a ela
+      await useBankStore.getState().fetchTransactions(true);
     } catch {
       showToast("Não consegui reprocessar agora. Tente de novo.", "error");
     } finally {

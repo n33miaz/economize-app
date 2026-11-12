@@ -168,7 +168,7 @@ describe("Vigias", () => {
 
     expect(desfazer).toHaveBeenCalledWith("r1");
     // Sem recarregar, a Análise mostraria o número de antes
-    await waitFor(() => expect(recarregar).toHaveBeenCalled());
+    await waitFor(() => expect(recarregar).toHaveBeenCalledWith(true));
   });
 
   it("falha ao ler se explica e oferece tentar de novo", async () => {
