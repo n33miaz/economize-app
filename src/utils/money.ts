@@ -175,3 +175,37 @@ export function parseAmount(raw: string): number | null {
   const value = Number(normalized);
   return Number.isFinite(value) ? value : null;
 }
+
+// Dois ou mais pontos sem vírgula só fazem sentido como milhar ("1.234.567")
+const MILHAR_EM_GRUPOS = /^-?\d{1,3}(\.\d{3}){2,}$/;
+
+/**
+ * Texto do campo de QUANTIDADE (ou de outro número que não é dinheiro, como a
+ * taxa) → número. Não é `parseAmount`: quantidade tem até 8 casas e quase
+ * nunca chega a milhares, então "1.234" unidades de uma cripto é 1,234 — ler
+ * como milhar (a regra do dinheiro) gravava mil vezes mais.
+ *
+ * | Entrada          | Lê        | Por quê                                  |
+ * |------------------|-----------|------------------------------------------|
+ * | "0,5", "1,234"   | 0.5, 1.234| vírgula é decimal                        |
+ * | "1.234,5"        | 1234.5    | com vírgula, os pontos são milhar        |
+ * | "1.234", "0.5"   | 1.234, 0.5| um ponto só é decimal                    |
+ * | "1.234.567"      | 1234567   | dois ou mais pontos sem vírgula: milhar  |
+ * | "", "abc", "1.2.3", "1,2,3" | null | não é número que se leia          |
+ */
+export function parseQuantity(raw: string): number | null {
+  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
+  if (!/\d/.test(cleaned)) return null;
+  let normalized: string;
+  if (cleaned.includes(",")) {
+    // Mais de uma vírgula vira NaN no Number abaixo e sai null
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if ((cleaned.match(/\./g) ?? []).length >= 2) {
+    if (!MILHAR_EM_GRUPOS.test(cleaned)) return null;
+    normalized = cleaned.replace(/\./g, "");
+  } else {
+    normalized = cleaned;
+  }
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}

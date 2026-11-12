@@ -31,6 +31,7 @@ import {
   formatBRLCompact,
   formatDecimal,
   parseAmount,
+  parseQuantity,
 } from "../utils/money";
 import { valorDoAporte } from "../utils/walletValue";
 import { describeSaveFailure } from "../services/requestFailure";
@@ -191,9 +192,9 @@ export default function Wallet() {
       return;
     }
 
-    // Leitura comum de valor: o `parseFloat` com troca de vírgula lia
-    // "1.234,56" como 1,234 e gravava o preço mil vezes menor
-    const quantity = parseAmount(amount);
+    // Preço é dinheiro ("1.234,56" é mil e tanto; o `parseFloat` lia 1,234);
+    // quantidade não: "1.234" unidades de cripto é 1,234, não 1234
+    const quantity = parseQuantity(amount);
     const unitPrice = parseAmount(price);
     // Rejeita vazio, zero e negativo ANTES de salvar: a transação inválida
     // virava "R$ NaN" no saldo e fatia quebrada na pizza

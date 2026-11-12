@@ -137,18 +137,20 @@ describe("Carteira", () => {
     );
   };
 
-  it("lê \"1.234,56\" como mil e tanto, não como 1,234", async () => {
+  // Preço é dinheiro ("1.234,56" é mil e tanto); quantidade não ("1.234"
+  // unidades de cripto é 1,234 — a regra do dinheiro gravaria 1234)
+  it("lê preço como dinheiro e quantidade como número", async () => {
     const addTransaction = jest.fn().mockResolvedValue(undefined);
     useWalletStore.setState({ addTransaction } as never);
 
     const tela = montar();
-    await preencher(tela, "2.500", "1.234,56");
+    await preencher(tela, "1.234", "1.234,56");
     await act(async () => {
       fireEvent.press(tela.getByLabelText("Salvar investimento"));
     });
 
     expect(addTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ quantity: 2500, priceAtTransaction: 1234.56 }),
+      expect.objectContaining({ quantity: 1.234, priceAtTransaction: 1234.56 }),
     );
   });
 

@@ -4,6 +4,7 @@ import {
   formatDecimal,
   formatPercent,
   parseAmount,
+  parseQuantity,
   SEM_VALOR,
 } from "../money";
 
@@ -214,4 +215,29 @@ describe("valor ausente", () => {
     expect(plain(formatBRL(0))).toBe("R$ 0,00");
     expect(formatPercent(0)).toBe("0,00%");
   });
+});
+
+// Quantidade não é dinheiro: "1.234" unidades de cripto é 1,234, não 1234
+describe("parseQuantity — leitura de quantidade", () => {
+  it.each([
+    ["0,5", 0.5],
+    ["1,234", 1.234],
+    ["0,00012345", 0.00012345],
+    ["1.234,5", 1234.5],
+    ["1.234", 1.234],
+    ["0.5", 0.5],
+    ["10", 10],
+    ["1.234.567", 1234567],
+    ["  2,5  ", 2.5],
+    ["-0,5", -0.5],
+  ])("%j → %p", (entrada, esperado) => {
+    expect(parseQuantity(entrada)).toBe(esperado);
+  });
+
+  it.each(["", "  ", "abc", "-", "1.2.3", "1,2,3", "1.23.456"])(
+    "%j → null",
+    (entrada) => {
+      expect(parseQuantity(entrada)).toBeNull();
+    },
+  );
 });

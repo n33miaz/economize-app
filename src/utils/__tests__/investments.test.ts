@@ -35,7 +35,6 @@ import {
   normalizeInvestmentType,
   normalizeTicker,
   parseDateInput,
-  parseDecimalInput,
   currencyOf,
   exchangeRateFor,
   formatMoney,
@@ -597,12 +596,46 @@ describe("datas", () => {
 });
 
 describe("formulário da posição manual", () => {
-  it("aceita vírgula e ponto como decimal", () => {
-    expect(parseDecimalInput("1.234,56")).toBe(1234.56);
-    expect(parseDecimalInput("1234.56")).toBe(1234.56);
-    expect(parseDecimalInput("12,5")).toBe(12.5);
-    expect(parseDecimalInput("")).toBeNull();
-    expect(parseDecimalInput("abc")).toBeNaN();
+  // Dinheiro pela regra do dinheiro, quantidade e taxa pela de número: a
+  // leitura antiga dava "1.000" reais como 1
+  const ler = (campos: Partial<typeof EMPTY_POSITION_FORM>) =>
+    validatePositionForm({
+      ...EMPTY_POSITION_FORM,
+      name: "Posição",
+      ...campos,
+    });
+
+  it.each([
+    ["investedAmount", "1.000", 1000],
+    ["investedAmount", "1.234,56", 1234.56],
+    ["investedAmount", "1234.56", 1234.56],
+    ["currentValue", "2.500", 2500],
+    ["unitPrice", "118,32", 118.32],
+    ["quantity", "1.234", 1.234],
+    ["quantity", "0,5", 0.5],
+    ["quantity", "1.234.567", 1234567],
+    ["rate", "12,5", 12.5],
+    ["rate", "10.75", 10.75],
+  ] as const)("%s %j → %p", (campo, texto, esperado) => {
+    const result = ler({
+      investedAmount: "100",
+      quantity: "1",
+      unitPrice: "1",
+      indexer: "CDI",
+      [campo]: texto,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.payload[campo]).toBe(esperado);
+  });
+
+  it("vazio é não informado; texto sem número é erro do campo", () => {
+    const vazio = ler({ investedAmount: "100", quantity: "" });
+    expect(vazio.ok).toBe(true);
+    if (vazio.ok) expect(vazio.payload.quantity).toBeNull();
+
+    const lixo = ler({ investedAmount: "abc" });
+    expect(lixo.ok).toBe(false);
+    if (!lixo.ok) expect(lixo.errors.investedAmount).toMatch(/maior que zero/);
   });
 
   it("aceita data brasileira e ISO, e recusa 31/02", () => {
