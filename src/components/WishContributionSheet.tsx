@@ -96,7 +96,13 @@ export default function WishContributionSheet({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       // A mensagem do servidor é específica ("a sobra de 2026-09 já foi
       // guardada"), e trocá-la por um genérico faria a pessoa tentar de novo
-      setError(translateWishError(e, "Não consegui guardar agora. Tente de novo."));
+      const message = translateWishError(e, "Não consegui guardar agora. Tente de novo.");
+      setError(message);
+      if (message.includes("já foi guardada nesta meta")) {
+        // A resposta de corrida também atualiza o extrato e tira a proposta;
+        // insistir no botão depois de saber que entrou só cria nova dúvida.
+        await carregarHistorico(wish.id);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -112,6 +118,11 @@ export default function WishContributionSheet({
   };
 
   const faltam = wish ? Math.max(0, wish.targetAmount - wish.savedAmount) : 0;
+  // O histórico é a fonte de verdade se a tela abriu depois de um aporte, ou
+  // se outro toque chegou antes da resposta: não oferecemos o mesmo ciclo duas vezes.
+  const sobraJaGuardada = leftover != null && history.some(
+    (linha) => linha.origin === "MEASURED" && linha.cycleMonth === leftover.cycleMonth,
+  );
 
   return (
     <CustomModal visible={visible} onClose={onClose}>
@@ -143,7 +154,7 @@ export default function WishContributionSheet({
             </Pressable>
           </View>
 
-          {leftover && leftover.amount > 0 ? (
+          {leftover && leftover.amount > 0 && !sobraJaGuardada ? (
             <Pressable
               onPress={() => guardar(leftover.amount, leftover.cycleMonth)}
               disabled={isSaving}

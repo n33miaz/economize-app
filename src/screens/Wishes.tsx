@@ -56,15 +56,14 @@ export default function Wishes({ navigation }: any) {
   // EC-205: a meta que está recebendo dinheiro. Null = folha fechada
   const [aportando, setAportando] = useState<Wish | null>(null);
 
-  // A sobra que o app MEDIU, e o ciclo dela — vira a proposta de um toque.
-  // Null quando não há ciclo fechado: sem medida não há o que propor, e
-  // inventar um valor aqui seria afirmar que a pessoa guardou algo
+  // A sobra efetivamente apurada no último ciclo fechado vira a proposta.
+  // Null quando não há saldo positivo fechado: estimativa não vira lançamento.
   const sobraMedida = useMemo(() => {
-    const valor = baseline?.monthlyLeftover;
-    if (valor == null || valor <= 0) return null;
-    const agora = new Date();
-    const mes = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
-    return { amount: valor, cycleMonth: mes };
+    // A mediana segue como estimativa na tela, mas nunca pode ganhar o selo
+    // "medido": só o ciclo já fechado carrega um fato para o histórico.
+    const ciclo = baseline?.lastClosedCycle;
+    if (!ciclo || ciclo.leftover <= 0) return null;
+    return { amount: ciclo.leftover, cycleMonth: ciclo.cycleMonth };
   }, [baseline]);
 
   // Puxar para atualizar: o gesto que a plataforma inteira ensinou
@@ -210,7 +209,7 @@ export default function Wishes({ navigation }: any) {
                     "173.33" com ponto, num app inteiro em pt-BR */}
                 {formatHours(baseline!.hoursPerMonth)} por mês
                 {baseline!.monthlyLeftover != null
-                  ? ` · sobra típica de ${formatBRL(baseline!.monthlyLeftover)}`
+                  ? ` · estimativa de sobra típica: ${formatBRL(baseline!.monthlyLeftover)}`
                   : ""}
               </Text>
             </View>

@@ -1917,6 +1917,13 @@ export interface WishBaseline {
   monthlyExpense: number | null;
   cyclesConsidered: number;
   gaps: WishGap[];
+  /** Medida do último ciclo já encerrado; ausente em servidores anteriores. */
+  lastClosedCycle?: {
+    /** `YYYY-MM` da janela que fechou, igual ao ciclo do aporte medido. */
+    cycleMonth: string;
+    /** Entradas menos saídas realmente apuradas naquele ciclo. */
+    leftover: number;
+  } | null;
 }
 
 export interface WishList {

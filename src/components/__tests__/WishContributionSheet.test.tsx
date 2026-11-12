@@ -92,6 +92,22 @@ describe("Folha de aporte da meta", () => {
     expect(queryByText(/Guardar a sobra/)).toBeNull();
   });
 
+  it("não oferece de novo o ciclo que o extrato da meta já registrou", async () => {
+    historico.mockResolvedValue([
+      {
+        id: "c1",
+        amount: 420.5,
+        origin: "MEASURED",
+        cycleMonth: "2026-09",
+        note: null,
+        createdAt: "2026-09-11T10:00:00Z",
+      },
+    ]);
+    const { queryByText } = montar();
+
+    await waitFor(() => expect(queryByText(/Guardar a sobra/)).toBeNull());
+  });
+
   it("o valor digitado vai SEM ciclo: ele é declarado, não medido", async () => {
     guardar.mockResolvedValue({
       contribution: {} as WishContribution,
