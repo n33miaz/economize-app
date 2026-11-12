@@ -121,6 +121,15 @@ export default function SegmentedTopTabBar({
     });
   }, [indiceAtivo, reducedMotion, indiceSv]);
 
+  // Trocar de aba revela a régua e a ilha. As cenas vizinhas ficam montadas,
+  // então o `revelar` de quando a tela desmonta (useEsconderBarra) não acontece:
+  // quem rolava o Extrato e deslizava para uma Carteira curta, sem nada para
+  // rolar de volta, chegava sem régua e sem ilha — navegação sumida
+  const revelar = useTabBarStore((s) => s.revelar);
+  React.useEffect(() => {
+    revelar();
+  }, [indiceAtivo, revelar]);
+
   // Esconder junto com o header. ALTURA e opacidade, e não o translate da
   // ilha: aqui o ponto é devolver os 38 px para a lista, e uma pílula que sobe
   // mas continua reservando a altura não teria escondido nada
