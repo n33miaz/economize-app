@@ -126,15 +126,14 @@ export const useNewsStore = create<NewsState>((set, get) => ({
       } catch (e) {
         // A lista anterior FICA: notícia de dez minutos atrás vale mais que um
         // bloco vazio, e a tela mostra o aviso ao lado do que já está lá
+        const message = describeLoadFailure(
+          e,
+          "Não foi possível carregar as notícias.",
+        );
+        if (!message) return;
         set((state) => ({
           loading: { ...state.loading, [key]: false },
-          errors: {
-            ...state.errors,
-            [key]: describeLoadFailure(
-              e,
-              "Não foi possível carregar as notícias.",
-            ),
-          },
+          errors: { ...state.errors, [key]: message },
         }));
       } finally {
         inFlight.delete(key);

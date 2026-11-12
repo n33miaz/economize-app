@@ -1,3 +1,4 @@
+import { SessionEndedError } from "../../services/requestFailure";
 import {
   createCategory,
   deleteCategory,
@@ -163,5 +164,42 @@ describe("categoriesStore", () => {
     expect(useCategoriesStore.getState().byId("nao-existe")).toBeUndefined();
     expect(useCategoriesStore.getState().byId(null)).toBeUndefined();
     expect(useCategoriesStore.getState().byId(undefined)).toBeUndefined();
+  });
+});
+
+/**
+ * A resposta de quem saiu chega depois da limpeza, com outra pessoa em tela.
+ * O dublê imita isso: limpa o store como o logout faz e só então rejeita.
+ */
+describe("categoriesStore — resposta de sessão encerrada", () => {
+  const limpo = { items: [], isLoading: false, isSaving: false, error: null };
+  const rejeitaDepoisDaLimpeza = async (): Promise<never> => {
+    useCategoriesStore.setState(limpo);
+    throw new SessionEndedError();
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useCategoriesStore.setState(limpo);
+  });
+
+  it("carregar, criar, salvar e remover não gravam erro em quem entrou", async () => {
+    mockGet.mockImplementation(rejeitaDepoisDaLimpeza);
+    mockCreate.mockImplementation(rejeitaDepoisDaLimpeza);
+    mockUpdate.mockImplementation(rejeitaDepoisDaLimpeza);
+    mockDelete.mockImplementation(rejeitaDepoisDaLimpeza);
+    const store = useCategoriesStore.getState();
+
+    await store.fetch();
+    expect(useCategoriesStore.getState()).toMatchObject(limpo);
+
+    expect(await store.create({ name: "X" } as never)).toBeNull();
+    expect(useCategoriesStore.getState()).toMatchObject(limpo);
+
+    expect(await store.update("c1", { name: "Y" } as never)).toBeNull();
+    expect(useCategoriesStore.getState()).toMatchObject(limpo);
+
+    expect(await store.remove("c1")).toBeNull();
+    expect(useCategoriesStore.getState()).toMatchObject(limpo);
   });
 });

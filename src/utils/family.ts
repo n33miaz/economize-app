@@ -1,3 +1,4 @@
+import { isSessionEnded } from "../services/requestFailure";
 import type {
   Category,
   CategorySlice,
@@ -243,6 +244,8 @@ export function translateFamilyError(
   fallback: string,
   messages: FamilyErrorMessages = {},
 ): string {
+  // Resposta de quem saiu: frase vazia, e o store não grava nada
+  if (isSessionEnded(error)) return "";
   const problem = readProblem(error);
   if (problem.status !== null && messages[problem.status]) {
     return messages[problem.status] as string;

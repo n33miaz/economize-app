@@ -63,8 +63,10 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       // Leitura que falhou não vira toast: a tela mostra a frase, e ela diz a
       // causa quando é de transporte (offline, servidor acordando).
       // `fetchedAt` não avança: falha não vale como leitura boa
+      const message = describeLoadFailure(error, "Erro ao carregar carteira");
+      if (!message) return;
       set({
-        error: describeLoadFailure(error, "Erro ao carregar carteira"),
+        error: message,
         isLoading: false,
       });
     }
@@ -81,8 +83,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         transactions: [response.data, ...get().transactions],
         isLoading: false,
       });
-    } catch (error: any) {
-      set({ error: "Erro ao adicionar transação", isLoading: false });
+    } catch (error) {
+      const message = describeLoadFailure(error, "Erro ao adicionar transação");
+      if (!message) throw error;
+      set({
+        error: message,
+        isLoading: false,
+      });
       throw error;
     }
   },
@@ -95,8 +102,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         transactions: get().transactions.filter((t) => t.id !== id),
         isLoading: false,
       });
-    } catch (error: any) {
-      set({ error: "Erro ao remover transação", isLoading: false });
+    } catch (error) {
+      const message = describeLoadFailure(error, "Erro ao remover transação");
+      if (!message) throw error;
+      set({
+        error: message,
+        isLoading: false,
+      });
       throw error;
     }
   },

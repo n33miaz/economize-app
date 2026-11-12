@@ -3,6 +3,7 @@ import type { InternalAxiosRequestConfig } from "axios";
 
 import {
   describeLoadFailure,
+  describeSaveFailure,
   describeRequestFailure,
   isSessionEnded,
   SessionEndedError,
@@ -265,5 +266,29 @@ describe("SessionEndedError — a resposta sem destinatário", () => {
     expect(
       describeLoadFailure(new SessionEndedError(), "Falha ao carregar extrato."),
     ).toBe("");
+  });
+});
+
+describe("describeSaveFailure — o erro de quem grava", () => {
+  it("o detalhe do servidor vence a frase do domínio", () => {
+    expect(
+      describeSaveFailure(
+        { response: { status: 400, data: { detail: "Nome duplicado." } } },
+        "Falha ao criar categoria.",
+      ),
+    ).toBe("Nome duplicado.");
+  });
+
+  it("sem detalhe, vale a leitura da falha de carga", () => {
+    expect(describeSaveFailure(new Error("x"), "Falha ao criar categoria.")).toBe(
+      "Falha ao criar categoria.",
+    );
+  });
+
+  it("sessão encerrada não tem frase, nem com detalhe pendurado", () => {
+    const erro = Object.assign(new SessionEndedError(), {
+      response: { status: 400, data: { detail: "De quem saiu." } },
+    });
+    expect(describeSaveFailure(erro, "Falha ao criar categoria.")).toBe("");
   });
 });

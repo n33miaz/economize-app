@@ -265,3 +265,15 @@ export function describeLoadFailure(error: unknown, fallback: string): string {
       return fallback;
   }
 }
+
+/**
+ * Mensagem para o `error` de um store que GRAVA (criar, salvar, remover).
+ *
+ * O `detail` do servidor diz a causa real — nome duplicado, por exemplo — e
+ * vence a frase do domínio. Sem ele, vale a mesma leitura da falha de carga.
+ * Vazia para a sessão encerrada: quem grava sai sem escrever nada.
+ */
+export function describeSaveFailure(error: unknown, fallback: string): string {
+  if (isSessionEnded(error)) return "";
+  return readDetail(error) ?? describeLoadFailure(error, fallback);
+}

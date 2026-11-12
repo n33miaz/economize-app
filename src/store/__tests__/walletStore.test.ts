@@ -1,3 +1,4 @@
+import { SessionEndedError } from "../../services/requestFailure";
 import api from "../../services/api";
 import { useWalletStore } from "../walletStore";
 
@@ -128,5 +129,33 @@ describe("walletStore", () => {
     ).rejects.toThrow();
 
     expect(useWalletStore.getState().transactions).toHaveLength(1);
+  });
+});
+
+/**
+ * A resposta de quem saiu chega depois da limpeza, com outra pessoa em tela.
+ * O dublê imita isso: limpa o store como o logout faz e só então rejeita.
+ */
+describe("walletStore — resposta de sessão encerrada", () => {
+  const limpo = { transactions: [], isLoading: false, error: null };
+  const rejeitaDepoisDaLimpeza = async (): Promise<never> => {
+    useWalletStore.setState(limpo);
+    throw new SessionEndedError();
+  };
+
+  it("adicionar e remover não gravam erro em quem entrou", async () => {
+    mockApi.post.mockImplementation(rejeitaDepoisDaLimpeza);
+    mockApi.delete.mockImplementation(rejeitaDepoisDaLimpeza);
+    const store = useWalletStore.getState();
+
+    await expect(
+      store.addTransaction(operacao("t1") as never),
+    ).rejects.toBeInstanceOf(SessionEndedError);
+    expect(useWalletStore.getState()).toMatchObject(limpo);
+
+    await expect(store.removeTransaction("t1")).rejects.toBeInstanceOf(
+      SessionEndedError,
+    );
+    expect(useWalletStore.getState()).toMatchObject(limpo);
   });
 });

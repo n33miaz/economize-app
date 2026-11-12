@@ -119,11 +119,13 @@ const createAccountsState: StateCreator<AccountsState> = (set, get) => ({
       // sessão — toda tela que pede o mapa no foco batia na guarda de cache e
       // voltava sem tentar, e no celular não sobrava caminho para o retry
       // manual. Falha não é resposta; o próximo foco tenta de novo.
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível carregar suas contas agora.",
+      );
+      if (!message) return;
       set({
-        error: describeLoadFailure(
-          e,
-          "Não foi possível carregar suas contas agora.",
-        ),
+        error: message,
         isLoading: false,
       });
     }
@@ -168,13 +170,18 @@ const createAccountsState: StateCreator<AccountsState> = (set, get) => ({
       // Mesma regra do sucesso: o erro da janela abandonada não pode apagar o
       // carregamento da janela que o usuário está esperando
       if (!isWindowStillWanted(get(), accountId, months)) return;
+      const message = describeLoadFailure(
+        e,
+        describeInvoiceFailure(getApiErrorStatus(e)),
+      );
+      if (!message) return;
       set((state) => ({
         invoices: {
           ...state.invoices,
           [accountId]: {
             data: state.invoices[accountId]?.data ?? null,
             isLoading: false,
-            error: describeInvoiceFailure(getApiErrorStatus(e)),
+            error: message,
             months,
           },
         },

@@ -207,8 +207,13 @@ const createAnalyticsState: StateCreator<AnalyticsState> = (set, get) => ({
       set({ data, debt, isLoading: false });
     } catch (e) {
       if (requestId !== monthlyRequestId) return;
+      const message = describeLoadFailure(
+        e,
+        "Falha ao carregar a análise do período.",
+      );
+      if (!message) return;
       set({
-        error: describeLoadFailure(e, "Falha ao carregar a análise do período."),
+        error: message,
         isLoading: false,
       });
     }
