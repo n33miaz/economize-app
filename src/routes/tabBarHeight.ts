@@ -33,6 +33,28 @@ export const ILHA_LATERAL = 14;
  */
 export const BOTTOM_BAR_HEIGHT = ILHA_ALTURA + ILHA_RESPIRO;
 
+/** Inset inferior da área segura, saneado: ausente, NaN ou negativo vale zero. */
+const insetSeguro = (insetBottom: number | null | undefined): number =>
+  typeof insetBottom === "number" && Number.isFinite(insetBottom) && insetBottom > 0
+    ? insetBottom
+    : 0;
+
+/**
+ * A que distância da borda de baixo a ilha é desenhada.
+ *
+ * <p>É a ÚNICA fonte da posição da ilha — a barra usa isto no `bottom` dela,
+ * e `ilhaCoverage` (o que as listas reservam) é derivado daqui. Eram duas
+ * contas: a ilha subia pelo inset real, e o contexto de altura só somava o
+ * inset no iOS e na web. Num Android de borda a borda com 24 px de inset a
+ * ilha cobria 100 px e as listas reservavam 92.
+ */
+export const ilhaBottom = (insetBottom: number | null | undefined): number =>
+  insetSeguro(insetBottom) + ILHA_RESPIRO;
+
+/** Quanto a ilha cobre do rodapé da cena: até o topo dela, a partir da borda. */
+export const ilhaCoverage = (insetBottom: number | null | undefined): number =>
+  ilhaBottom(insetBottom) + ILHA_ALTURA;
+
 /**
  * Quanto a barra de abas ocupa na cena — ou `undefined` quando não há barra.
  *

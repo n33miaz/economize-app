@@ -32,7 +32,7 @@ import { useArquivoRecebido } from "../hooks/useArquivoRecebido";
 import AppOpening from "../components/AppOpening";
 import OverlayHost from "../components/OverlayHost";
 import {
-  BOTTOM_BAR_HEIGHT,
+  ilhaCoverage,
   ILHA_ALTURA,
   TabBarHeightContext,
 } from "./tabBarHeight";
@@ -68,42 +68,82 @@ import {
 } from "./routeNames";
 
 // Telas
-import Login from "../screens/auth/Login";
-import Register from "../screens/auth/Register";
-import ForgotPassword from "../screens/auth/ForgotPassword";
-import ResetPassword from "../screens/auth/ResetPassword";
-import ChangePassword from "../screens/ChangePassword";
-import Security from "../screens/Security";
-import Home from "../screens/Home";
-import AssetCatalog from "../screens/AssetCatalog";
-import Currencies from "../screens/Currencies";
-import Indexes from "../screens/Indexes";
-import News from "../screens/News";
-import Wallet from "../screens/Wallet";
-import BankIntegration from "../screens/BankIntegration";
-import AiAssistant from "../screens/AiAssistant";
-import Profile from "../screens/Profile";
-import AdvancedOptions from "../screens/AdvancedOptions";
-import Watchmen from "../screens/Watchmen";
-import Support from "../screens/Support";
-import AiSettings from "../screens/AiSettings";
-import Wishes from "../screens/Wishes";
-import IncomeSettings from "../screens/IncomeSettings";
-import Family from "../screens/Family";
-import Reports from "../screens/Reports";
-import Analytics from "../screens/Analytics";
-import Categories from "../screens/Categories";
-import CreditCards from "../screens/CreditCards";
-import StatementReview from "../screens/StatementReview";
-import Recurrences from "../screens/Recurrences";
-import RecurrenceForm from "../screens/RecurrenceForm";
-import BalanceForecast from "../screens/BalanceForecast";
-import Plan from "../screens/Plan";
-import Investments from "../screens/Investments";
-import Shopping from "../screens/Shopping";
-import ShoppingTrip from "../screens/ShoppingTrip";
+import { withScreenBoundary } from "../components/ScreenErrorBoundary";
+import LoginScreen from "../screens/auth/Login";
+import RegisterScreen from "../screens/auth/Register";
+import ForgotPasswordScreen from "../screens/auth/ForgotPassword";
+import ResetPasswordScreen from "../screens/auth/ResetPassword";
+import ChangePasswordScreen from "../screens/ChangePassword";
+import SecurityScreen from "../screens/Security";
+import HomeScreen from "../screens/Home";
+import AssetCatalogScreen from "../screens/AssetCatalog";
+import CurrenciesScreen from "../screens/Currencies";
+import IndexesScreen from "../screens/Indexes";
+import NewsScreen from "../screens/News";
+import WalletScreen from "../screens/Wallet";
+import BankIntegrationScreen from "../screens/BankIntegration";
+import AiAssistantScreen from "../screens/AiAssistant";
+import ProfileScreen from "../screens/Profile";
+import AdvancedOptionsScreen from "../screens/AdvancedOptions";
+import WatchmenScreen from "../screens/Watchmen";
+import SupportScreen from "../screens/Support";
+import AiSettingsScreen from "../screens/AiSettings";
+import WishesScreen from "../screens/Wishes";
+import IncomeSettingsScreen from "../screens/IncomeSettings";
+import FamilyScreen from "../screens/Family";
+import ReportsScreen from "../screens/Reports";
+import AnalyticsScreen from "../screens/Analytics";
+import CategoriesScreen from "../screens/Categories";
+import CreditCardsScreen from "../screens/CreditCards";
+import StatementReviewScreen from "../screens/StatementReview";
+import RecurrencesScreen from "../screens/Recurrences";
+import RecurrenceFormScreen from "../screens/RecurrenceForm";
+import BalanceForecastScreen from "../screens/BalanceForecast";
+import PlanScreen from "../screens/Plan";
+import InvestmentsScreen from "../screens/Investments";
+import ShoppingScreen from "../screens/Shopping";
+import ShoppingTripScreen from "../screens/ShoppingTrip";
 
 // Altura da barra inferior sem contar o inset da barra de gestos
+
+// Cada tela entra no navegador dentro do próprio limite de erro: uma exceção
+// de renderização vira um aviso com "Tentar de novo" NAQUELA tela, em vez de
+// desmontar o app inteiro. Em escopo de módulo de propósito — o navegador
+// precisa receber sempre o mesmo componente, ou remonta a tela a cada render.
+const Login = withScreenBoundary(LoginScreen);
+const Register = withScreenBoundary(RegisterScreen);
+const ForgotPassword = withScreenBoundary(ForgotPasswordScreen);
+const ResetPassword = withScreenBoundary(ResetPasswordScreen);
+const ChangePassword = withScreenBoundary(ChangePasswordScreen);
+const Security = withScreenBoundary(SecurityScreen);
+const Home = withScreenBoundary(HomeScreen);
+const AssetCatalog = withScreenBoundary(AssetCatalogScreen);
+const Currencies = withScreenBoundary(CurrenciesScreen);
+const Indexes = withScreenBoundary(IndexesScreen);
+const News = withScreenBoundary(NewsScreen);
+const Wallet = withScreenBoundary(WalletScreen);
+const BankIntegration = withScreenBoundary(BankIntegrationScreen);
+const AiAssistant = withScreenBoundary(AiAssistantScreen);
+const Profile = withScreenBoundary(ProfileScreen);
+const AdvancedOptions = withScreenBoundary(AdvancedOptionsScreen);
+const Watchmen = withScreenBoundary(WatchmenScreen);
+const Support = withScreenBoundary(SupportScreen);
+const AiSettings = withScreenBoundary(AiSettingsScreen);
+const Wishes = withScreenBoundary(WishesScreen);
+const IncomeSettings = withScreenBoundary(IncomeSettingsScreen);
+const Family = withScreenBoundary(FamilyScreen);
+const Reports = withScreenBoundary(ReportsScreen);
+const Analytics = withScreenBoundary(AnalyticsScreen);
+const Categories = withScreenBoundary(CategoriesScreen);
+const CreditCards = withScreenBoundary(CreditCardsScreen);
+const StatementReview = withScreenBoundary(StatementReviewScreen);
+const Recurrences = withScreenBoundary(RecurrencesScreen);
+const RecurrenceForm = withScreenBoundary(RecurrenceFormScreen);
+const BalanceForecast = withScreenBoundary(BalanceForecastScreen);
+const Plan = withScreenBoundary(PlanScreen);
+const Investments = withScreenBoundary(InvestmentsScreen);
+const Shopping = withScreenBoundary(ShoppingScreen);
+const ShoppingTrip = withScreenBoundary(ShoppingTripScreen);
 
 const Stack = createNativeStackNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -234,11 +274,6 @@ function MainTabs() {
   // Mesmo gate das abas superiores: com "reduzir movimento" a troca de aba é
   // seca, em vez de deslizar e esmaecer
   const reducedMotion = useReducedMotion();
-  // Web entra junto do iOS: no iPhone, tanto no Safari quanto instalado na tela
-  // de início, a barra de gestos come o rodapé e Platform.OS lá é "web". No
-  // Android o respiro fixo continua valendo, e no desktop o inset é 0.
-  const bottomInset =
-    Platform.OS === "ios" || Platform.OS === "web" ? insets.bottom : 0;
 
   return (
     // A altura da barra viaja por contexto para quem desenha por cima dela —
@@ -246,7 +281,10 @@ function MainTabs() {
     // quem navega é o trilho lateral e não há barra: o valor é `undefined`,
     // que é a resposta honesta. Ver `routes/tabBarHeight.ts`.
     <TabBarHeightContext.Provider
-      value={isWide ? undefined : BOTTOM_BAR_HEIGHT + bottomInset}
+      // O inset é o MESMO que a ilha usa para se posicionar, em qualquer
+      // plataforma: quem reserva rodapé por este número não pode ficar atrás
+      // de onde a barra de fato está (Android de borda a borda tem inset)
+      value={isWide ? undefined : ilhaCoverage(insets.bottom)}
     >
     <BottomTab.Navigator
       initialRouteName={MAIN_TAB_ROUTES.principal}
@@ -295,6 +333,11 @@ function MainTabs() {
           fontFamily: "Roboto_700Bold",
           fontSize: 11,
           marginTop: 4,
+          // Sem isto o rótulo é espremido pelo item (10 px de altura para
+          // uma fonte de 11) e a caixa de uma linha corta os descendentes:
+          // a cedilha de "Finanças" sumia e a aba lia "Financas"
+          lineHeight: 14,
+          flexShrink: 0,
         },
       }}
     >

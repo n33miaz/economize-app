@@ -25,7 +25,7 @@ import {
   toggleFavoriteWithSnapshot,
   useFavoritesStore,
 } from "../store/favoritesStore";
-import { formatDecimal, formatPercent } from "../utils/money";
+import { formatBRL, formatDecimal, formatPercent } from "../utils/money";
 import { assetNews } from "../utils/assetNews";
 import { useIndicatorStore } from "../store/indicatorStore";
 import useNewsData from "../hooks/useNewsData";
@@ -126,8 +126,8 @@ export default function IndicatorDetailSheet({
   const isFavorite = favorites.includes(indicator.id);
   const isPositive = indicator.variation >= 0;
 
-  const formatBrl = (value: number) =>
-    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  // pelo formatador canônico: cotação ausente vira traço em vez de exceção
+  const formatBrl = (value: number) => formatBRL(value);
 
   const handleToggleFavorite = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

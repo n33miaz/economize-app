@@ -303,6 +303,14 @@ describe("profitOf e formatProfit", () => {
     expect(profitOf(0, 50)).toEqual({ value: 50, percent: null });
   });
 
+  it("resultado desconhecido vira traço, na moeda que for", () => {
+    // O resumo da API manda profit:null quando nenhuma posição tem preço
+    expect(formatProfit({ value: null, percent: null })).toBe("—");
+    expect(formatProfit({ value: null, percent: 5 }, "USD")).toBe("—");
+    expect(formatMoney(null as unknown as number, "USD")).toBe("—");
+    expect(formatMoney(undefined as unknown as number, "BRL")).toBe("—");
+  });
+
   it("formata com sinal nos dois números", () => {
     expect(formatProfit({ value: 120, percent: 2.3 })).toBe("+R$ 120,00 (+2,30%)");
     expect(formatProfit({ value: -30.5, percent: -1.5 })).toBe("-R$ 30,50 (-1,50%)");
@@ -865,8 +873,75 @@ describe("moeda estrangeira — a posição na moeda dela", () => {
       currentValue: null,
     });
     const comCotacao = positionValueView(manual, undefined, { VT: quote({ priceBrl: 640 }) });
-    expect(limpo(comCotacao.primary)).toBe("R$ 6.400,00");
+    // O papel é cotado em dólar: o número da posição é em dólar, e os reais
+    // são conta derivada — antes saía "R$ 6.400,00" como se fosse o valor dela
+    expect(limpo(comCotacao.primary)).toBe("US$ 1.183,20");
+    expect(limpo(comCotacao.equivalent)).toBe("≈ R$ 6.400,00");
     expect(positionValueView(manual, undefined).primary).toBeNull();
+  });
+
+  describe("posição manual de ticker no exterior", () => {
+    // O que o formulário grava: quantidade, custo em REAIS e nenhum valor
+    // atual — quem dá o valor é a cotação do papel, na moeda dele
+    const VT = position({
+      id: "pos-vt",
+      source: "MANUAL",
+      currency: "USD",
+      code: "VT",
+      quantity: 2,
+      unitPrice: 100,
+      investedAmount: 1000,
+      currentValue: null,
+    });
+
+    it("com cotação e sem câmbio: valor em dólar, sem reais, fora do total por falta de CÂMBIO", () => {
+      // Medido em 12/11/2026: a API devolvia price 110,5 / priceBrl null e a
+      // tela dizia "cotação indisponível" — a cotação existia, faltava o dólar
+      const view = positionValueView(VT, { exchangeRates: [] }, { VT: quote({ price: 110.5, priceBrl: null }) });
+      expect(limpo(view.primary)).toBe("US$ 221,00");
+      expect(view.equivalent).toBeNull();
+      expect(view.excluded).toBe(true);
+      expect(view.missing).toBe("fx");
+      // Custo em reais contra valor em dólar não é resultado de nada
+      expect(view.profitLabel).toBeNull();
+    });
+
+    it("com cotação e câmbio do servidor (priceBrl): dólar, ≈ reais e resultado em reais", () => {
+      const view = positionValueView(VT, undefined, { VT: quote({ price: 110.5, priceBrl: 600 }) });
+      expect(limpo(view.primary)).toBe("US$ 221,00");
+      expect(limpo(view.equivalent)).toBe("≈ R$ 1.200,00");
+      expect(view.excluded).toBe(false);
+      expect(view.missing).toBeNull();
+      // Investido R$ 1.000 contra R$ 1.200: os dois lados em reais
+      expect(limpo(view.profitLabel)).toBe("+R$ 200,00 (+20,00%)");
+    });
+
+    it("com cotação em dólar e só o dólar do bloco macro: converte por ele", () => {
+      const view = positionValueView(VT, undefined, { VT: quote({ price: 110.5, priceBrl: null }) }, 5);
+      expect(limpo(view.primary)).toBe("US$ 221,00");
+      expect(limpo(view.equivalent)).toBe("≈ R$ 1.105,00");
+      expect(view.excluded).toBe(false);
+    });
+
+    it("sem a cotação do papel: sem valor, fora do total por falta de COTAÇÃO", () => {
+      const view = positionValueView(VT, { exchangeRates: [] }, {}, 5);
+      expect(view.primary).toBeNull();
+      expect(view.equivalent).toBeNull();
+      expect(view.excluded).toBe(true);
+      expect(view.missing).toBe("quote");
+    });
+
+    it("cotação em outra moeda que não o dólar: o dólar macro não serve de câmbio", () => {
+      const view = positionValueView(
+        { ...VT, currency: "EUR" },
+        undefined,
+        { VT: quote({ price: 50, currency: "EUR", priceBrl: null }) },
+        5,
+      );
+      expect(limpo(view.primary)).toBe("€ 100,00");
+      expect(view.equivalent).toBeNull();
+      expect(view.missing).toBe("fx");
+    });
   });
 
   it("conector em dólar sem valor atual cai em quantidade × preço, ainda em dólar", () => {

@@ -15,7 +15,7 @@ import type {
   TreasuryBond,
 } from "../services/api";
 import { isoDate, parseIsoDate } from "./cycleWindow";
-import { formatBRL, formatDecimal, formatPercent } from "./money";
+import { formatBRL, formatDecimal, formatPercent, SEM_VALOR } from "./money";
 
 /**
  * Leitura dos investimentos (EC-15x).
@@ -250,7 +250,8 @@ export function positionCurrentValue(
 }
 
 export interface Profit {
-  value: number;
+  /** Nulo quando o resultado é desconhecido (nenhuma posição com preço). */
+  value: number | null;
   /** Nulo quando não há base de custo: zero afirmaria "nada rendeu". */
   percent: number | null;
 }
@@ -278,6 +279,8 @@ export function formatBRLOrNull(value: number | null | undefined): string | null
  * da posição: resultado em dólar com "R$" na frente seria outro número.
  */
 export function formatProfit(profit: Profit, currency = "BRL"): string {
+  // Resultado desconhecido é um traço só: percentual sem valor não diz nada
+  if (!isFinite_(profit.value)) return SEM_VALOR;
   const sign = profit.value > 0 ? "+" : "";
   const percent =
     profit.percent === null
@@ -309,6 +312,7 @@ export function currencyOf(position: Pick<InvestmentPosition, "currency">): stri
 
 /** Valor na moeda dele: "R$ 1.234,56", "US$ 1.234,56", "CHF 1.234,56". */
 export function formatMoney(value: number, currency: string): string {
+  if (!isFinite_(value)) return SEM_VALOR;
   const code = currency.trim().toUpperCase() || "BRL";
   if (code === "BRL") return formatBRL(value);
   const symbol = CURRENCY_SYMBOLS[code] ?? code;
@@ -337,8 +341,15 @@ export interface PositionValueView {
   profit: Profit | null;
   /** Resultado na MESMA moeda do valor principal. */
   profitLabel: string | null;
-  /** Sem câmbio: o servidor deixou a posição fora dos totais em reais. */
+  /** A posição não entra nos totais em reais do cabeçalho. */
   excluded: boolean;
+  /**
+   * O que falta para ela entrar: o CÂMBIO (o valor na moeda de origem existe)
+   * ou a COTAÇÃO do papel (nem o valor existe). `null` quando não falta nada.
+   * São avisos diferentes na tela — dizer "sem cotação" com a cotação na mão
+   * manda a pessoa procurar o problema no lugar errado.
+   */
+  missing: "fx" | "quote" | null;
 }
 
 /**
@@ -371,6 +382,7 @@ export function positionValueView(
       profit,
       profitLabel: profit ? formatProfit(profit, money) : null,
       excluded: false,
+      missing: null,
       ...extra,
     };
   };
@@ -393,8 +405,39 @@ export function positionValueView(
       isFinite_(pending.currentValue) ? pending.currentValue : position.currentValue,
       isFinite_(pending.investedAmount) ? pending.investedAmount : position.investedAmount,
       currency,
-      { excluded: true },
+      // O valor na moeda de origem existe; o que o servidor não tinha é câmbio
+      { excluded: true, missing: "fx" },
     );
+  }
+
+  // Posição manual de ticker no exterior: o formulário não grava valor atual,
+  // quem dá o valor é a cotação do papel — e ela vem na moeda DELE. O número
+  // da posição é quantidade × cotação, nessa moeda; os reais são derivados
+  if (positionNeedsQuote(position) && !isFinite_(position.currentValue)) {
+    const quote = position.code ? quotes[position.code.toUpperCase()] : undefined;
+    if (!quote || !isFinite_(quote.price) || !isFinite_(position.quantity)) {
+      return view(null, position.investedAmount, currency, { excluded: true, missing: "quote" });
+    }
+    const quoteCurrency = (quote.currency ?? "").trim().toUpperCase() || currency;
+    const native = position.quantity * quote.price;
+    // Câmbio: o que o servidor já aplicou na cotação; na falta, o dólar do
+    // bloco macro — que só serve se a cotação for em dólar
+    const brl = isFinite_(quote.priceBrl)
+      ? position.quantity * quote.priceBrl
+      : quoteCurrency === "USD" && isFinite_(usdBrl)
+        ? native * usdBrl
+        : null;
+    // "Valor investido" do formulário é em reais: o resultado só existe
+    // contra o equivalente em reais, e é nessa moeda que ele é dito
+    const profit = brl === null ? null : profitOf(position.investedAmount, brl);
+    return {
+      primary: formatMoney(native, quoteCurrency),
+      equivalent: brl === null ? null : `≈ ${formatBRL(brl)}`,
+      profit,
+      profitLabel: profit ? formatProfit(profit, "BRL") : null,
+      excluded: brl === null,
+      missing: brl === null ? "fx" : null,
+    };
   }
 
   const manual = position.source === "MANUAL";

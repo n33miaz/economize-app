@@ -333,6 +333,19 @@ describe("Investments", () => {
     expect(api.getNewsByTopics).toHaveBeenCalledWith(PERFIL.topics, 5);
   });
 
+  it("resultado desconhecido (profit nulo): o cabeçalho mostra um traço e a tela fica de pé", async () => {
+    // O que a API manda quando nenhuma posição tem valor atual. Medido em
+    // 12/11/2026: este corpo derrubava o app inteiro ao abrir a aba
+    comDados();
+    api.getInvestmentSummary.mockResolvedValue({ ...RESUMO, profit: null, profitPercent: null });
+
+    const { getByText, getByLabelText } = montar();
+
+    await waitFor(() => expect(getByLabelText("Resultado: desconhecido")).toBeTruthy());
+    expect(getByText("—")).toBeTruthy();
+    expect(getByText(/investido R\$\s15\.000,00/)).toBeTruthy();
+  });
+
   it("tocar num indicador explica por que ele importa PARA ESTE usuário", async () => {
     comDados();
 
@@ -476,7 +489,7 @@ describe("Investments", () => {
     expect(queryByText(/^Câmbio /)).toBeNull();
   });
 
-  it("posição sem cotação: fica na lista em dólar, com o aviso de fora do total", async () => {
+  it("posição sem câmbio: fica na lista em dólar, com o aviso que diz o que falta", async () => {
     comDolar({
       exchangeRates: [],
       unconverted: [
@@ -487,7 +500,9 @@ describe("Investments", () => {
     const { getByText, queryByText } = montar();
 
     await waitFor(() => expect(getByText(/^US\$\s1\.000,00$/)).toBeTruthy());
-    expect(getByText("sem cotação · fora do total")).toBeTruthy();
+    // O valor em dólar existe: o que falta é câmbio, e é isso que a marca diz
+    expect(getByText("sem câmbio · fora do total")).toBeTruthy();
+    expect(queryByText("sem cotação · fora do total")).toBeNull();
     // Nem pelo dólar do bloco macro: o total do servidor não tem esta posição
     expect(queryByText(/^≈/)).toBeNull();
     expect(queryByText(/^R\$\s1\.000,00$/)).toBeNull();
