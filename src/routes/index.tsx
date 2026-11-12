@@ -32,7 +32,7 @@ import { useArquivoRecebido } from "../hooks/useArquivoRecebido";
 import AppOpening from "../components/AppOpening";
 import OverlayHost from "../components/OverlayHost";
 import {
-  BOTTOM_BAR_HEIGHT,
+  ilhaCoverage,
   ILHA_ALTURA,
   TabBarHeightContext,
 } from "./tabBarHeight";
@@ -274,11 +274,6 @@ function MainTabs() {
   // Mesmo gate das abas superiores: com "reduzir movimento" a troca de aba é
   // seca, em vez de deslizar e esmaecer
   const reducedMotion = useReducedMotion();
-  // Web entra junto do iOS: no iPhone, tanto no Safari quanto instalado na tela
-  // de início, a barra de gestos come o rodapé e Platform.OS lá é "web". No
-  // Android o respiro fixo continua valendo, e no desktop o inset é 0.
-  const bottomInset =
-    Platform.OS === "ios" || Platform.OS === "web" ? insets.bottom : 0;
 
   return (
     // A altura da barra viaja por contexto para quem desenha por cima dela —
@@ -286,7 +281,10 @@ function MainTabs() {
     // quem navega é o trilho lateral e não há barra: o valor é `undefined`,
     // que é a resposta honesta. Ver `routes/tabBarHeight.ts`.
     <TabBarHeightContext.Provider
-      value={isWide ? undefined : BOTTOM_BAR_HEIGHT + bottomInset}
+      // O inset é o MESMO que a ilha usa para se posicionar, em qualquer
+      // plataforma: quem reserva rodapé por este número não pode ficar atrás
+      // de onde a barra de fato está (Android de borda a borda tem inset)
+      value={isWide ? undefined : ilhaCoverage(insets.bottom)}
     >
     <BottomTab.Navigator
       initialRouteName={MAIN_TAB_ROUTES.principal}
