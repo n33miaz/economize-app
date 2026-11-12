@@ -3,6 +3,7 @@ import {
   formatBRLCompact,
   formatDecimal,
   formatPercent,
+  SEM_VALOR,
 } from "../money";
 
 // O Intl separa "R$" do número com espaço não separável (U+00A0); normalizar
@@ -95,9 +96,9 @@ describe("formatPercent", () => {
     expect(formatPercent(1234.5, { decimals: 1 })).toBe("1.234,5%");
   });
 
-  it("NaN e Infinity viram zero em vez de assustar na tela", () => {
-    expect(formatPercent(NaN)).toBe("0,00%");
-    expect(formatPercent(Infinity)).toBe("0,00%");
+  it("NaN e Infinity viram traço em vez de assustar (ou mentir) na tela", () => {
+    expect(formatPercent(NaN)).toBe(SEM_VALOR);
+    expect(formatPercent(Infinity)).toBe(SEM_VALOR);
   });
 });
 
@@ -111,7 +112,38 @@ describe("formatDecimal", () => {
     expect(formatDecimal(5.185, 1)).toBe("5,2");
   });
 
-  it("valor inválido vira zero", () => {
-    expect(formatDecimal(NaN)).toBe("0,00");
+  it("valor inválido vira traço, não um zero inventado", () => {
+    expect(formatDecimal(NaN)).toBe(SEM_VALOR);
+  });
+});
+
+/**
+ * Campo opcional da API chega como `null` mesmo quando o tipo diz `number`
+ * (o resumo de investimentos manda `profit: null` sem posição com preço).
+ * Medido em 12/11/2026: `null.toLocaleString` derrubava o app inteiro. O
+ * formatador é a segunda linha de defesa — devolve um traço, nunca "R$ 0,00",
+ * porque zero afirmaria um valor que ninguém mediu.
+ */
+describe("valor ausente", () => {
+  const ausentes = [null, undefined, Number.NaN, Number.POSITIVE_INFINITY] as unknown as number[];
+
+  it("formatBRL devolve o traço em vez de lançar", () => {
+    for (const valor of ausentes) expect(formatBRL(valor)).toBe(SEM_VALOR);
+  });
+
+  it("formatBRLCompact devolve o traço em vez de lançar", () => {
+    for (const valor of ausentes) expect(formatBRLCompact(valor)).toBe(SEM_VALOR);
+  });
+
+  it("percentual e número solto ausentes também viram traço", () => {
+    for (const valor of ausentes) {
+      expect(formatPercent(valor)).toBe(SEM_VALOR);
+      expect(formatDecimal(valor)).toBe(SEM_VALOR);
+    }
+  });
+
+  it("zero continua sendo zero: é valor medido", () => {
+    expect(plain(formatBRL(0))).toBe("R$ 0,00");
+    expect(formatPercent(0)).toBe("0,00%");
   });
 });

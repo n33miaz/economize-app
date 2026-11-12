@@ -333,6 +333,19 @@ describe("Investments", () => {
     expect(api.getNewsByTopics).toHaveBeenCalledWith(PERFIL.topics, 5);
   });
 
+  it("resultado desconhecido (profit nulo): o cabeçalho mostra um traço e a tela fica de pé", async () => {
+    // O que a API manda quando nenhuma posição tem valor atual. Medido em
+    // 12/11/2026: este corpo derrubava o app inteiro ao abrir a aba
+    comDados();
+    api.getInvestmentSummary.mockResolvedValue({ ...RESUMO, profit: null, profitPercent: null });
+
+    const { getByText, getByLabelText } = montar();
+
+    await waitFor(() => expect(getByLabelText("Resultado: desconhecido")).toBeTruthy());
+    expect(getByText("—")).toBeTruthy();
+    expect(getByText(/investido R\$\s15\.000,00/)).toBeTruthy();
+  });
+
   it("tocar num indicador explica por que ele importa PARA ESTE usuário", async () => {
     comDados();
 

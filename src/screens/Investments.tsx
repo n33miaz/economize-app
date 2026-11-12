@@ -949,9 +949,17 @@ function SummaryCard({
   onAddManual: () => void;
 }) {
   const syncPress = usePressScale();
-  const positive = summary.profit >= 0;
-  const tone = positive ? t.semantic.success : t.semantic.danger;
-  const DeltaIcon = positive ? ArrowUpRight : ArrowDownRight;
+  // Resultado desconhecido: o servidor manda `profit: null` quando nenhuma
+  // posição tem preço. O selo continua no lugar, com um traço e em tom neutro
+  // — verde com seta para cima afirmaria um ganho que ninguém mediu
+  const profitKnown = typeof summary.profit === "number" && Number.isFinite(summary.profit);
+  const positive = profitKnown && (summary.profit ?? 0) >= 0;
+  const tone = !profitKnown
+    ? t.text.secondary
+    : positive
+      ? t.semantic.success
+      : t.semantic.danger;
+  const profitLabel = formatProfit({ value: summary.profit, percent: summary.profitPercent });
   const updated = formatRelativeTime(summary.updatedAt);
 
   return (
@@ -977,29 +985,34 @@ function SummaryCard({
       >
         <View
           accessible
-          accessibilityLabel={`Resultado: ${formatProfit({
-            value: summary.profit,
-            percent: summary.profitPercent,
-          })}`}
+          accessibilityLabel={`Resultado: ${profitKnown ? profitLabel : "desconhecido"}`}
           style={{
             flexDirection: "row",
             alignItems: "center",
             paddingHorizontal: spacing[2],
             paddingVertical: spacing[1],
             borderRadius: radius.lg,
-            backgroundColor: positive ? t.semantic.successMuted : t.semantic.dangerMuted,
+            backgroundColor: !profitKnown
+              ? t.background.elevated
+              : positive
+                ? t.semantic.successMuted
+                : t.semantic.dangerMuted,
           }}
         >
-          <DeltaIcon size={14} color={tone} />
+          {!profitKnown ? null : positive ? (
+            <ArrowUpRight size={14} color={tone} />
+          ) : (
+            <ArrowDownRight size={14} color={tone} />
+          )}
           <Text
             style={{
               color: tone,
               fontSize: 12,
               fontWeight: "700",
-              marginLeft: spacing[1],
+              marginLeft: profitKnown ? spacing[1] : 0,
             }}
           >
-            {formatProfit({ value: summary.profit, percent: summary.profitPercent })}
+            {profitLabel}
           </Text>
         </View>
         <Text style={{ color: t.text.secondary, fontSize: 12 }}>

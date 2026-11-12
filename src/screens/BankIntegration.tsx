@@ -121,7 +121,7 @@ import {
   memberFilterOptions,
   resolveMemberFilter,
 } from "../utils/family";
-import { formatBRL, formatBRLCompact } from "../utils/money";
+import { formatBRL, formatBRLCompact, formatDecimal } from "../utils/money";
 
 // Teto do gráfico de pizza: acima disso ele só cresce sem informar mais nada
 const MAX_CHART_WIDTH = 420;
@@ -428,7 +428,7 @@ export default function BankIntegration() {
         showToast(
           movidos === 1
             ? "1 lançamento mudou de conta. As duas origens agora são uma."
-            : `${movidos.toLocaleString("pt-BR")} lançamentos mudaram de conta. As duas origens agora são uma.`,
+            : `${formatDecimal(movidos, 0)} lançamentos mudaram de conta. As duas origens agora são uma.`,
           "success",
         );
         await fetchAccounts(true);

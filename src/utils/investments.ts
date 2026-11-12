@@ -15,7 +15,7 @@ import type {
   TreasuryBond,
 } from "../services/api";
 import { isoDate, parseIsoDate } from "./cycleWindow";
-import { formatBRL, formatDecimal, formatPercent } from "./money";
+import { formatBRL, formatDecimal, formatPercent, SEM_VALOR } from "./money";
 
 /**
  * Leitura dos investimentos (EC-15x).
@@ -250,7 +250,8 @@ export function positionCurrentValue(
 }
 
 export interface Profit {
-  value: number;
+  /** Nulo quando o resultado é desconhecido (nenhuma posição com preço). */
+  value: number | null;
   /** Nulo quando não há base de custo: zero afirmaria "nada rendeu". */
   percent: number | null;
 }
@@ -278,6 +279,8 @@ export function formatBRLOrNull(value: number | null | undefined): string | null
  * da posição: resultado em dólar com "R$" na frente seria outro número.
  */
 export function formatProfit(profit: Profit, currency = "BRL"): string {
+  // Resultado desconhecido é um traço só: percentual sem valor não diz nada
+  if (!isFinite_(profit.value)) return SEM_VALOR;
   const sign = profit.value > 0 ? "+" : "";
   const percent =
     profit.percent === null
@@ -309,6 +312,7 @@ export function currencyOf(position: Pick<InvestmentPosition, "currency">): stri
 
 /** Valor na moeda dele: "R$ 1.234,56", "US$ 1.234,56", "CHF 1.234,56". */
 export function formatMoney(value: number, currency: string): string {
+  if (!isFinite_(value)) return SEM_VALOR;
   const code = currency.trim().toUpperCase() || "BRL";
   if (code === "BRL") return formatBRL(value);
   const symbol = CURRENCY_SYMBOLS[code] ?? code;

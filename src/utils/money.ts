@@ -16,6 +16,22 @@ const COMPACT_FLOOR = 100_000;
 const NBSP = "\u00A0";
 
 /**
+ * O que a tela mostra no lugar de um número que não existe.
+ *
+ * Campo opcional da API chega `null` mesmo onde o tipo promete `number` (o
+ * resumo de investimentos manda `profit: null` sem posição com preço), e
+ * `null.toLocaleString` é exceção de renderização: em 12/11/2026 isso levava
+ * o app inteiro para a tela de abertura. Todo formatador daqui devolve este
+ * traço para nulo, indefinido, NaN e infinito. Nunca zero: "R$ 0,00" afirmaria
+ * um valor que ninguém mediu.
+ */
+export const SEM_VALOR = "—";
+
+/** Número de verdade: nem nulo, nem NaN, nem infinito. */
+const temValor = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+/**
  * Valor completo em BRL (ex.: "R$ 1.234,56"), sempre com 2 casas.
  * `opts` permite ajustes pontuais de Intl sem sair do padrão pt-BR.
  */
@@ -23,6 +39,7 @@ export function formatBRL(
   value: number,
   opts?: Intl.NumberFormatOptions,
 ): string {
+  if (!temValor(value)) return SEM_VALOR;
   return value.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
@@ -37,6 +54,7 @@ export function formatBRL(
  * pt-BR e sinal negativo preservado antes do "R$", como no Intl.
  */
 export function formatBRLCompact(value: number): string {
+  if (!temValor(value)) return SEM_VALOR;
   const abs = Math.abs(value);
   if (abs < COMPACT_FLOOR) return formatBRL(value);
 
@@ -70,8 +88,9 @@ export function formatPercent(
   opts?: { decimals?: number; signed?: boolean },
 ): string {
   const decimals = opts?.decimals ?? 2;
-  // NaN/Infinity viram 0: um "NaN%" na tela assusta mais do que informa
-  const safe = Number.isFinite(value) ? value : 0;
+  // Um "NaN%" na tela assusta mais do que informa — e "0,00%" mentiria
+  if (!temValor(value)) return SEM_VALOR;
+  const safe = value;
   const digits = safe.toLocaleString("pt-BR", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -86,8 +105,8 @@ export function formatPercent(
  * símbolo à parte, resultado de conversão). Mesma razão do `formatPercent`.
  */
 export function formatDecimal(value: number, decimals = 2): string {
-  const safe = Number.isFinite(value) ? value : 0;
-  return safe.toLocaleString("pt-BR", {
+  if (!temValor(value)) return SEM_VALOR;
+  return value.toLocaleString("pt-BR", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });

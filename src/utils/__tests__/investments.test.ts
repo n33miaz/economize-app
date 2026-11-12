@@ -303,6 +303,14 @@ describe("profitOf e formatProfit", () => {
     expect(profitOf(0, 50)).toEqual({ value: 50, percent: null });
   });
 
+  it("resultado desconhecido vira traço, na moeda que for", () => {
+    // O resumo da API manda profit:null quando nenhuma posição tem preço
+    expect(formatProfit({ value: null, percent: null })).toBe("—");
+    expect(formatProfit({ value: null, percent: 5 }, "USD")).toBe("—");
+    expect(formatMoney(null as unknown as number, "USD")).toBe("—");
+    expect(formatMoney(undefined as unknown as number, "BRL")).toBe("—");
+  });
+
   it("formata com sinal nos dois números", () => {
     expect(formatProfit({ value: 120, percent: 2.3 })).toBe("+R$ 120,00 (+2,30%)");
     expect(formatProfit({ value: -30.5, percent: -1.5 })).toBe("-R$ 30,50 (-1,50%)");

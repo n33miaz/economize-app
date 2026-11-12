@@ -3039,7 +3039,11 @@ export interface InvestmentMovementTotals {
 export interface InvestmentSummary {
   totalInvested: number;
   currentValue: number;
-  profit: number;
+  /**
+   * Nulo quando nenhuma posição tem valor atual E investido: resultado
+   * desconhecido, não zero. O servidor manda `null` de verdade.
+   */
+  profit: number | null;
   /** Nulo quando não há base de custo — zero afirmaria "nada rendeu". */
   profitPercent: number | null;
   positionsCount: number;
