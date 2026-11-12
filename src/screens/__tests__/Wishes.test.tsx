@@ -1,15 +1,21 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
 } from "react-native-safe-area-context";
 
 import Wishes from "../Wishes";
+import WishContributionSheet from "../../components/WishContributionSheet";
 import { useWishStore } from "../../store/wishStore";
 import { usePlanStore } from "../../store/planStore";
 
 jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+
+jest.mock("../../components/WishContributionSheet", () => ({
+  __esModule: true,
+  default: jest.fn(() => null),
+}));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
@@ -60,16 +66,17 @@ const BASELINE = {
   monthlyExpense: 2207.5,
   cyclesConsidered: 3,
   gaps: [],
+  lastClosedCycle: { cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04", leftover: 300 },
 };
 
-const desejo = (id: string, nome: string, valor: number) =>
+const desejo = (id: string, nome: string, valor: number, status: "WISH" | "GOAL" = "WISH") =>
   ({
     id,
     name: nome,
     targetAmount: valor,
     savedAmount: 0,
     categoryId: null,
-    status: "WISH",
+    status,
     targetDate: null,
     note: null,
     purchasedAt: null,
@@ -85,6 +92,8 @@ const desejo = (id: string, nome: string, valor: number) =>
       estimatedDate: "2027-03-01",
       installments: null,
       maxInstallment: null,
+      // o detalhe da meta percorre os "e se"; vazio = nenhum atalho a sugerir
+      whatIfs: [],
     },
   }) as never;
 
@@ -99,6 +108,7 @@ describe("Desejos", () => {
   beforeEach(() => {
     useWishStore.setState(BASE_VAZIA as never);
     usePlanStore.setState({ plan: "FREE", adsEnabled: true });
+    (WishContributionSheet as unknown as jest.Mock).mockClear();
   });
 
   it("sem desejo nenhum a tela abre e convida a criar", async () => {
@@ -123,6 +133,46 @@ describe("Desejos", () => {
     const { getByText } = montar();
 
     await waitFor(() => expect(getByText("Bicicleta")).toBeTruthy());
+  });
+
+  it("propõe a sobra apurada do ciclo fechado, nunca a mediana estimada", async () => {
+    useWishStore.setState({
+      ...BASE_VAZIA,
+      baseline: { ...BASELINE, monthlyLeftover: 420.5 },
+      wishes: [desejo("w1", "Moto", 18000, "GOAL")],
+    } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText(/^Moto,/)));
+    fireEvent.press(getByLabelText("Guardar dinheiro para Moto"));
+
+    await waitFor(() =>
+      expect((WishContributionSheet as unknown as jest.Mock).mock.calls.at(-1)?.[0])
+        .toMatchObject({
+          leftover: { amount: 300, cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04" },
+        }),
+    );
+  });
+
+  it.each([
+    ["sem ciclo fechado com dados", null],
+    ["ciclo fechado sem sobra", { cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04", leftover: 0 }],
+    ["ciclo fechado no vermelho", { cycleMonth: "2026-10", start: "2026-10-05", end: "2026-11-04", leftover: -120 }],
+  ])("%s: nada é proposto, mesmo com mediana positiva", async (_caso, ciclo) => {
+    useWishStore.setState({
+      ...BASE_VAZIA,
+      baseline: { ...BASELINE, monthlyLeftover: 420.5, lastClosedCycle: ciclo },
+      wishes: [desejo("w1", "Moto", 18000, "GOAL")],
+    } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText(/^Moto,/)));
+    fireEvent.press(getByLabelText("Guardar dinheiro para Moto"));
+
+    await waitFor(() =>
+      expect((WishContributionSheet as unknown as jest.Mock).mock.calls.at(-1)?.[0])
+        .toMatchObject({ visible: true, leftover: null }),
+    );
   });
 
   it("busca a lista na primeira abertura", async () => {

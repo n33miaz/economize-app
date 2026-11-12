@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import X from "lucide-react-native/dist/esm/icons/x";
 
@@ -11,6 +11,7 @@ import {
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, SHEET_PADDING, spacing } from "../theme/ds";
 import * as Haptics from "../utils/haptics";
+import { describeWindow, formatDayMonth, formatMonthLongLabel } from "../utils/cycleWindow";
 import { formatBRL, parseAmount } from "../utils/money";
 import { translateWishError } from "../utils/wishes";
 import CustomModal from "./CustomModal";
@@ -24,9 +25,15 @@ interface Props {
    *
    * <p>Quando presente, vira a proposta de um toque. Nulo é estado normal:
    * quem não tem ciclo fechado ainda não tem sobra medida, e aí só existe o
-   * aporte digitado.
+   * aporte digitado. `start`/`end` (fim inclusivo) dizem o período real do
+   * ciclo; faltam quando a API ainda não os envia.
    */
-  leftover: { amount: number; cycleMonth: string } | null;
+  leftover: {
+    amount: number;
+    cycleMonth: string;
+    start?: string | null;
+    end?: string | null;
+  } | null;
   onClose: () => void;
   /** Chamado depois de gravar, para a tela recarregar a meta. */
   onSaved: () => void;
@@ -63,16 +70,32 @@ export default function WishContributionSheet({
   const [amount, setAmount] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<WishContribution[]>([]);
+  // O extrato guarda de qual meta ele é: trocar de meta descarta o da anterior
+  // já no render, antes de o novo chegar. Sem isso a outra meta aparecia por um
+  // instante e podia esconder (ou repetir) a proposta da sobra
+  const [historico, setHistorico] = useState<{ wishId: string | null; linhas: WishContribution[] }>(
+    { wishId: null, linhas: [] },
+  );
+  const wishId = wish?.id ?? null;
+  const history = historico.wishId === wishId ? historico.linhas : [];
+  // A meta aberta agora: resposta atrasada de outra meta não entra
+  const metaAtual = useRef<string | null>(wishId);
+  metaAtual.current = wishId;
 
   const carregarHistorico = useCallback(async (id: string) => {
     try {
-      setHistory(await getWishContributions(id));
+      const linhas = await getWishContributions(id);
+      if (metaAtual.current === id) setHistorico({ wishId: id, linhas });
     } catch {
       // O extrato é apoio: falhar aqui não pode impedir de guardar dinheiro
-      setHistory([]);
+      if (metaAtual.current === id) setHistorico({ wishId: id, linhas: [] });
     }
   }, []);
+
+  useEffect(() => {
+    // Limpa ao mudar o id, antes de carregar o extrato da nova meta
+    setHistorico((atual) => (atual.wishId === wishId ? atual : { wishId, linhas: [] }));
+  }, [wishId]);
 
   useEffect(() => {
     if (!visible || !wish) return;
@@ -96,7 +119,13 @@ export default function WishContributionSheet({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       // A mensagem do servidor é específica ("a sobra de 2026-09 já foi
       // guardada"), e trocá-la por um genérico faria a pessoa tentar de novo
-      setError(translateWishError(e, "Não consegui guardar agora. Tente de novo."));
+      const message = translateWishError(e, "Não consegui guardar agora. Tente de novo.");
+      setError(message);
+      if (message.includes("já foi guardada nesta meta")) {
+        // A resposta de corrida também atualiza o extrato e tira a proposta;
+        // insistir no botão depois de saber que entrou só cria nova dúvida.
+        await carregarHistorico(wish.id);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -112,6 +141,22 @@ export default function WishContributionSheet({
   };
 
   const faltam = wish ? Math.max(0, wish.targetAmount - wish.savedAmount) : 0;
+  // O histórico é a fonte de verdade se a tela abriu depois de um aporte, ou
+  // se outro toque chegou antes da resposta: não oferecemos o mesmo ciclo duas vezes.
+  const sobraJaGuardada = leftover != null && history.some(
+    (linha) => linha.origin === "MEASURED" && linha.cycleMonth === leftover.cycleMonth,
+  );
+  // "de 05/10 a 04/11" é o mês que a pessoa viveu; "2026-10" é chave interna.
+  // Sem as datas (API anterior), o mês por extenso ainda é legível
+  const periodoDaSobra = leftover
+    ? leftover.start && leftover.end
+      ? `de ${formatDayMonth(leftover.start)} a ${formatDayMonth(leftover.end)}`
+      : `em ${formatMonthLongLabel(leftover.cycleMonth)}`
+    : "";
+  const periodoFalado = leftover
+    ? (describeWindow(leftover.start, leftover.end)
+      ?? `em ${formatMonthLongLabel(leftover.cycleMonth)}`)
+    : "";
 
   return (
     <CustomModal visible={visible} onClose={onClose}>
@@ -143,12 +188,12 @@ export default function WishContributionSheet({
             </Pressable>
           </View>
 
-          {leftover && leftover.amount > 0 ? (
+          {leftover && leftover.amount > 0 && !sobraJaGuardada ? (
             <Pressable
               onPress={() => guardar(leftover.amount, leftover.cycleMonth)}
               disabled={isSaving}
               accessibilityRole="button"
-              accessibilityLabel={`Guardar a sobra de ${formatBRL(leftover.amount)} do ciclo ${leftover.cycleMonth}`}
+              accessibilityLabel={`Guardar a sobra de ${formatBRL(leftover.amount)}, ${periodoFalado}`}
               style={{
                 borderWidth: 1,
                 borderColor: t.accent.neon,
@@ -161,8 +206,7 @@ export default function WishContributionSheet({
                 Guardar a sobra de {formatBRL(leftover.amount)}
               </Text>
               <Text style={{ color: t.text.tertiary, fontSize: 11, marginTop: 2 }}>
-                É o que sobrou no ciclo {leftover.cycleMonth}, medido no seu extrato. Entra
-                uma vez só.
+                É o que sobrou {periodoDaSobra}, medido no seu extrato. Entra uma vez só.
               </Text>
             </Pressable>
           ) : null}
