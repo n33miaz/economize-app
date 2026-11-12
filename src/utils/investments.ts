@@ -15,7 +15,14 @@ import type {
   TreasuryBond,
 } from "../services/api";
 import { isoDate, parseIsoDate } from "./cycleWindow";
-import { formatBRL, formatDecimal, formatPercent, SEM_VALOR } from "./money";
+import {
+  formatBRL,
+  formatDecimal,
+  formatPercent,
+  parseAmount,
+  parseQuantity,
+  SEM_VALOR,
+} from "./money";
 
 /**
  * Leitura dos investimentos (EC-15x).
@@ -1084,21 +1091,6 @@ export function isForeignTickerForm(values: PositionFormValues): boolean {
   );
 }
 
-/**
- * "1.234,56" → 1234.56; "1234.56" → 1234.56; vazio → null; lixo → NaN.
- * Aceita as duas grafias porque o teclado numérico do iOS em pt-BR manda
- * vírgula e o do navegador manda ponto.
- */
-export function parseDecimalInput(text: string): number | null {
-  const raw = text.replace(/\s/g, "").trim();
-  if (!raw) return null;
-  const normalized =
-    raw.includes(",") && raw.includes(".")
-      ? raw.replace(/\./g, "").replace(",", ".")
-      : raw.replace(",", ".");
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : Number.NaN;
-}
 
 /** "15/03/2027" ou "2027-03-15" → "2027-03-15"; inválida → null. */
 export function parseDateInput(text: string): string | null {
@@ -1160,13 +1152,25 @@ export function validatePositionForm(
     errors.code = "Informe o código do ativo (ex.: VT, PETR4).";
   }
 
+  // Cada campo com a leitura do que ele é: dinheiro pela regra do dinheiro
+  // ("1.000" é mil — a leitura antiga dava 1) e quantidade e taxa pela de
+  // número ("1.234" cotas de cripto é 1,234)
+  const LEITURA = {
+    quantity: parseQuantity,
+    rate: parseQuantity,
+    unitPrice: parseAmount,
+    investedAmount: parseAmount,
+    currentValue: parseAmount,
+  } as const;
   const numberField = (
     field: "quantity" | "unitPrice" | "investedAmount" | "currentValue" | "rate",
     allowZero: boolean,
   ): number | null => {
-    const parsed = parseDecimalInput(values[field]);
-    if (parsed === null) return null;
-    if (Number.isNaN(parsed) || parsed < 0 || (!allowZero && parsed === 0)) {
+    // Vazio é "não informado"; texto que não vira número é erro do campo —
+    // as leituras devolvem null nos dois casos, então o vazio é visto aqui
+    if (!values[field].trim()) return null;
+    const parsed = LEITURA[field](values[field]);
+    if (parsed === null || parsed < 0 || (!allowZero && parsed === 0)) {
       errors[field] = allowZero
         ? "Use um número maior ou igual a zero."
         : "Use um número maior que zero.";

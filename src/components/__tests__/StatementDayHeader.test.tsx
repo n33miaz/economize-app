@@ -110,4 +110,18 @@ describe("StatementDayHeader", () => {
       `Hoje. Entrou ${formatBRL(120)} no dia`,
     );
   });
+  // Total somado em ponto flutuante por quem chama: -3,5e-15 é zero
+  it("resto binário não vira \"- R$ 0,00\" nem \"Saiu\"", () => {
+    const { getByText, queryByText, getByRole } = montar({
+      rotulo: "Hoje",
+      total: -3.5e-15,
+      saldoNoFim: null,
+    });
+
+    expect(getByText("R$ 0,00")).toBeTruthy();
+    expect(queryByText(/^- /)).toBeNull();
+    expect(getByRole("header").props.accessibilityLabel).toBe(
+      "Hoje. Sem movimento no dia",
+    );
+  });
 });

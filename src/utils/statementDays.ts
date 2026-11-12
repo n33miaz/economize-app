@@ -45,10 +45,24 @@ export interface DiaDoExtrato<T> {
  * de `bankMetrics` descreve, e o total do dia não pode cair nela por fora.
  */
 function totalDoDia(transacoes: readonly Agrupavel[]): number {
-  return transacoes.reduce((soma, tx) => {
-    const valor = Math.abs(tx.amount);
+  // Soma em centavos inteiros: em ponto flutuante, 10,10 + 0,20 - 10,30 dá
+  // -3,5e-15 em vez de zero, e o cabeçalho escrevia "- R$ 0,00" e o leitor de
+  // tela dizia "Saiu R$ 0,00" num dia que não moveu nada
+  const centavos = transacoes.reduce((soma, tx) => {
+    const valor = emCentavos(Math.abs(tx.amount));
     return tx.type === "CREDIT" ? soma + valor : soma - valor;
   }, 0);
+  return deCentavos(centavos);
+}
+
+/** Reais → centavos inteiros (o arredondamento absorve o resto binário). */
+function emCentavos(reais: number): number {
+  return Math.round(reais * 100);
+}
+
+/** Centavos inteiros → reais; o `|| 0` não deixa sair um -0. */
+function deCentavos(centavos: number): number {
+  return centavos / 100 || 0;
 }
 
 /** A chave do dia, sem passar por `Date` — é o que evita deriva de fuso. */
@@ -102,11 +116,13 @@ export function agruparPorDia<T extends Agrupavel>(
   const { saldoAtual } = opcoes;
   if (saldoAtual === null || saldoAtual === undefined) return dias;
 
-  let saldo = saldoAtual;
+  // Mesma razão do total do dia: a subtração acumulada em ponto flutuante
+  // deriva a cada dia, então o saldo corrido também anda em centavos
+  let saldo = emCentavos(saldoAtual);
   for (const dia of dias) {
-    dia.saldoNoFim = saldo;
+    dia.saldoNoFim = deCentavos(saldo);
     // O dia anterior fechou com o saldo deste dia menos o que este dia moveu
-    saldo = saldo - dia.total;
+    saldo = saldo - emCentavos(dia.total);
   }
   return dias;
 }

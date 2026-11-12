@@ -3,6 +3,8 @@ import {
   formatBRLCompact,
   formatDecimal,
   formatPercent,
+  parseAmount,
+  parseQuantity,
   SEM_VALOR,
 } from "../money";
 
@@ -115,6 +117,73 @@ describe("formatDecimal", () => {
   it("valor inválido vira zero", () => {
     expect(formatDecimal(NaN)).toBe("0,00");
   });
+
+  // Quantidade de ativo: sem casas fixas, até o teto pedido
+  it("aceita mínimo e teto de casas diferentes", () => {
+    expect(formatDecimal(0.5, 0, 8)).toBe("0,5");
+    expect(formatDecimal(1234, 0, 8)).toBe("1.234");
+    expect(formatDecimal(0.00012345, 0, 8)).toBe("0,00012345");
+  });
+});
+
+// A soma em ponto flutuante de um dia que zerou chega como -3,5e-15
+describe("formatBRL arredonda em centavos", () => {
+  it("resto binário perto de zero não vira \"-R$ 0,00\"", () => {
+    expect(plain(formatBRL(-3.5e-15))).toBe("R$ 0,00");
+    expect(plain(formatBRL(-0))).toBe("R$ 0,00");
+    expect(plain(formatBRL(-0.004))).toBe("R$ 0,00");
+  });
+
+  it("negativo de verdade continua negativo", () => {
+    expect(plain(formatBRL(-0.01))).toBe("-R$ 0,01");
+  });
+
+  it("respeita quem pede mais casas", () => {
+    expect(plain(formatBRL(5.1234, { maximumFractionDigits: 4 }))).toBe(
+      "R$ 5,1234",
+    );
+  });
+});
+
+describe("parseAmount — a única leitura de valor digitado", () => {
+  it.each([
+    // pt-BR com vírgula decimal
+    ["1.234,56", 1234.56],
+    ["1234,56", 1234.56],
+    ["21,90", 21.9],
+    ["0,5", 0.5],
+    // ponto que não forma grupo de 3 é decimal de quem cola número
+    ["1234.56", 1234.56],
+    ["12.34", 12.34],
+    ["2.5", 2.5],
+    ["1234.567", 1234.567],
+    // grupo começando em zero não é milhar: cripto e fração de dólar
+    ["0.500", 0.5],
+    ["0.001", 0.001],
+    // ponto em grupos de 3 é milhar — "2.500" virava R$ 2,50
+    ["2.500", 2500],
+    ["1.234.567", 1234567],
+    // o ambíguo: vale milhar, como `parseAmountInput` já fazia
+    ["1.234", 1234],
+    // inteiro, "R$", espaços e negativos
+    ["100", 100],
+    ["R$ 1.234,56", 1234.56],
+    ["  2.500  ", 2500],
+    ["R$ 18.000,50", 18000.5],
+    ["-1.234,56", -1234.56],
+    ["R$ -1.234,56", -1234.56],
+    ["-2.500", -2500],
+    ["-12.5", -12.5],
+  ])("%j → %p", (entrada, esperado) => {
+    expect(parseAmount(entrada)).toBe(esperado);
+  });
+
+  it.each(["", "   ", "R$", "R$ ", "-", ",", ".", "abc", "1,234,567", "1-2"])(
+    "%j → null",
+    (entrada) => {
+      expect(parseAmount(entrada)).toBeNull();
+    },
+  );
 });
 
 /**
@@ -146,4 +215,29 @@ describe("valor ausente", () => {
     expect(plain(formatBRL(0))).toBe("R$ 0,00");
     expect(formatPercent(0)).toBe("0,00%");
   });
+});
+
+// Quantidade não é dinheiro: "1.234" unidades de cripto é 1,234, não 1234
+describe("parseQuantity — leitura de quantidade", () => {
+  it.each([
+    ["0,5", 0.5],
+    ["1,234", 1.234],
+    ["0,00012345", 0.00012345],
+    ["1.234,5", 1234.5],
+    ["1.234", 1.234],
+    ["0.5", 0.5],
+    ["10", 10],
+    ["1.234.567", 1234567],
+    ["  2,5  ", 2.5],
+    ["-0,5", -0.5],
+  ])("%j → %p", (entrada, esperado) => {
+    expect(parseQuantity(entrada)).toBe(esperado);
+  });
+
+  it.each(["", "  ", "abc", "-", "1.2.3", "1,2,3", "1.23.456"])(
+    "%j → null",
+    (entrada) => {
+      expect(parseQuantity(entrada)).toBeNull();
+    },
+  );
 });

@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -20,7 +26,15 @@ import Animated from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { radius, shadow, spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
-import { formatBRL, formatBRLCompact } from "../utils/money";
+import {
+  formatBRL,
+  formatBRLCompact,
+  formatDecimal,
+  parseAmount,
+  parseQuantity,
+} from "../utils/money";
+import { valorDoAporte } from "../utils/walletValue";
+import { describeSaveFailure } from "../services/requestFailure";
 import { useWalletStore, Transaction } from "../store/walletStore";
 import { useIndicatorStore } from "../store/indicatorStore";
 import { askConfirm } from "../store/confirmStore";
@@ -76,6 +90,10 @@ export default function Wallet() {
   // Esqueleto só no primeiro load: o isLoading do store também liga em
   // add/remove, e reexibir o esqueleto nessas ações faria a tela piscar
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  // Trava contra o duplo toque no salvar (mesmo padrão da folha de posição):
+  // o estado só muda no render seguinte, e dois toques no mesmo quadro
+  // gravariam a mesma compra duas vezes
+  const savingRef = useRef(false);
 
   const insets = useSafeAreaInsets();
   // Liga a lista à ilha da barra de abas e ao segmentado do topo
@@ -91,11 +109,10 @@ export default function Wallet() {
   const showSkeleton =
     isLoading && !hasLoadedOnce && transactions.length === 0;
 
-  const getCurrentPrice = useCallback(
-    (code: string) => {
-      const indicator = indicators.find((i) => i.code === code);
-      return indicator ? indicator.buy : 0;
-    },
+  // Mesma conta de valor da Home: sem cotação vale o custo, marcado como
+  // estimado — valer 0 punha saldo zerado e prejuízo do valor inteiro
+  const valorDe = useCallback(
+    (tx: Transaction) => valorDoAporte(tx, indicators),
     [indicators],
   );
 
@@ -104,8 +121,7 @@ export default function Wallet() {
     const allocation: Record<string, number> = {};
 
     transactions.forEach((t) => {
-      const currentPrice = getCurrentPrice(t.assetCode);
-      const currentVal = t.quantity * currentPrice;
+      const currentVal = valorDe(t).valor;
       total += currentVal;
 
       if (allocation[t.assetCode]) {
@@ -115,8 +131,9 @@ export default function Wallet() {
       }
     });
 
-    // Enquanto os indicadores não chegam todo preço é 0: as fatias sairiam de
-    // uma divisão por zero, então a caixa vazia cobre esse instante
+    // Sem aporte (ou só aportes de valor zero) as fatias sairiam de uma divisão
+    // por zero, então a caixa vazia cobre esse caso. Enquanto os indicadores
+    // não chegam, o valor é o custo — a pizza já sai com a alocação paga
     if (total <= 0) {
       return { totalBalance: total, chartData: [], legendItems: [] };
     }
@@ -165,24 +182,26 @@ export default function Wallet() {
         color: slice.color,
       })),
     };
-  }, [transactions, getCurrentPrice, t]);
+  }, [transactions, valorDe, t]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    if (savingRef.current) return;
     if (!amount || !price || !code.trim()) {
       // Validação de campo é aviso, não decisão: toast em vez de diálogo
       showToast("Preencha todos os campos para continuar.", "warning");
       return;
     }
 
-    const quantity = parseFloat(amount.replace(",", "."));
-    const unitPrice = parseFloat(price.replace(",", "."));
-    // Rejeita NaN, zero e negativo ANTES de salvar: a guarda do gráfico
-    // (`total <= 0`) não pega NaN — `NaN <= 0` é false — e a transação
-    // inválida virava "R$ NaN" no saldo e fatia quebrada na pizza
+    // Preço é dinheiro ("1.234,56" é mil e tanto; o `parseFloat` lia 1,234);
+    // quantidade não: "1.234" unidades de cripto é 1,234, não 1234
+    const quantity = parseQuantity(amount);
+    const unitPrice = parseAmount(price);
+    // Rejeita vazio, zero e negativo ANTES de salvar: a transação inválida
+    // virava "R$ NaN" no saldo e fatia quebrada na pizza
     if (
-      !Number.isFinite(quantity) ||
+      quantity === null ||
+      unitPrice === null ||
       quantity <= 0 ||
-      !Number.isFinite(unitPrice) ||
       unitPrice <= 0
     ) {
       showToast(
@@ -192,20 +211,33 @@ export default function Wallet() {
       return;
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-    addTransaction({
-      assetCode: code.toUpperCase(),
-      type: "BUY",
-      quantity,
-      priceAtTransaction: unitPrice,
-    });
-
-    setModalVisible(false);
-    setAmount("");
-    setPrice("");
-    setCode("USD");
+    savingRef.current = true;
+    try {
+      // Espera a gravação: antes a folha fechava, vibrava sucesso e limpava os
+      // campos na hora, e uma falha sumia em silêncio (o ErrorState só aparece
+      // com a lista vazia). Fechar, limpar e vibrar só no sucesso; na falha o
+      // que foi digitado fica na folha para tentar de novo
+      await addTransaction({
+        assetCode: code.toUpperCase(),
+        type: "BUY",
+        quantity,
+        priceAtTransaction: unitPrice,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setModalVisible(false);
+      setAmount("");
+      setPrice("");
+      setCode("USD");
+    } catch (e) {
+      // Frase vazia para sessão encerrada: o toast não aparece
+      showToast(
+        describeSaveFailure(e, "Não foi possível salvar a transação."),
+        "error",
+      );
+    } finally {
+      savingRef.current = false;
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -215,10 +247,19 @@ export default function Wallet() {
       message: "Deseja excluir esta transação?",
       confirmLabel: "Excluir",
       destructive: true,
-      onConfirm: () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        removeTransaction(id);
+      onConfirm: async () => {
+        // O diálogo só faz `console.error` de quem rejeita: a falha é tratada
+        // aqui, com toast, e a vibração de sucesso espera a exclusão de fato
+        try {
+          await removeTransaction(id);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        } catch (e) {
+          showToast(
+            describeSaveFailure(e, "Não foi possível excluir a transação."),
+            "error",
+          );
+        }
       },
     });
   };
@@ -230,10 +271,8 @@ export default function Wallet() {
     item: Transaction;
     index: number;
   }) => {
-    const currentPrice = getCurrentPrice(item.assetCode);
-    const totalInvested = item.quantity * item.priceAtTransaction;
-    const currentValue = item.quantity * currentPrice;
-    const profit = currentValue - totalInvested;
+    const { valor: currentValue, custo, estimado } = valorDe(item);
+    const profit = currentValue - custo;
     const isProfit = profit >= 0;
 
     return (
@@ -248,7 +287,9 @@ export default function Wallet() {
         </View>
         <View className="flex-1">
           <Text className="text-base font-bold text-textPrimary">
-            {item.quantity} {item.assetCode}
+            {/* Quantidade em pt-BR ("0,5 USD"), sem casas fixas: cripto
+                pede até 8 e dólar inteiro nenhuma */}
+            {formatDecimal(item.quantity, 0, 8)} {item.assetCode}
           </Text>
           <Text className="text-xs text-textSecondary">
             Pago: {formatBRL(item.priceAtTransaction)}
@@ -261,13 +302,21 @@ export default function Wallet() {
           <Text numberOfLines={1} className="text-sm font-bold text-textPrimary">
             {formatBRL(currentValue)}
           </Text>
-          <Text
-            numberOfLines={1}
-            className={`text-xs font-bold ${isProfit ? "text-success" : "text-danger"}`}
-          >
-            {isProfit ? "+" : ""}
-            {formatBRL(profit)}
-          </Text>
+          {estimado ? (
+            // Sem cotação o valor é o preço pago: lucro ou prejuízo aqui
+            // seria inventado, então a linha só diz de onde veio o número
+            <Text numberOfLines={1} className="text-xs text-textTertiary">
+              sem cotação
+            </Text>
+          ) : (
+            <Text
+              numberOfLines={1}
+              className={`text-xs font-bold ${isProfit ? "text-success" : "text-danger"}`}
+            >
+              {isProfit ? "+" : ""}
+              {formatBRL(profit)}
+            </Text>
+          )}
         </View>
         <TouchableOpacity
           className="p-2"
@@ -485,7 +534,7 @@ export default function Wallet() {
           </Text>
           <TextInput
             className="bg-elevated rounded-xl p-4 text-base text-textPrimary mb-4 border border-border"
-            placeholder="0.00"
+            placeholder="0,00"
             placeholderTextColor={t.text.tertiary}
             value={amount}
             onChangeText={setAmount}
@@ -497,7 +546,7 @@ export default function Wallet() {
           </Text>
           <TextInput
             className="bg-elevated rounded-xl p-4 text-base text-textPrimary mb-4 border border-border"
-            placeholder="0.00"
+            placeholder="0,00"
             placeholderTextColor={t.text.tertiary}
             value={price}
             onChangeText={setPrice}

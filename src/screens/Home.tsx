@@ -106,6 +106,7 @@ import {
   formatDecimal,
   formatPercent,
 } from "../utils/money";
+import { valorDoAporte } from "../utils/walletValue";
 import { formatMonthLabel, formatWindowLabel } from "../utils/cycleWindow";
 import { favoriteDisplayItems } from "../utils/indicatorList";
 import {
@@ -442,11 +443,12 @@ export default function Home() {
   ]);
 
   const walletBalance = useMemo(() => {
-    return walletTxs.reduce((total, tx) => {
-      const indicator = indicators.find((i) => i.code === tx.assetCode);
-      const currentPrice = indicator ? indicator.buy : tx.priceAtTransaction;
-      return total + tx.quantity * currentPrice;
-    }, 0);
+    // Mesma conta de valor da Carteira (`valorDoAporte`): sem cotação vale o
+    // custo. Antes as duas telas davam patrimônios diferentes
+    return walletTxs.reduce(
+      (total, tx) => total + valorDoAporte(tx, indicators).valor,
+      0,
+    );
   }, [walletTxs, indicators]);
 
   // Rentabilidade real da carteira (valor atual vs custo de aquisição);
@@ -455,10 +457,9 @@ export default function Home() {
     let cost = 0;
     let current = 0;
     walletTxs.forEach((tx) => {
-      const indicator = indicators.find((i) => i.code === tx.assetCode);
-      const currentPrice = indicator ? indicator.buy : tx.priceAtTransaction;
-      cost += tx.quantity * tx.priceAtTransaction;
-      current += tx.quantity * currentPrice;
+      const { valor, custo } = valorDoAporte(tx, indicators);
+      cost += custo;
+      current += valor;
     });
     if (cost <= 0) return null;
     return ((current - cost) / cost) * 100;

@@ -27,6 +27,7 @@ import {
   monthKeyOf,
 } from "./cycleWindow";
 import { vale as materialidade } from "./materiality";
+import { parseAmount } from "./money";
 
 // --- Rótulos ---
 
@@ -239,27 +240,11 @@ export function validityLabel(
 // --- Valores ---
 
 /**
- * Texto do campo → número. Aceita "1.234,56", "1234,56", "1234.56" e o "R$"
- * colado por quem copia da tela. Devolve null quando não sobra número algum:
- * o campo vazio não pode virar 0 e ser aceito pelo servidor como valor.
+ * Texto do campo → número. Delegado a `parseAmount` (money.ts): a regra de
+ * leitura de valor é uma só no app — ver a tabela lá.
  */
 export function parseAmountInput(text: string): number | null {
-  const cleaned = text.replace(/[^\d,.-]/g, "").trim();
-  if (!cleaned) return null;
-  let normalized: string;
-  if (cleaned.includes(",")) {
-    // Vírgula é o separador decimal em pt-BR; o ponto que sobra é de milhar
-    normalized = cleaned.replace(/\./g, "").replace(",", ".");
-  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(cleaned)) {
-    // Sem vírgula, ponto em grupos de 3 é grafia de milhar: "2.500" é dois mil
-    // e quinhentos — lê-lo como decimal gravava o valor 1000× menor em silêncio
-    normalized = cleaned.replace(/\./g, "");
-  } else {
-    // ponto solto ("1234.56", "2.5") segue sendo decimal de quem cola número
-    normalized = cleaned;
-  }
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
+  return parseAmount(text);
 }
 
 // --- Payloads ---

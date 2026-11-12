@@ -44,10 +44,14 @@ interface Props {
  */
 export default function StatementDayHeader({
   rotulo,
-  total,
+  total: totalRecebido,
   saldoNoFim,
 }: Props) {
   const t = useTheme();
+  // Arredonda para centavos antes de decidir sinal e cor: quem passa um total
+  // somado em ponto flutuante (-3,5e-15) não pode ganhar "- R$ 0,00" nem
+  // "Saiu R$ 0,00". O `|| 0` troca o -0 por 0
+  const total = Math.round(totalRecebido * 100) / 100 || 0;
   // Zero é neutro: um dia sem movimento líquido não é ganho nem perda
   const tomDoTotal =
     total > 0 ? t.chart.up : total < 0 ? t.text.primary : t.text.tertiary;
@@ -60,8 +64,11 @@ export default function StatementDayHeader({
       accessible
       accessibilityRole="header"
       accessibilityLabel={
-        `${rotulo}. ${total >= 0 ? "Entrou" : "Saiu"} ` +
-        `${formatBRL(Math.abs(total))} no dia` +
+        `${rotulo}. ` +
+        // Dia que zerou não "entrou" nem "saiu" nada
+        (total === 0
+          ? "Sem movimento no dia"
+          : `${total > 0 ? "Entrou" : "Saiu"} ${formatBRL(Math.abs(total))} no dia`) +
         (saldoNoFim === null
           ? ""
           : `. Em conta ao fim do dia, ${formatBRL(saldoNoFim)}`)

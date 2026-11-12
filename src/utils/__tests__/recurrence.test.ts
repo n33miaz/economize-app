@@ -173,6 +173,11 @@ describe("leitura de valor", () => {
     expect(parseAmountInput("2.5")).toBe(2.5);
     expect(parseAmountInput("1234.56")).toBe(1234.56);
   });
+
+  // Delegada a `parseAmount`: grupo começando em zero é decimal
+  it("não lê \"0.500\" como quinhentos", () => {
+    expect(parseAmountInput("0.500")).toBe(0.5);
+  });
 });
 
 describe("montagem do payload de criação", () => {

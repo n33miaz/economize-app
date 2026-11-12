@@ -42,7 +42,15 @@ export function formatBRL(
   opts?: Intl.NumberFormatOptions,
 ): string {
   if (!temValor(value)) return SEM_VALOR;
-  return value.toLocaleString("pt-BR", {
+  // Arredonda nas casas que vão aparecer ANTES de formatar: uma soma em ponto
+  // flutuante que devia dar zero chega como -3,5e-15, e o Intl escreve isso
+  // "-R$ 0,00". O `|| 0` troca o -0 que sobra do arredondamento por 0.
+  // Respeita `maximumFractionDigits` maior (cotação com 4 casas) para não
+  // cortar precisão de quem pediu mais
+  const casas = Math.max(2, opts?.maximumFractionDigits ?? 2);
+  const fator = 10 ** casas;
+  const arredondado = Math.round(value * fator) / fator || 0;
+  return arredondado.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
     ...opts,
@@ -105,26 +113,99 @@ export function formatPercent(
  * Número solto em pt-BR, para o que não é moeda nem porcentagem (cotação com
  * símbolo à parte, resultado de conversão). Mesma razão do `formatPercent`.
  */
-export function formatDecimal(value: number, decimals = 2): string {
+export function formatDecimal(
+  value: number,
+  decimals = 2,
+  // Teto opcional de casas: quantidade de ativo não tem número fixo de casas
+  // ("0,5" dólar, "0,00012345" bitcoin) e min = max cortaria a cripto em zero
+  maxDecimals = decimals,
+): string {
   const safe = Number.isFinite(value) ? value : 0;
   return safe.toLocaleString("pt-BR", {
     minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    maximumFractionDigits: Math.max(decimals, maxDecimals),
   });
 }
 
+// Ponto em grupos de 3 sem vírgula: "2.500", "1.234.567". O primeiro grupo
+// não começa com zero — "0.500" e "0.001" são decimais (quantidade de cripto,
+// fração de dólar) e lê-los como milhar multiplicaria o valor por mil
+const MILHAR_SO_COM_PONTO = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
+
 /**
- * Aceita "18.000,50" e "18000.50" — ninguém digita moeda de um jeito só.
+ * Texto do campo de valor → número. A ÚNICA leitura de valor digitado do app:
+ * cada tela tinha a sua, e a que tratava "2.500" como R$ 2,50 gravava o valor
+ * mil vezes menor em silêncio em orçamento, reserva, desejo e renda.
+ *
+ * Regra (pt-BR primeiro, sem esquecer quem cola número do navegador):
+ *
+ * | Entrada        | Lê       | Por quê                                     |
+ * |----------------|----------|---------------------------------------------|
+ * | "1.234,56"     | 1234.56  | vírgula decimal, ponto de milhar            |
+ * | "1234,56"      | 1234.56  | vírgula decimal                             |
+ * | "1234.56"      | 1234.56  | ponto que não forma grupo de 3 é decimal    |
+ * | "2.5", "12.34" | decimal  | idem                                        |
+ * | "0.500"        | 0.5      | grupo começando em 0 não é milhar           |
+ * | "2.500"        | 2500     | ponto em grupos de 3 é milhar               |
+ * | "1.234.567"    | 1234567  | idem                                        |
+ * | "1.234"        | 1234     | AMBÍGUO: vale milhar, como `parseAmountInput`|
+ * |                |          | já fazia — em pt-BR "1.234" é mil e tanto   |
+ * | "R$ -1.234,56" | -1234.56 | "R$", espaço e sinal são tolerados          |
+ * | "", "-", ","   | null     | não sobra número                            |
+ * | "1,234,567"    | null     | duas vírgulas não é valor que se leia       |
+ *
  * Devolve `null` quando não dá para ler um número, para quem chama decidir a
- * mensagem: "informe um valor" e "valor inválido" são erros diferentes.
+ * mensagem: "informe um valor" e "valor inválido" são erros diferentes — e o
+ * campo vazio não pode virar 0 e ser aceito pelo servidor como valor.
  */
 export function parseAmount(raw: string): number | null {
   const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
-  if (!cleaned) return null;
-  // Com vírgula, o ponto é separador de milhar; sem vírgula, o ponto é decimal
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
+  if (!/\d/.test(cleaned)) return null;
+  let normalized: string;
+  if (cleaned.includes(",")) {
+    // Vírgula é o decimal em pt-BR; o ponto que sobra é de milhar. Mais de
+    // uma vírgula vira NaN no Number abaixo e sai null
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (MILHAR_SO_COM_PONTO.test(cleaned)) {
+    normalized = cleaned.replace(/\./g, "");
+  } else {
+    // ponto solto ("1234.56", "2.5") segue sendo decimal de quem cola número
+    normalized = cleaned;
+  }
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+// Dois ou mais pontos sem vírgula só fazem sentido como milhar ("1.234.567")
+const MILHAR_EM_GRUPOS = /^-?\d{1,3}(\.\d{3}){2,}$/;
+
+/**
+ * Texto do campo de QUANTIDADE (ou de outro número que não é dinheiro, como a
+ * taxa) → número. Não é `parseAmount`: quantidade tem até 8 casas e quase
+ * nunca chega a milhares, então "1.234" unidades de uma cripto é 1,234 — ler
+ * como milhar (a regra do dinheiro) gravava mil vezes mais.
+ *
+ * | Entrada          | Lê        | Por quê                                  |
+ * |------------------|-----------|------------------------------------------|
+ * | "0,5", "1,234"   | 0.5, 1.234| vírgula é decimal                        |
+ * | "1.234,5"        | 1234.5    | com vírgula, os pontos são milhar        |
+ * | "1.234", "0.5"   | 1.234, 0.5| um ponto só é decimal                    |
+ * | "1.234.567"      | 1234567   | dois ou mais pontos sem vírgula: milhar  |
+ * | "", "abc", "1.2.3", "1,2,3" | null | não é número que se leia          |
+ */
+export function parseQuantity(raw: string): number | null {
+  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
+  if (!/\d/.test(cleaned)) return null;
+  let normalized: string;
+  if (cleaned.includes(",")) {
+    // Mais de uma vírgula vira NaN no Number abaixo e sai null
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if ((cleaned.match(/\./g) ?? []).length >= 2) {
+    if (!MILHAR_EM_GRUPOS.test(cleaned)) return null;
+    normalized = cleaned.replace(/\./g, "");
+  } else {
+    normalized = cleaned;
+  }
   const value = Number(normalized);
   return Number.isFinite(value) ? value : null;
 }
