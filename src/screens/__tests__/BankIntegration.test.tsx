@@ -19,6 +19,7 @@ import { usePreferencesStore } from "../../store/preferencesStore";
 import { useToastStore } from "../../store/toastStore";
 
 const mockOnScrollDaBarra = jest.fn();
+const mockNavigate = jest.fn();
 
 jest.mock("../../hooks/useEsconderBarra", () => ({
   useEsconderBarra: () => ({
@@ -45,7 +46,7 @@ jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
-    navigate: jest.fn(),
+    navigate: mockNavigate,
     goBack: jest.fn(),
     canGoBack: () => false,
     getState: () => ({ index: 0, routes: [{ name: "Extrato" }] }),
@@ -147,6 +148,7 @@ const montar = () =>
 describe("Extrato", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNavigate.mockClear();
     prepararStores();
   });
 
@@ -354,18 +356,31 @@ describe("Extrato", () => {
       } as never);
     }
 
-    it("sucesso com banco pulado avisa o nome e manda reconectar", async () => {
-      const fetchItems = jest.fn().mockResolvedValue(undefined);
-      const runSync = jest.fn().mockResolvedValue({
-        transactionsImported: 3,
-        reconciled: 0,
+    function resultadoDaSync(sobrescrever: Record<string, unknown> = {}) {
+      return {
+        message: "Sincronização concluída",
+        uploadId: "upload-1",
+        transactionsImported: 1,
         suggested: 0,
         uncategorized: 0,
+        reconciled: 0,
+        format: "PLUGGY",
+        duplicated: false,
+        itemsSynced: 1,
+        skippedConnections: [],
+        ...sobrescrever,
+      };
+    }
+
+    it("sucesso com banco pulado avisa o nome e manda reconectar", async () => {
+      const fetchItems = jest.fn().mockResolvedValue(undefined);
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync({
+        transactionsImported: 3,
         skippedConnections: [
           { id: "c2", name: "Itaú", reason: "NEEDS_USER_ACTION" },
           { id: "c3", name: "Inter", reason: "NOT_FOUND" },
         ],
-      });
+      }));
       ligarConector(runSync, fetchItems);
 
       const { getByLabelText } = montar();
@@ -384,13 +399,7 @@ describe("Extrato", () => {
     });
 
     it("sucesso sem banco pulado fica só com o resumo", async () => {
-      const runSync = jest.fn().mockResolvedValue({
-        transactionsImported: 1,
-        reconciled: 0,
-        suggested: 0,
-        uncategorized: 0,
-        skippedConnections: [],
-      });
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync());
       ligarConector(runSync, jest.fn().mockResolvedValue(undefined));
 
       const { getByLabelText } = montar();
@@ -400,6 +409,41 @@ describe("Extrato", () => {
         expect(useToastStore.getState().message).toBe("1 transação importada."),
       );
       expect(useToastStore.getState().type).toBe("success");
+    });
+
+    it("leva a revisão com todos os uploads novos da sincronização", async () => {
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync({
+        transactionsImported: 2,
+        suggested: 1,
+        uncategorized: 1,
+        uploadIds: ["upload-1", "upload-2"],
+      }));
+      ligarConector(runSync, jest.fn().mockResolvedValue(undefined));
+
+      const { getByLabelText } = montar();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith(expect.any(String), {
+          uploadIds: ["upload-1", "upload-2"],
+        }),
+      );
+    });
+
+    it("mantém uploadId ao revisar resposta da API anterior", async () => {
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync({
+        suggested: 1,
+      }));
+      ligarConector(runSync, jest.fn().mockResolvedValue(undefined));
+
+      const { getByLabelText } = montar();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith(expect.any(String), {
+          uploadId: "upload-1",
+        }),
+      );
     });
 
     it("falha mostra o erro do store e recarrega as conexões", async () => {

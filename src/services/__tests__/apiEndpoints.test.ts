@@ -240,6 +240,24 @@ describe("api — o contrato das rotas", () => {
     expect(cliente.delete.mock.calls[0][0]).toBe("/connectors/items/cx-1");
   });
 
+  it("a fila de revisão repete uploadId para dois uploads e preserva o id único", async () => {
+    await getReviewQueue(["upload-1", "upload-2"]);
+
+    expect(cliente.get.mock.calls[0][0]).toBe("/transactions/review");
+    expect(cliente.get.mock.calls[0][1]).toMatchObject({
+      params: { uploadId: ["upload-1", "upload-2"] },
+      paramsSerializer: { indexes: null },
+    });
+
+    jest.clearAllMocks();
+    cliente.get.mockResolvedValue({ data: "RESPOSTA" });
+    await getReviewQueue("upload-legado");
+
+    expect(cliente.get.mock.calls[0][1]).toEqual({
+      params: { uploadId: "upload-legado" },
+    });
+  });
+
   it("a análise mensal manda o recorte como parâmetro", async () => {
     await getMonthlyAnalytics({ kind: "month", month: "2026-07" });
 

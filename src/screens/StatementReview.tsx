@@ -328,6 +328,10 @@ export default function StatementReview() {
 
   // O projeto não tem ParamList tipado — cast local e pontual
   const uploadId = (route.params as any)?.uploadId as string | undefined;
+  const uploadIds = (route.params as any)?.uploadIds as string[] | undefined;
+  // A API nova manda todos os uploads da sincronização; a rota antiga mantém
+  // uploadId para APKs e links já publicados.
+  const reviewScope = uploadIds?.length ? uploadIds : uploadId;
 
   const {
     groups,
@@ -365,8 +369,8 @@ export default function StatementReview() {
   // grudaria num grupo novo que o usuário nunca abriu
   const reloadQueue = useCallback(() => {
     setChoices({});
-    fetchQueue(uploadId);
-  }, [uploadId, fetchQueue]);
+    fetchQueue(reviewScope);
+  }, [reviewScope, fetchQueue]);
 
   useEffect(() => {
     reloadQueue();
