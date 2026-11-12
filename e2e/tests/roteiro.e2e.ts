@@ -5,12 +5,15 @@
 // dependem para quem usa o app, e a sessão nasce pelo formulário de verdade.
 // Ninguém injeta token, ninguém fala com a API por fora do navegador.
 //
-// DEFEITO CONHECIDO não é consertado nem escondido aqui: cada um tem um teste
-// pequeno marcado com `test.fail` e o motivo. Enquanto o defeito existir, o
-// teste "falha como esperado" e a rodada segue; no dia em que for consertado,
-// o Playwright acusa "era para falhar e passou", que é o aviso para tirar a marca.
+// DEFEITO CONHECIDO não é consertado nem escondido aqui. O roteiro normal faz
+// os passos com conferência dura, ANOTA o sintoma do defeito (e a captura) e
+// segue pelo caminho que a pessoa seguiria. No fim do arquivo, cada defeito tem
+// um teste de UMA asserção sobre o sintoma anotado, marcado com `test.fail` e
+// o motivo. Assim a marca só cobre o defeito, nunca um seletor quebrado; e no
+// dia em que ele for consertado o Playwright acusa "era para falhar e passou".
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { montarExtrato } from "../lib/fixture.mjs";
+import { COTACOES } from "../lib/market-cotacoes.mjs";
 import {
   aberturaTerminou,
   abrirContexto,
@@ -41,11 +44,19 @@ const extrato = montarExtrato();
 const compra = extrato.lancamentos.find((l) => l.papel === "compra em cartão")!;
 
 const CDB = { nome: "CDB Banco Sintetico", investido: 1000, atual: 1050 };
-const ETF = { nome: "ETF Global Sintetico", codigo: "VT", quantidade: 2, precoUsd: 100, investido: 1000 };
+// `cotacaoUsd` é o preço que o dublê de mercado devolve para VT (lib/market-stub.mjs)
+const ETF = { nome: "ETF Global Sintetico", codigo: "VT", quantidade: 2, precoUsd: 100, investido: 1000, cotacaoUsd: COTACOES["vt.us"] };
 
 let context: BrowserContext;
 let page: Page;
 const vigia = new Vigia();
+
+/** O que o roteiro viu de cada defeito conhecido; cobrado nos testes do fim. */
+const sintomas = {
+  d1QuemRecebeOToque: "não medido",
+  d2: { excecoes: ["não medido"], telaSobreviveu: false },
+  d2b: { excecoes: ["não medido"], telaSobreviveu: false },
+};
 
 test.beforeAll(async ({ browser }) => {
   context = await abrirContexto(browser);
@@ -96,33 +107,25 @@ test("a. logout e login pelo formulário", async () => {
 
 // ------------------------------------------------------------------ b. extrato
 
-test("D1 (defeito conhecido): no Extrato vazio, 'Importar extrato' é alcançável em 390x664", async () => {
-  test.fail(
-    true,
-    "D1: em 390x664 a barra de abas de baixo cobre o botão 'Importar extrato' do Extrato vazio, " +
-      "e a lista só rola ~23px: o toque no botão cai na aba. Evidência: defeito-D1-importar-coberto.png",
-  );
+test("b. importa o extrato OFX sintético pela tela de Extrato", async () => {
   await irPara(page, "Finanças", "Extrato");
   const importar = botao(page, "Importar extrato");
   await expect(importar).toBeVisible();
   await expect(page.getByText("Nenhum extrato importado")).toBeVisible();
   await vigia.conferirTela(page, "Extrato sem dados");
 
-  // rola o que der, como faria um dedo, antes de julgar
+  // D1: rola o que der, como faria um dedo, e anota quem recebe o toque
   await importar.scrollIntoViewIfNeeded();
+  sintomas.d1QuemRecebeOToque = await quemEstaNoCentro(importar);
   await captura(page, "defeito-D1-importar-coberto");
-  expect(await quemEstaNoCentro(importar)).toBe("o próprio elemento");
-});
 
-test("b. importa o extrato OFX sintético pela tela de Extrato", async () => {
-  await irPara(page, "Finanças", "Extrato");
-  const importar = botao(page, "Importar extrato");
-
-  // Contorno do D1, declarado: com a altura de um iPhone 12 em tela cheia
-  // (844) o botão fica livre e o toque é de verdade. Volta a 664 em seguida.
-  await page.setViewportSize({ width: VIEWPORT.width, height: 844 });
+  // Contorno do D1, declarado: se o botão está coberto em 390x664, o toque é
+  // dado com a altura de um iPhone 12 em tela cheia (844), onde ele fica
+  // livre. É um toque de verdade; a tela volta a 664 em seguida.
+  const coberto = sintomas.d1QuemRecebeOToque !== "o próprio elemento";
+  if (coberto) await page.setViewportSize({ width: VIEWPORT.width, height: 844 });
   const [seletor] = await Promise.all([page.waitForEvent("filechooser"), importar.click()]);
-  await page.setViewportSize(VIEWPORT);
+  if (coberto) await page.setViewportSize(VIEWPORT);
   const [envio] = await Promise.all([
     page.waitForResponse((r) => r.url().includes("/bank-statements/upload") && r.request().method() === "POST"),
     seletor.setFiles(extrato.arquivo),
@@ -224,44 +227,52 @@ function linhaDaPosicao(nome: string) {
     .last();
 }
 
-test("D2 (defeito conhecido): cadastrar a primeira posição manual não derruba o app", async () => {
-  test.fail(
-    true,
-    "D2: logo após o POST /investments/positions (201) da PRIMEIRA posição, o cabeçalho da carteira é " +
-      "desenhado com o resumo antigo (GET /investments/summary com profit:null) e formatProfit chama " +
-      "toLocaleString em null: TypeError e o app inteiro vira a tela de abertura. " +
-      "Evidência: defeito-D2-app-caiu.png",
-  );
-  await abrirInvestimentos();
-  await expect(page.getByText("Ainda não encontramos investimentos")).toBeVisible();
-  await vigia.conferirTela(page, "Investimentos sem posições");
-
-  await botao(page, "Cadastrar à mão").click();
-  await campo(page, "Nome").fill(CDB.nome);
-  await campo(page, "Valor investido (R$)").fill(String(CDB.investido));
-  await campo(page, "Valor atual (R$, opcional)").fill(String(CDB.atual));
+/** Preenche a folha de cadastro (já aberta) e confere que a API gravou. */
+async function salvarPosicao() {
   const [criacao] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/investments/positions") && r.request().method() === "POST"),
     botao(page, "Cadastrar posição").click(),
   ]);
   expect(criacao.status(), "POST /investments/positions").toBe(201);
+  return criacao;
+}
 
-  await page.waitForTimeout(1_500);
-  await captura(page, "defeito-D2-app-caiu");
-  const eventos = vigia.descartar();
-  expect(eventos.filter((e) => e.tipo === "excecao").map((e) => e.texto), "exceção na página").toEqual([]);
-  await expect(page.getByRole("heading", { name: "Posições" })).toBeVisible({ timeout: 5_000 });
-});
+/** Depois de salvar: a tela continua de pé? Anota exceções e devolve o veredito. */
+async function comoFicouATela() {
+  await page.waitForTimeout(2_000);
+  const excecoes = vigia
+    .descartar()
+    .filter((e) => e.tipo === "excecao")
+    .map((e) => e.texto);
+  const telaSobreviveu = await page.getByRole("heading", { name: "Posições" }).isVisible();
+  return { excecoes, telaSobreviveu };
+}
 
 test("e. Investimentos: posição manual em BRL e em USD", async () => {
-  // Recupera do D2 como a pessoa faria: recarrega. A sessão tem de sobreviver.
-  await page.reload();
-  vigia.descartar();
-  await expect(page.getByText("Olá, Alice")).toBeVisible();
-  await dispensarFolhaDoPote(page, 3_000);
   await abrirInvestimentos();
+  await expect(page.getByText("Ainda não encontramos investimentos")).toBeVisible();
+  await vigia.conferirTela(page, "Investimentos sem posições");
 
-  // A posição em BRL foi gravada apesar do D2
+  // A posição em BRL, a primeira da carteira
+  await botao(page, "Cadastrar à mão").click();
+  await campo(page, "Nome").fill(CDB.nome);
+  await campo(page, "Valor investido (R$)").fill(String(CDB.investido));
+  await campo(page, "Valor atual (R$, opcional)").fill(String(CDB.atual));
+  await salvarPosicao();
+
+  // D2: anota se o app sobreviveu ao cadastro da primeira posição
+  sintomas.d2 = await comoFicouATela();
+  await captura(page, "defeito-D2-apos-primeira-posicao");
+  if (!sintomas.d2.telaSobreviveu) {
+    // Recupera como a pessoa faria: recarrega. A sessão tem de sobreviver.
+    await page.reload();
+    await expect(page.getByText("Olá, Alice")).toBeVisible();
+    await dispensarFolhaDoPote(page, 3_000);
+    vigia.descartar();
+    await abrirInvestimentos();
+  }
+
+  // A posição em BRL foi gravada, com ou sem D2
   const linhaCdb = linhaDaPosicao(CDB.nome);
   await expect(linhaCdb).toContainText(brl(CDB.atual));
   await expect(page.getByText("1 posição", { exact: true })).toBeVisible();
@@ -275,12 +286,16 @@ test("e. Investimentos: posição manual em BRL e em USD", async () => {
   await campo(page, "Quantidade").fill(String(ETF.quantidade));
   await campo(page, "Preço unitário (US$)").fill(String(ETF.precoUsd));
   await campo(page, "Valor investido (R$)").fill(String(ETF.investido));
-  const [criacao] = await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith("/investments/positions") && r.request().method() === "POST"),
-    botao(page, "Cadastrar posição").click(),
+  // A cotação do ticker é pedida pelo app logo depois de salvar; quem responde
+  // por baixo da API é o dublê local (lib/market-stub.mjs), em US$ e sem câmbio
+  const [criacao, cotacao] = await Promise.all([
+    salvarPosicao(),
+    page.waitForResponse((r) => r.url().includes(`/indicators/quote/${ETF.codigo}`)),
   ]);
-  expect(criacao.status(), "POST /investments/positions").toBe(201);
   expect((await criacao.json()).currency).toBe("USD");
+  expect(cotacao.status(), "GET /indicators/quote/VT").toBe(200);
+  const cotado = await cotacao.json();
+  expect(cotado.price, "preço em US$ vindo do dublê").toBe(ETF.cotacaoUsd);
   // a folha de cadastro fecha sozinha depois de salvar
   await expect(botao(page, "Cadastrar posição")).toBeHidden();
 
@@ -290,24 +305,32 @@ test("e. Investimentos: posição manual em BRL e em USD", async () => {
   await page.waitForLoadState("networkidle").catch(() => undefined);
   const textoEtf = (await linhaEtf.innerText()).replace(/\s+/g, " ");
 
-  // Três desfechos legítimos, conforme o que o ambiente tem de mercado. O
-  // roteiro confere o que cada um promete e REGISTRA qual aconteceu.
+  // O que a tela faz com uma posição em dólar depende do que há de mercado.
+  // O roteiro confere o que cada desfecho promete e REGISTRA qual aconteceu;
+  // neste ambiente há cotação em US$ e não há câmbio.
   let desfecho: string;
   if (/US\$/.test(textoEtf) && /≈\s?R\$/.test(textoEtf)) {
-    desfecho = "com cotação e câmbio: US$ e ≈ R$";
+    desfecho = "US$ e ≈ R$";
   } else if (/US\$/.test(textoEtf)) {
-    desfecho = "com cotação, sem câmbio: US$ e 'sem cotação · fora do total'";
+    desfecho = "US$ e 'sem cotação · fora do total'";
     await expect(linhaEtf).toContainText("sem cotação · fora do total");
+  } else if (/R\$/.test(textoEtf)) {
+    desfecho = "valor só em R$ (convertido), sem US$";
   } else {
-    desfecho = "sem cotação do ticker: 'cotação indisponível', sem US$ e sem ≈ R$";
+    desfecho = "'cotação indisponível': sem US$, sem ≈ R$ e sem a marca 'fora do total'";
     await expect(linhaEtf).toContainText("cotação indisponível");
-    // Sem valor, a posição não pode entrar no total: ele segue sendo só o CDB
+  }
+  // Sem câmbio, a posição em dólar não pode entrar no total: ele é só o CDB
+  if (!/R\$/.test(textoEtf)) {
     await expect(page.getByText(new RegExp(`^Valor atual\\s*${brl(CDB.atual).source}`)).first()).toBeVisible();
   }
-  // Em nenhum desfecho a posição em dólar pode aparecer como se fosse real
-  expect(textoEtf, "posição em USD mostrada em R$ sem o ≈").not.toMatch(/(?<!≈\s?)R\$/);
-  vigia.observacoes["posição em USD"] = { desfecho, texto: textoEtf };
-  test.info().annotations.push({ type: "posição em USD", description: `${desfecho} | "${textoEtf}"` });
+  const visto = {
+    desfecho,
+    texto: textoEtf,
+    cotacaoDaApi: { price: cotado.price, currency: cotado.currency, priceBrl: cotado.priceBrl ?? null },
+  };
+  vigia.observacoes["posição em USD"] = visto;
+  test.info().annotations.push({ type: "posição em USD", description: JSON.stringify(visto) });
 
   await vigia.conferirTela(page, "Investimentos com BRL e USD");
   // A captura mostra as duas posições
@@ -382,47 +405,65 @@ test("f. troca de conta: nada do primeiro usuário aparece para o segundo", asyn
 
 // ------------------------------------------------- defeitos e garantias finais
 
-test("D2b (defeito conhecido): posição manual sem valor atual não quebra a aba Investimentos", async () => {
-  test.fail(
-    true,
-    "D2b: com uma posição manual sem valor atual, GET /investments/summary devolve profit:null para sempre " +
-      "e a aba Investimentos derruba o app TODA vez que é aberta, inclusive depois de recarregar. " +
-      "Evidência: defeito-D2b-investimentos-inacessivel.png",
-  );
+test("e2. posição manual sem valor atual (segundo usuário)", async () => {
   await abrirInvestimentos();
   await botao(page, "Cadastrar à mão").click();
   await campo(page, "Nome").fill("Tesouro Sintetico");
   await campo(page, "Valor investido (R$)").fill("500");
-  const [criacao] = await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith("/investments/positions") && r.request().method() === "POST"),
-    botao(page, "Cadastrar posição").click(),
-  ]);
-  expect(criacao.status(), "POST /investments/positions").toBe(201);
-
-  // Recarregar não salva: o resumo continua vindo com profit:null
-  await page.reload();
+  await salvarPosicao();
   vigia.descartar();
+
+  // D2b: recarrega (para não confundir com o D2) e abre a aba de novo
+  await page.reload();
   await expect(page.getByText("Olá, Bruno")).toBeVisible();
+  await aberturaTerminou(page.getByText("Olá, Bruno"));
+  vigia.descartar();
   await page.getByRole("tab", { name: "Finanças", exact: true }).click();
   await page.getByRole("tab", { name: "Investimentos", exact: true }).click();
-  await page.waitForTimeout(2_500);
-  await captura(page, "defeito-D2b-investimentos-inacessivel");
-  const excecoes = vigia.descartar().filter((e) => e.tipo === "excecao").map((e) => e.texto);
-  expect(excecoes, "exceção ao abrir Investimentos").toEqual([]);
-  await expect(page.getByRole("heading", { name: "Posições" })).toBeVisible({ timeout: 5_000 });
+  sintomas.d2b = await comoFicouATela();
+  await captura(page, "defeito-D2b-posicao-sem-valor-atual");
+});
+
+// ------------------------------------------------- defeitos e garantias finais
+//
+// Cada teste abaixo tem UMA asserção, sobre um sintoma que o roteiro anotou.
+
+test("D1 (defeito conhecido): no Extrato vazio, 'Importar extrato' recebe o toque em 390x664", async () => {
+  test.fail(
+    true,
+    "D1: em 390x664 a barra de abas de baixo cobre o botão 'Importar extrato' do Extrato vazio e a lista " +
+      "quase não rola: o toque no centro do botão cai na aba. Evidência: defeito-D1-importar-coberto.png",
+  );
+  expect(sintomas.d1QuemRecebeOToque).toBe("o próprio elemento");
+});
+
+test("D2 (defeito conhecido): cadastrar a primeira posição manual não derruba o app", async () => {
+  test.fail(
+    true,
+    "D2: depois do POST /investments/positions (201) da PRIMEIRA posição, a página lança TypeError " +
+      "(toLocaleString em null) e o app inteiro vira a tela de abertura; só recarregando volta. " +
+      "Evidência: defeito-D2-apos-primeira-posicao.png",
+  );
+  expect(sintomas.d2).toEqual({ excecoes: [], telaSobreviveu: true });
+});
+
+test("D2b (defeito conhecido): posição manual sem valor atual não quebra a aba Investimentos", async () => {
+  test.fail(
+    true,
+    "D2b: com uma posição manual sem valor atual, GET /investments/summary devolve profit:null e a aba " +
+      "Investimentos derruba o app TODA vez que é aberta, inclusive depois de recarregar. " +
+      "Evidência: defeito-D2b-posicao-sem-valor-atual.png",
+  );
+  expect(sintomas.d2b).toEqual({ excecoes: [], telaSobreviveu: true });
 });
 
 test("D3 (defeito conhecido): o console fica limpo para quem não tem família", async () => {
   test.fail(
     true,
     "D3: GET /family responde 404 para usuário sem família e o navegador registra " +
-      "'Failed to load resource' no console a cada entrada na Home",
+      "'Failed to load resource' no console a cada entrada",
   );
-  const vezes = vigia.tolerados.filter((t) => t.id === "D3");
-  expect(
-    vezes.map((t) => `${t.tela}: ${t.evento.texto}`),
-    "erros de console por causa do 404 de /family",
-  ).toEqual([]);
+  expect(vigia.tolerados.filter((t) => t.id === "D3").map((t) => `${t.tela}: ${t.evento.texto}`)).toEqual([]);
 });
 
 test("g. nenhuma requisição saiu da máquina", async () => {

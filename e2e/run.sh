@@ -7,6 +7,7 @@
 #   1. a web (`expo export`) apontando para a API LOCAL, sem JVM no ar;
 #   2. um Postgres descartável (container com dados em tmpfs, some ao parar);
 #   3. a API (um JVM só, Flyway de verdade, segredo JWT de teste, CORS local);
+#      (com um dublê local só para a cotação de ticker do exterior);
 #   4. um servidor estático com fallback de SPA para o `dist`;
 #   5. o roteiro do Playwright (WebKit, 390x664).
 # E derruba tudo o que subiu ao sair, com sucesso ou com falha.
@@ -35,6 +36,7 @@ STARTED_AT=$(date +%s)
 
 API_PID=""
 WEB_PID=""
+STUB_PID=""
 PG_STARTED=""
 KILLED=()
 
@@ -89,11 +91,12 @@ cleanup() {
   trap - EXIT INT TERM
   log "derrubando o que subiu"
   kill_tree "$WEB_PID" "estatico"
+  kill_tree "$STUB_PID" "duble-mercado"
   kill_tree "$API_PID" "api-jvm"
   if [[ -n "$PG_STARTED" ]]; then
     docker rm -f "$PG_NAME" >/dev/null 2>&1 && KILLED+=("container=$PG_NAME")
   fi
-  rm -f "$ART_DIR/web.pid"
+  rm -f "$ART_DIR/web.pid" "$ART_DIR/stub.pid"
   echo "[e2e] derrubados: ${KILLED[*]:-nada}"
   echo "[e2e] tempo total: $(($(date +%s) - STARTED_AT))s"
   exit "$code"
@@ -142,6 +145,7 @@ else
 fi
 WEB_PORT="$(node "$E2E_DIR/lib/free-port.mjs" "${E2E_WEB_PORT:-18081}")"
 PG_PORT="$(node "$E2E_DIR/lib/free-port.mjs" "${E2E_PG_PORT:-15432}")"
+STUB_PORT="$(node "$E2E_DIR/lib/free-port.mjs" "${E2E_STUB_PORT:-18082}")"
 API_URL="http://127.0.0.1:$API_PORT"
 WEB_URL="http://127.0.0.1:$WEB_PORT"
 log "API em $API_URL · web em $WEB_URL · Postgres em 127.0.0.1:$PG_PORT · API de $API_DIR"
@@ -192,6 +196,11 @@ ARGFILE="$API_DIR/target/e2e-java.args"
 printf -- '-cp\n"%s%s%s"\n' "$(to_native "$API_DIR/target/classes")" "$SEP" \
   "$(tr -d '\r\n' <"$API_DIR/target/e2e-classpath.txt" | tr '\\' '/')" >"$ARGFILE"
 
+# Dublê da cotação de ticker do exterior (só ela; câmbio fica sem fonte de propósito)
+node "$E2E_DIR/lib/market-stub.mjs" "$STUB_PORT" "$ART_DIR/stub.pid" >"$ART_DIR/stub.log" 2>&1 &
+wait_http "http://127.0.0.1:$STUB_PORT/?s=vt.us" 15 "o dublê de mercado"
+STUB_PID="$(cat "$ART_DIR/stub.pid" 2>/dev/null || pid_on_port "$STUB_PORT")"
+
 require_memory "a JVM da API"
 log "subindo a API"
 (
@@ -207,7 +216,7 @@ log "subindo a API"
   export BRAPI_TOKEN=token-de-teste
   exec java -Xmx384m -XX:+UseSerialGC -Dfile.encoding=UTF-8 "@$(to_native "$ARGFILE")" \
     br.com.economize.EconomizeApiApplication \
-    "--spring.config.additional-location=file:$(to_native "$E2E_DIR/api.properties")"
+    "--spring.config.additional-location=file:$(to_native "$E2E_DIR/api.properties")"     "--economize.market.stooq-url=http://127.0.0.1:$STUB_PORT/q/l/"
 ) >"$ART_DIR/api.log" 2>&1 &
 API_BASH_PID=$!
 for ((i = 0; i < 90; i++)); do
