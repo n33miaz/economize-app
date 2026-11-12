@@ -96,9 +96,9 @@ describe("formatPercent", () => {
     expect(formatPercent(1234.5, { decimals: 1 })).toBe("1.234,5%");
   });
 
-  it("NaN e Infinity viram traço em vez de assustar (ou mentir) na tela", () => {
-    expect(formatPercent(NaN)).toBe(SEM_VALOR);
-    expect(formatPercent(Infinity)).toBe(SEM_VALOR);
+  it("NaN e Infinity viram zero em vez de assustar na tela", () => {
+    expect(formatPercent(NaN)).toBe("0,00%");
+    expect(formatPercent(Infinity)).toBe("0,00%");
   });
 });
 
@@ -112,8 +112,8 @@ describe("formatDecimal", () => {
     expect(formatDecimal(5.185, 1)).toBe("5,2");
   });
 
-  it("valor inválido vira traço, não um zero inventado", () => {
-    expect(formatDecimal(NaN)).toBe(SEM_VALOR);
+  it("valor inválido vira zero", () => {
+    expect(formatDecimal(NaN)).toBe("0,00");
   });
 });
 
@@ -135,10 +135,10 @@ describe("valor ausente", () => {
     for (const valor of ausentes) expect(formatBRLCompact(valor)).toBe(SEM_VALOR);
   });
 
-  it("percentual e número solto ausentes também viram traço", () => {
+  it("percentual e número solto ausentes não lançam: seguem virando zero", () => {
     for (const valor of ausentes) {
-      expect(formatPercent(valor)).toBe(SEM_VALOR);
-      expect(formatDecimal(valor)).toBe(SEM_VALOR);
+      expect(formatPercent(valor)).toBe("0,00%");
+      expect(formatDecimal(valor)).toBe("0,00");
     }
   });
 

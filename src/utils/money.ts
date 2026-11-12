@@ -21,9 +21,11 @@ const NBSP = "\u00A0";
  * Campo opcional da API chega `null` mesmo onde o tipo promete `number` (o
  * resumo de investimentos manda `profit: null` sem posição com preço), e
  * `null.toLocaleString` é exceção de renderização: em 12/11/2026 isso levava
- * o app inteiro para a tela de abertura. Todo formatador daqui devolve este
- * traço para nulo, indefinido, NaN e infinito. Nunca zero: "R$ 0,00" afirmaria
- * um valor que ninguém mediu.
+ * o app inteiro para a tela de abertura. Os formatadores de DINHEIRO devolvem
+ * este traço para nulo, indefinido, NaN e infinito. Nunca zero: "R$ 0,00"
+ * afirmaria um valor que ninguém mediu. (Percentual e número solto seguem a
+ * regra antiga deles, zero: nunca lançaram, e o resultado é colado a unidades
+ * — "% a.a.", "pts" — onde um traço no meio da frase leria pior.)
  */
 export const SEM_VALOR = "—";
 
@@ -88,9 +90,8 @@ export function formatPercent(
   opts?: { decimals?: number; signed?: boolean },
 ): string {
   const decimals = opts?.decimals ?? 2;
-  // Um "NaN%" na tela assusta mais do que informa — e "0,00%" mentiria
-  if (!temValor(value)) return SEM_VALOR;
-  const safe = value;
+  // NaN/Infinity viram 0: um "NaN%" na tela assusta mais do que informa
+  const safe = Number.isFinite(value) ? value : 0;
   const digits = safe.toLocaleString("pt-BR", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -105,8 +106,8 @@ export function formatPercent(
  * símbolo à parte, resultado de conversão). Mesma razão do `formatPercent`.
  */
 export function formatDecimal(value: number, decimals = 2): string {
-  if (!temValor(value)) return SEM_VALOR;
-  return value.toLocaleString("pt-BR", {
+  const safe = Number.isFinite(value) ? value : 0;
+  return safe.toLocaleString("pt-BR", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
