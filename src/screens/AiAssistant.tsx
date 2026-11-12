@@ -147,7 +147,9 @@ function MessageBubble({
           textAlign: isUser ? "right" : "left",
         }}
       >
-        {new Date(item.timestamp).toLocaleTimeString([], {
+        {/* Fuso e formato do app, não do aparelho: com `[]` um celular em
+            inglês mostrava "03:15 PM" no meio de um app em português */}
+        {new Date(item.timestamp).toLocaleTimeString("pt-BR", {
           hour: "2-digit",
           minute: "2-digit",
         })}
