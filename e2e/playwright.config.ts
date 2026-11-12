@@ -25,6 +25,9 @@ export default defineConfig({
     // WebKit porque o alvo do dono é o Safari do iPhone 12. Viewport (390x664),
     // tema e fuso ficam em tests/apoio.ts, junto do contexto que o roteiro abre
     browserName: "webkit",
+    // Sem isto um clique que nunca fica acionável espera o teste inteiro (90 s)
+    // e o relatório não aponta o passo
+    actionTimeout: 15_000,
     trace: "off",
     video: "off",
   },
