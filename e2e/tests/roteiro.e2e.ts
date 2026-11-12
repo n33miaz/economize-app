@@ -166,8 +166,10 @@ test("b2. abas de Finanças não saem do lugar com scrollIntoView ou foco", asyn
   // As cenas vizinhas ficam montadas (com aria-hidden) ao lado da visível; o
   // contêiner delas era rolável e um scrollIntoView/foco num elemento do
   // Extrato, com a Carteira aberta, deixava meia aba de cada lado na tela
+  // As abas de cima não publicam aria-selected no web (só a barra de baixo
+  // publica): quem prova que a Carteira continua na tela é o elemento do
+  // Extrato seguir inteiro fora dela, conferido no fim
   await tocarAba(page, "Carteira");
-  await expect(page.getByRole("tab", { name: "Carteira", exact: true })).toHaveAttribute("aria-selected", "true");
   const doExtrato = page.getByRole("button", {
     name: "Ver de onde estes números foram somados",
     includeHidden: true,
@@ -183,7 +185,14 @@ test("b2. abas de Finanças não saem do lugar com scrollIntoView ou foco", asyn
   const rolados = await doExtrato.evaluate((el) => {
     const achados: string[] = [];
     for (let n: Element | null = el; n; n = n.parentElement) {
-      if (n.scrollLeft !== 0) achados.push(`${n.tagName}.${n.className} scrollLeft=${n.scrollLeft}`);
+      if (n.scrollLeft !== 0) {
+        const s = getComputedStyle(n);
+        achados.push(
+          `${n.tagName}.${n.className} scrollLeft=${n.scrollLeft} ` +
+            `(largura ${n.clientWidth}/${n.scrollWidth}, overflow-x ${s.overflowX}, ` +
+            `aria-hidden ${n.getAttribute("aria-hidden")}, style "${n.getAttribute("style") ?? ""}")`,
+        );
+      }
     }
     return achados;
   });
@@ -194,7 +203,6 @@ test("b2. abas de Finanças não saem do lugar com scrollIntoView ou foco", asyn
   const caixa = await doExtrato.boundingBox();
   expect(caixa, "caixa do elemento do Extrato").not.toBeNull();
   expect(caixa!.x, "elemento do Extrato segue fora da tela").toBeGreaterThanOrEqual(largura);
-  await expect(page.getByRole("tab", { name: "Carteira", exact: true })).toHaveAttribute("aria-selected", "true");
   await doExtrato.evaluate((el) => (el as HTMLElement).blur());
   await captura(page, "carteira-apos-scrollintoview-do-extrato");
 });
