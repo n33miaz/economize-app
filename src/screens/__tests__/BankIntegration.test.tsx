@@ -1,5 +1,5 @@
 import React from "react";
-import { SectionList, StyleSheet } from "react-native";
+import { ScrollView, SectionList, StyleSheet } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
@@ -16,6 +16,15 @@ import { useConnectorStore } from "../../store/connectorStore";
 import { useFamilyStore } from "../../store/familyStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
+
+const mockOnScrollDaBarra = jest.fn();
+
+jest.mock("../../hooks/useEsconderBarra", () => ({
+  useEsconderBarra: () => ({
+    onScroll: mockOnScrollDaBarra,
+    scrollEventThrottle: 16,
+  }),
+}));
 
 // A conferencia de saldo (EC-196) sai na entrada da tela. Aqui ela devolve
 // vazio: o que estes testes cobrem e a tela de conexoes, nao o aviso -- que
@@ -138,6 +147,25 @@ describe("Extrato", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prepararStores();
+  });
+
+  it("liga a barra à rolagem vertical, não aos atalhos horizontais", () => {
+    const { UNSAFE_getAllByType, UNSAFE_getByType } = montar();
+    const listaPrincipal = UNSAFE_getByType(SectionList);
+
+    // A rolagem que muda a ilha é a do extrato, não a da fita de apps bancários.
+    fireEvent.scroll(listaPrincipal, {
+      nativeEvent: { contentOffset: { x: 0, y: 120 } },
+    });
+
+    expect(mockOnScrollDaBarra).toHaveBeenCalledTimes(1);
+    expect(listaPrincipal.props.scrollEventThrottle).toBe(16);
+    const atalhosHorizontais = UNSAFE_getAllByType(ScrollView).find(
+      (scrollView) => scrollView.props.horizontal,
+    );
+    expect(atalhosHorizontais).toBeDefined();
+    expect(atalhosHorizontais?.props.onScroll).toBeUndefined();
+    expect(atalhosHorizontais?.props.scrollEventThrottle).toBeUndefined();
   });
 
   it("lista o lançamento importado", async () => {

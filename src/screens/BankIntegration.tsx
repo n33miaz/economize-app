@@ -957,6 +957,10 @@ export default function BankIntegration() {
   return (
     <PageContainer style={{ flex: 1, position: "relative" }}>
       <SectionList
+        // O hook usa o deslocamento vertical: é esta lista que move o extrato.
+        // Ligá-lo aos atalhos laterais deixava a ilha parada durante a rolagem
+        // que a pessoa realmente faz para ler os lançamentos.
+        {...barraQueSeEsconde}
         sections={secoes}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -1387,7 +1391,8 @@ export default function BankIntegration() {
                     Acesso Rápido
                   </Text>
                   <ScrollView
-                    {...barraQueSeEsconde}
+                    // Esta fita só desliza para os lados; o hook acompanha Y e
+                    // pertence à SectionList vertical acima.
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerClassName="gap-3"
