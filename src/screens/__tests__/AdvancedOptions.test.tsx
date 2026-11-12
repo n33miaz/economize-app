@@ -1,4 +1,5 @@
 import React from "react";
+import { Share } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
@@ -164,5 +165,57 @@ describe("Opções avançadas", () => {
     await waitFor(() =>
       expect(useToastStore.getState().message).toContain("N\u00e3o consegui reprocessar"),
     );
+  });
+
+  describe("exportar meus dados", () => {
+    // As outras tr\u00eas fontes respondem na hora: aqui interessa o extrato
+    const prepararFontes = (historicoInteiro: boolean) => {
+      useUserStore.setState({
+        me: null,
+        fetchMe: jest.fn().mockResolvedValue(undefined),
+      } as never);
+      useWalletStore.setState({
+        transactions: [],
+        fetchTransactions: jest.fn().mockResolvedValue(undefined),
+      } as never);
+      useCategoriesStore.setState({
+        items: [],
+        fetch: jest.fn().mockResolvedValue(undefined),
+      } as never);
+      const garantir = jest.fn().mockResolvedValue(historicoInteiro);
+      useBankStore.setState({
+        transactions: [],
+        ensureHistory: garantir,
+      } as never);
+      return garantir;
+    };
+
+    it("espera o hist\u00f3rico inteiro do extrato antes de gerar o arquivo", async () => {
+      const compartilhar = jest
+        .spyOn(Share, "share")
+        .mockResolvedValue({ action: "sharedAction" } as never);
+      const garantir = prepararFontes(true);
+
+      const { getByText } = montar();
+      fireEvent.press(await waitFor(() => getByText("Exportar meus dados")));
+
+      await waitFor(() => expect(compartilhar).toHaveBeenCalled());
+      expect(garantir).toHaveBeenCalled();
+      compartilhar.mockRestore();
+    });
+
+    it("sem o hist\u00f3rico inteiro, n\u00e3o gera arquivo pela metade", async () => {
+      const compartilhar = jest.spyOn(Share, "share");
+      prepararFontes(false);
+
+      const { getByText } = montar();
+      fireEvent.press(await waitFor(() => getByText("Exportar meus dados")));
+
+      await waitFor(() =>
+        expect(useToastStore.getState().message).toMatch(/extrato inteiro/),
+      );
+      expect(compartilhar).not.toHaveBeenCalled();
+      compartilhar.mockRestore();
+    });
   });
 });

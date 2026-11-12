@@ -115,12 +115,23 @@ export default function AdvancedOptions() {
       // O pacote deve refletir o servidor, não o cache de quando cada tela
       // abriu — recarrega as quatro fontes antes de montar. Os stores engolem
       // falhas individuais (setam error), então o export segue com o que veio.
-      await Promise.all([
+      //
+      // O extrato é a exceção: na primeira carga a store tem primeiro só os
+      // lançamentos recentes, e um backup com três meses no lugar de dois
+      // anos é pior que nenhum — sem o histórico inteiro, não gera arquivo
+      const [, historicoInteiro] = await Promise.all([
         useUserStore.getState().fetchMe(),
-        useBankStore.getState().fetchTransactions(),
+        useBankStore.getState().ensureHistory(),
         useWalletStore.getState().fetchTransactions(),
         useCategoriesStore.getState().fetch(),
       ]);
+      if (!historicoInteiro) {
+        showToast(
+          "Não consegui carregar o extrato inteiro. Tente exportar de novo.",
+          "error",
+        );
+        return;
+      }
       const prefs = usePreferencesStore.getState();
       const payload = buildExportPayload({
         me: useUserStore.getState().me,
