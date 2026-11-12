@@ -10,6 +10,11 @@ import * as api from "../../services/api";
 import { useConfirmStore } from "../../store/confirmStore";
 import { useToastStore } from "../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 jest.mock("../../services/api", () => ({
   __esModule: true,
   default: {},
@@ -85,7 +90,10 @@ describe("Security", () => {
     useConfirmStore.setState({ request: null });
   });
 
-  afterEach(() => showToastSpy.mockRestore());
+  afterEach(() => {
+    showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
+  });
 
   it("desligada, oferece ativar e diz o que protege a conta hoje", async () => {
     mocked.getMfaStatus.mockResolvedValue(DESLIGADO);

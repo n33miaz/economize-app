@@ -11,6 +11,11 @@ import { DEFAULT_PLANS, usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useToastStore } from "../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 jest.mock("../../services/api", () => ({
   getPlans: jest.fn(),
   registerPlanInterest: jest.fn(),
@@ -53,7 +58,10 @@ describe("PremiumOfferSheet", () => {
       .mockImplementation(() => {});
   });
 
-  afterEach(() => showToastSpy.mockRestore());
+  afterEach(() => {
+    showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
+  });
 
   it("fechada, não desenha nada", () => {
     const { queryByLabelText } = montar({ visible: false, onClose: jest.fn() });
