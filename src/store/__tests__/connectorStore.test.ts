@@ -38,6 +38,8 @@ const item = (id: string) => ({
   institution: "Banco Inter S.A.",
   createdAt: "2026-08-30T00:00:00Z",
   lastSyncedAt: null,
+  status: "UPDATED",
+  needsAttention: false,
 });
 
 beforeEach(() => {
@@ -96,6 +98,16 @@ describe("buildConnectUrl", () => {
     );
     expect(url!.split("#")[0]).not.toContain("tok-secreto");
     expect(url!.split("#")[0]).not.toContain("exemplo.test");
+  });
+
+  it("pede o token em modo atualizacao para reconectar a instituicao certa", async () => {
+    api.createConnectToken.mockResolvedValue("tok-secreto");
+
+    await useConnectorStore
+      .getState()
+      .buildConnectUrl("economize://conectar", "item-reconectar");
+
+    expect(api.createConnectToken).toHaveBeenCalledWith("item-reconectar");
   });
 
   it("sem widget no status, não abre o navegador e explica", async () => {

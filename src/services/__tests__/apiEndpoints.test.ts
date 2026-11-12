@@ -215,6 +215,13 @@ describe("api — o contrato das rotas", () => {
     cliente.post.mockResolvedValue({ data: { accessToken: "tok" } });
     await expect(createConnectToken()).resolves.toBe("tok");
     expect(cliente.post.mock.calls[0][0]).toBe("/connectors/connect-token");
+    expect(cliente.post.mock.calls[0][2]).toMatchObject({ params: undefined });
+
+    jest.clearAllMocks();
+    cliente.post.mockResolvedValue({ data: { accessToken: "tok" } });
+    await expect(createConnectToken("item-1")).resolves.toBe("tok");
+    expect(cliente.post.mock.calls[0][0]).toBe("/connectors/connect-token");
+    expect(cliente.post.mock.calls[0][2]).toMatchObject({ params: { itemId: "item-1" } });
 
     jest.clearAllMocks();
     cliente.post.mockResolvedValue({ data: "RESPOSTA" });

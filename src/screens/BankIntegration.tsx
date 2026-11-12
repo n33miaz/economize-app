@@ -663,12 +663,12 @@ export default function BankIntegration() {
     return () => sub.remove();
   }, [registrarRetorno]);
 
-  const handleConectarBanco = async () => {
+  const handleConectarBanco = async (itemId?: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // `createURL` resolve o destino por plataforma: deep link no aparelho,
     // URL da origem na web
     const destino = ExpoLinking.createURL("/");
-    const url = await buildConnectUrl(destino);
+    const url = await buildConnectUrl(destino, itemId);
     if (!url) {
       showToast(
         useConnectorStore.getState().error || "Não foi possível iniciar.",
@@ -1363,6 +1363,19 @@ export default function BankIntegration() {
                               prefix="sincronizado"
                               style={{ marginTop: 2 }}
                             />
+                            {conexao.needsAttention && (
+                              <TouchableOpacity
+                                className="self-start mt-1"
+                                onPress={() => handleConectarBanco(conexao.itemId)}
+                                disabled={isLinking}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${nome} precisa reconectar`}
+                              >
+                                <Text className="text-accent font-bold text-xs">
+                                  Reconectar
+                                </Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                           <TouchableOpacity
                             onPress={() => handleDesconectar(conexao.id, nome)}
@@ -1383,7 +1396,7 @@ export default function BankIntegration() {
 
                     <TouchableOpacity
                       className="flex-row items-center justify-center bg-accentMuted border border-accent rounded-full px-4 py-3 mt-1"
-                      onPress={handleConectarBanco}
+                      onPress={() => handleConectarBanco()}
                       disabled={isLinking}
                       accessibilityLabel="Conectar um banco pelo Open Finance"
                       accessibilityRole="button"
@@ -1591,7 +1604,7 @@ export default function BankIntegration() {
                   connector.enabled ? "Conectar banco" : undefined
                 }
                 onSecondaryAction={
-                  connector.enabled ? handleConectarBanco : undefined
+                  connector.enabled ? () => handleConectarBanco() : undefined
                 }
               />
             </Animated.View>
