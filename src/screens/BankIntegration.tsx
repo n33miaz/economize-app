@@ -1147,9 +1147,13 @@ export default function BankIntegration() {
               <>
                 {/* Os totais somam o histórico INTEIRO: com só a lista recente
                     eles afirmariam um número que ainda vai mudar. Esperam em
-                    esqueleto, como na primeira abertura */}
+                    esqueleto, como na primeira abertura, enquanto o resto vem;
+                    se o resto falhou, somem (esqueleto parado promete uma
+                    carga que não está acontecendo) e o rodapé explica */}
                 {!historyComplete ? (
-                  <MetricRowSkeleton />
+                  isLoadingHistory ? (
+                    <MetricRowSkeleton />
+                  ) : null
                 ) : (
                   <Animated.View entering={cardEntering} className="mb-4">
                     {/* EC-225: o bloco inteiro gira, e não cada número. Os três saem
@@ -1545,16 +1549,36 @@ export default function BankIntegration() {
         }
         // A lista recente chega antes do histórico inteiro: o fim dela diz,
         // discretamente, que o resto está a caminho — sem isso o último
-        // lançamento de três meses atrás pareceria o primeiro da conta
+        // lançamento de três meses atrás pareceria o primeiro da conta. Se o
+        // resto falhou, a mesma linha diz isso e vira o "tentar de novo"
         ListFooterComponent={
-          !inFamilyScope && isLoadingHistory && transactions.length > 0 ? (
+          inFamilyScope ||
+          historyComplete ||
+          transactions.length === 0 ? null : isLoadingHistory ? (
             <Text
               className="text-textTertiary text-center mt-4"
               style={{ fontSize: 11, lineHeight: 16 }}
             >
               Carregando lançamentos mais antigos…
             </Text>
-          ) : null
+          ) : (
+            <TouchableOpacity
+              onPress={() => fetchTransactions(true)}
+              disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Os lançamentos mais antigos não carregaram. Tentar de novo"
+              className="mt-4"
+              style={{ minHeight: 44, justifyContent: "center" }}
+            >
+              <Text
+                className="text-textTertiary text-center"
+                style={{ fontSize: 11, lineHeight: 16 }}
+              >
+                Os lançamentos mais antigos não carregaram. Toque para tentar de
+                novo.
+              </Text>
+            </TouchableOpacity>
+          )
         }
       />
 

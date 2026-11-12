@@ -1,6 +1,6 @@
 import React from "react";
 import { SectionList, StyleSheet } from "react-native";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -159,6 +159,29 @@ describe("Extrato", () => {
     expect(getByText("Carregando lançamentos mais antigos…")).toBeTruthy();
     // Somar três meses e chamar de "Saídas" seria afirmar um número que muda
     expect(queryByText("Saídas")).toBeNull();
+  });
+
+  it("se o resto do histórico falhou, o rodapé diz e oferece tentar de novo", async () => {
+    const buscar = jest.fn().mockResolvedValue(undefined);
+    useBankStore.setState({
+      historyComplete: false,
+      isLoadingHistory: false,
+      fetchedAt: null,
+      fetchTransactions: buscar,
+    } as never);
+
+    const { getByText, queryByText } = montar();
+
+    const aviso = await waitFor(() =>
+      getByText(/lançamentos mais antigos não carregaram/),
+    );
+    // Sem esqueleto parado e sem total afirmado sobre a lista parcial
+    expect(queryByText("Saídas")).toBeNull();
+    expect(queryByText("Carregando lançamentos mais antigos…")).toBeNull();
+
+    buscar.mockClear();
+    fireEvent.press(aviso);
+    expect(buscar).toHaveBeenCalledWith(true);
   });
 
   it("com o histórico inteiro, totais na tela e sem aviso no rodapé", async () => {
