@@ -215,9 +215,12 @@ api.interceptors.response.use(
 
     // 5xx que não é hibernação: uma repetição, em silêncio. `error.config`
     // pode vir undefined (falha antes do request montar); sem a guarda o
-    // TypeError aqui mascarava o erro original
+    // TypeError aqui mascarava o erro original. `retryable` fica de fora no
+    // 503 que a própria API classificou ("tente em alguns minutos"): repetir
+    // a sincronização em um segundo releria todos os bancos à toa
     if (
       failure.kind === "server" &&
+      failure.retryable &&
       originalRequest &&
       !originalRequest._retried
     ) {
@@ -749,12 +752,37 @@ export const getConnectorStatus = async (): Promise<ConnectorStatus> => {
   }
 };
 
+/**
+ * Banco que ficou DE FORA de uma sincronização porque a conexão pede ação da
+ * pessoa: `NOT_FOUND` (o provedor não conhece mais a conexão) ou
+ * `NEEDS_USER_ACTION` (o banco recusou a coleta). Nos dois casos o remédio é o
+ * mesmo — reconectar —, por isso o app não precisa distinguir na frase.
+ */
+export interface SkippedConnection {
+  id: string;
+  /** Nome que a pessoa reconhece ("Nubank"); pode faltar em conexão antiga. */
+  name: string | null;
+  reason: "NOT_FOUND" | "NEEDS_USER_ACTION" | string;
+}
+
+/**
+ * Resposta do `POST /connectors/sync`: o resultado do pipeline de importação
+ * mais o que só a sincronização sabe. Os campos novos são opcionais porque a
+ * API anterior ao PR #130 não os manda, e o app tem de conviver com as duas.
+ */
+export interface ConnectorSyncResult extends StatementUploadResult {
+  /** Quantas conexões foram lidas nesta rodada. */
+  itemsSynced?: number;
+  /** Bancos pulados; lista vazia quando nenhum ficou de fora. */
+  skippedConnections?: SkippedConnection[];
+}
+
 export const syncConnector = async (
   days = 90,
-): Promise<StatementUploadResult> => {
+): Promise<ConnectorSyncResult> => {
   // Mesma janela do upload: a sincronização passa pelo mesmo pipeline e pode
   // levar dezenas de segundos com 90 dias de histórico
-  const response = await api.post<StatementUploadResult>(
+  const response = await api.post<ConnectorSyncResult>(
     "/connectors/sync",
     null,
     { params: { days }, timeout: 180000 },

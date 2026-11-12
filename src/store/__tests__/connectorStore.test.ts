@@ -189,3 +189,51 @@ describe("fetchItems e unlink", () => {
     expect(api.getConnectorStatus).toHaveBeenCalled();
   });
 });
+
+describe("runSync", () => {
+  it("devolve os bancos pulados que a API mandou", async () => {
+    api.syncConnector.mockResolvedValue({
+      transactionsImported: 2,
+      skippedConnections: [{ id: "x", name: "Itaú", reason: "NOT_FOUND" }],
+    });
+
+    const r = await useConnectorStore.getState().runSync();
+
+    expect(r?.skippedConnections?.[0].name).toBe("Itaú");
+  });
+
+  it("503 da leitura do banco deixa no error o detail com o nome dele", async () => {
+    const detail =
+      "Não foi possível ler Nubank no provedor agora; nada foi importado. Tente de novo em alguns minutos.";
+    api.syncConnector.mockRejectedValue({
+      response: {
+        status: 503,
+        data: {
+          type: "https://economize.app/erros/servico-indisponivel",
+          detail,
+        },
+      },
+    });
+
+    await expect(useConnectorStore.getState().runSync()).rejects.toBeTruthy();
+
+    expect(useConnectorStore.getState().error).toBe(detail);
+    expect(useConnectorStore.getState().isSyncing).toBe(false);
+  });
+
+  it("409 diz que já há uma sincronização em andamento", async () => {
+    api.syncConnector.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          type: "https://economize.app/erros/conflito",
+          detail: "Já existe uma sincronização em andamento. Aguarde ela terminar.",
+        },
+      },
+    });
+
+    await expect(useConnectorStore.getState().runSync()).rejects.toBeTruthy();
+
+    expect(useConnectorStore.getState().error).toMatch(/em andamento/);
+  });
+});

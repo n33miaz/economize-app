@@ -36,6 +36,15 @@ function semResposta(code?: string): AxiosError {
   return new AxiosError("Network Error", code, config, {});
 }
 
+/** O 503 que a sincronização devolve quando a leitura de um banco falha. */
+const PROBLEMA_SINCRONIZACAO = {
+  type: "https://economize.app/erros/servico-indisponivel",
+  title: "Serviço Indisponível",
+  status: 503,
+  detail:
+    "Não foi possível ler Nubank no provedor agora; nada foi importado. Tente de novo em alguns minutos.",
+};
+
 const navigatorOriginal = (globalThis as { navigator?: unknown }).navigator;
 
 function fingirRede(onLine: boolean | undefined) {
@@ -199,6 +208,27 @@ describe("describeRequestFailure", () => {
     expect(r.message).toBe("Conexão já registrada.");
   });
 
+  it("503 classificado da API leva o detail com o banco e não se repete", () => {
+    const r = describeRequestFailure(comResposta(503, {}, PROBLEMA_SINCRONIZACAO));
+    expect(r.kind).toBe("server");
+    expect(r.message).toBe(PROBLEMA_SINCRONIZACAO.detail);
+    // "tente em alguns minutos": repetir em 1 s releria todos os bancos
+    expect(r.retryable).toBe(false);
+  });
+
+  it("5xx com detail técnico segue com a frase genérica", () => {
+    const r = describeRequestFailure(
+      comResposta(500, {}, {
+        type: "https://economize.app/erros/erro-interno",
+        detail: "Internal Server Error",
+      }),
+    );
+    expect(r.message).toBe(
+      "Não conseguimos concluir agora. Já estamos tentando de novo.",
+    );
+    expect(r.retryable).toBe(true);
+  });
+
   it("lê cabeçalho vindo como AxiosHeaders", () => {
     const headers = new AxiosHeaders({ "Retry-After": "4" });
     const erro = new AxiosError("x", "ERR_BAD_RESPONSE", config, {}, {
@@ -284,6 +314,55 @@ describe("describeSaveFailure — o erro de quem grava", () => {
     expect(describeSaveFailure(new Error("x"), "Falha ao criar categoria.")).toBe(
       "Falha ao criar categoria.",
     );
+  });
+
+  it("5xx só mostra o detail quando é ProblemDetail classificado da API", () => {
+    // O 503 da sincronização nomeia o banco: é a frase que a pessoa precisa
+    expect(
+      describeSaveFailure(
+        comResposta(503, {}, PROBLEMA_SINCRONIZACAO),
+        "Falha ao sincronizar",
+      ),
+    ).toBe(PROBLEMA_SINCRONIZACAO.detail);
+    // Reason phrase em inglês do `erro-interno` nunca chega à tela
+    expect(
+      describeSaveFailure(
+        comResposta(503, {}, {
+          type: "https://economize.app/erros/erro-interno",
+          detail: "Service Unavailable",
+        }),
+        "Falha ao sincronizar",
+      ),
+    ).toBe("Falha ao sincronizar");
+    // Corpo sem o `type` da API (proxy, outro serviço) também não
+    expect(
+      describeSaveFailure(
+        comResposta(500, {}, { detail: "java.lang.NullPointerException" }),
+        "Falha ao sincronizar",
+      ),
+    ).toBe("Falha ao sincronizar");
+  });
+
+  it("400 e 409 da sincronização mostram o detail da API", () => {
+    expect(
+      describeSaveFailure(
+        comResposta(400, {}, {
+          type: "https://economize.app/erros/requisicao-invalida",
+          detail:
+            "Nenhuma conexão pôde ser sincronizada. Reconecte pelo app: Nubank.",
+        }),
+        "Falha ao sincronizar",
+      ),
+    ).toMatch(/Reconecte pelo app: Nubank/);
+    expect(
+      describeSaveFailure(
+        comResposta(409, {}, {
+          type: "https://economize.app/erros/conflito",
+          detail: "Já existe uma sincronização em andamento. Aguarde ela terminar.",
+        }),
+        "Falha ao sincronizar",
+      ),
+    ).toMatch(/em andamento/);
   });
 
   it("sessão encerrada não tem frase, nem com detalhe pendurado", () => {

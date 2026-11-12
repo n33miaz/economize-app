@@ -3,7 +3,7 @@ import { create } from "zustand";
 import {
   ConnectorItem,
   ConnectorStatus,
-  StatementUploadResult,
+  ConnectorSyncResult,
   createConnectToken,
   getConnectorStatus,
   listConnectorItems,
@@ -50,7 +50,7 @@ interface ConnectorState {
   buildConnectUrl: (redirect: string) => Promise<string | null>;
   finishConnect: (itemId: string) => Promise<boolean>;
   unlink: (id: string) => Promise<boolean>;
-  runSync: (days?: number) => Promise<StatementUploadResult | null>;
+  runSync: (days?: number) => Promise<ConnectorSyncResult | null>;
   clearError: () => void;
   reset: () => void;
 }
