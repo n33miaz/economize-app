@@ -489,7 +489,7 @@ describe("Investments", () => {
     expect(queryByText(/^Câmbio /)).toBeNull();
   });
 
-  it("posição sem cotação: fica na lista em dólar, com o aviso de fora do total", async () => {
+  it("posição sem câmbio: fica na lista em dólar, com o aviso que diz o que falta", async () => {
     comDolar({
       exchangeRates: [],
       unconverted: [
@@ -500,7 +500,9 @@ describe("Investments", () => {
     const { getByText, queryByText } = montar();
 
     await waitFor(() => expect(getByText(/^US\$\s1\.000,00$/)).toBeTruthy());
-    expect(getByText("sem cotação · fora do total")).toBeTruthy();
+    // O valor em dólar existe: o que falta é câmbio, e é isso que a marca diz
+    expect(getByText("sem câmbio · fora do total")).toBeTruthy();
+    expect(queryByText("sem cotação · fora do total")).toBeNull();
     // Nem pelo dólar do bloco macro: o total do servidor não tem esta posição
     expect(queryByText(/^≈/)).toBeNull();
     expect(queryByText(/^R\$\s1\.000,00$/)).toBeNull();

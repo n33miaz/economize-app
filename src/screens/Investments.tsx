@@ -1508,7 +1508,7 @@ function PositionRow({
               }}
             >
               <Text style={{ color: t.semantic.warning, fontSize: 11, fontWeight: "700" }}>
-                sem cotação · fora do total
+                {value.missing === "fx" ? "sem câmbio · fora do total" : "sem cotação · fora do total"}
               </Text>
             </View>
           ) : null}
