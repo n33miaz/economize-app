@@ -13,6 +13,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { spacing } from "../theme/ds";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
 import { changePassword, getApiErrorDetail } from "../services/api";
+import { useAuthStore } from "../store/authStore";
 import { useToastStore } from "../store/toastStore";
 import { useUserStore } from "../store/userStore";
 import { validateNewPassword } from "../utils/passwordPolicy";
@@ -64,7 +65,14 @@ export default function ChangePassword({ forced = false }: Props) {
     setIsSaving(true);
     setApiError(null);
     try {
-      await changePassword(current, password);
+      const renewed = await changePassword(current, password);
+      // O servidor derrubou todas as sessões, inclusive a deste aparelho, e
+      // mandou um token novo: sem gravá-lo, o próximo pedido voltaria 401 e a
+      // pessoa cairia no login logo depois de trocar a senha. Servidor antigo
+      // (204, sem corpo) não derruba nada, e o token de agora segue valendo
+      if (renewed) {
+        useAuthStore.getState().renewSession(renewed.token, renewed.name);
+      }
       showToast("Senha alterada.", "success");
       if (forced) {
         // Não há para onde voltar: a tela é a única montada. Quem libera o app

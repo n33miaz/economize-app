@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -7,6 +7,9 @@ import {
 
 import ChangePassword from "../ChangePassword";
 import { changePassword } from "../../services/api";
+import { useAuthStore } from "../../store/authStore";
+import { useBankStore } from "../../store/bankStore";
+import { useToastStore } from "../../store/toastStore";
 import { useUserStore } from "../../store/userStore";
 
 jest.mock("../../services/api", () => ({
@@ -69,5 +72,60 @@ describe("Trocar senha", () => {
     // Validação do lado do cliente é cortesia, não segurança — mas evita uma
     // ida ao servidor que já se sabe que vai voltar 400
     expect(mockTrocar).not.toHaveBeenCalled();
+  });
+
+  /** Preenche os três campos com uma troca válida e toca em salvar. */
+  const trocar = async () => {
+    const tela = montar();
+    fireEvent.changeText(await tela.findByLabelText("Senha atual"), "velha-123");
+    fireEvent.changeText(tela.getByLabelText("Nova senha"), "Nova-senha-9");
+    fireEvent.changeText(
+      tela.getByLabelText("Confirmar nova senha"),
+      "Nova-senha-9",
+    );
+    fireEvent.press(tela.getByLabelText("Salvar nova senha"));
+    await waitFor(() => expect(mockTrocar).toHaveBeenCalled());
+    return tela;
+  };
+
+  describe("a sessão depois da troca", () => {
+    const EXTRATO = [{ id: "t1", description: "IFOOD", amount: -89.9 }];
+
+    beforeEach(() => {
+      useAuthStore.setState({ token: "token-velho", userName: "Ana" } as never);
+      useBankStore.setState({ transactions: EXTRATO } as never);
+    });
+
+    afterEach(() => {
+      useToastStore.getState().hideToast();
+    });
+
+    it("servidor novo: grava o token novo e não apaga nada da pessoa", async () => {
+      mockTrocar.mockResolvedValue({ token: "token-novo", name: "Ana" });
+
+      await trocar();
+
+      // O servidor derrubou o token velho; sem gravar o novo, o próximo
+      // pedido voltaria 401 e a pessoa cairia no login
+      await waitFor(() =>
+        expect(useAuthStore.getState().token).toBe("token-novo"),
+      );
+      expect(useAuthStore.getState().userName).toBe("Ana");
+      // A mesma pessoa: o extrato que já estava na memória continua lá
+      expect(useBankStore.getState().transactions).toBe(EXTRATO);
+      expect(mockTrocar).toHaveBeenCalledWith("velha-123", "Nova-senha-9");
+    });
+
+    it("servidor antigo (204 sem corpo): o token de agora fica", async () => {
+      mockTrocar.mockResolvedValue(null);
+
+      await trocar();
+
+      await waitFor(() =>
+        expect(useToastStore.getState().message).toBe("Senha alterada."),
+      );
+      expect(useAuthStore.getState().token).toBe("token-velho");
+      expect(useBankStore.getState().transactions).toBe(EXTRATO);
+    });
   });
 });

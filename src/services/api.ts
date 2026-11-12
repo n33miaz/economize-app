@@ -1714,11 +1714,45 @@ export const resetPassword = async (
   await api.post("/auth/reset-password", { token, newPassword });
 };
 
+/** A sessão nova que a troca de senha devolve (mesmo formato do login). */
+export interface RenewedSession {
+  token: string;
+  name: string;
+}
+
+/**
+ * Troca a senha da conta logada.
+ *
+ * <p>A troca derruba TODAS as sessões da conta no servidor, inclusive o token
+ * com que este pedido saiu — por isso a resposta traz um token novo, que quem
+ * chama precisa gravar para este aparelho continuar dentro. Devolve `null`
+ * quando o servidor ainda é o antigo (204 sem corpo): lá o token de antes
+ * segue valendo, e não há nada a trocar.
+ */
 export const changePassword = async (
   currentPassword: string,
   newPassword: string,
-): Promise<void> => {
-  await api.post("/users/me/change-password", { currentPassword, newPassword });
+): Promise<RenewedSession | null> => {
+  const response = await api.post<Partial<RenewedSession> | "">(
+    "/users/me/change-password",
+    { currentPassword, newPassword },
+  );
+  const body = response?.data;
+  // Corpo vazio chega como "" no axios; só um token de verdade troca a sessão
+  if (body && typeof body === "object" && typeof body.token === "string" && body.token) {
+    return { token: body.token, name: body.name ?? "" };
+  }
+  return null;
+};
+
+/**
+ * Sai de todos os aparelhos: o servidor derruba todas as sessões da conta,
+ * inclusive a deste aparelho, e esquece os aparelhos confiáveis — o próximo
+ * login de qualquer um pede o código do segundo fator. Responde 204; quem
+ * chama faz o logout local em seguida.
+ */
+export const logoutAllSessions = async (): Promise<void> => {
+  await api.post("/auth/logout-all");
 };
 
 // --- Usuário ---
