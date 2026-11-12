@@ -285,6 +285,52 @@ describe("Extrato", () => {
     await waitFor(() => expect(queryByText(/[Pp]luggy/)).toBeNull());
   });
 
+  describe("conexoes que precisam de atencao", () => {
+    const conexaoBase = {
+      id: "c-reconectar",
+      itemId: "item-reconectar",
+      connectorId: 1,
+      connectorName: "Nubank",
+      institution: "Nubank",
+      createdAt: "2026-11-01T12:00:00Z",
+      lastSyncedAt: "2026-11-10T12:00:00Z",
+      status: "UPDATED",
+      needsAttention: false,
+    };
+
+    it("mostra o selo Reconectar quando a conexao precisa de atencao", async () => {
+      useConnectorStore.setState({
+        status: { enabled: true, configured: true, itemCount: 1 },
+        items: [
+          {
+            ...conexaoBase,
+            status: "NEEDS_USER_ACTION",
+            needsAttention: true,
+          },
+        ],
+      } as never);
+
+      const { getByLabelText, getByText } = montar();
+
+      await waitFor(() => expect(getByText("Reconectar")).toBeTruthy());
+      expect(getByLabelText("Nubank precisa reconectar")).toBeTruthy();
+    });
+
+    it("nao mostra o selo Reconectar para conexao saudavel", async () => {
+      useConnectorStore.setState({
+        status: { enabled: true, configured: true, itemCount: 1 },
+        items: [conexaoBase],
+      } as never);
+
+      const { queryByLabelText, queryByText, queryAllByText } = montar();
+
+      // o nome aparece no cabeçalho e na linha da conexão: basta existir
+      await waitFor(() => expect(queryAllByText("Nubank").length).toBeGreaterThan(0));
+      expect(queryByText("Reconectar")).toBeNull();
+      expect(queryByLabelText("Nubank precisa reconectar")).toBeNull();
+    });
+  });
+
   describe("sincronizar bancos conectados", () => {
     const conexao = {
       id: "c1",
@@ -294,6 +340,8 @@ describe("Extrato", () => {
       institution: "Nubank",
       createdAt: "2026-11-01T12:00:00Z",
       lastSyncedAt: "2026-11-10T12:00:00Z",
+      status: "UPDATED",
+      needsAttention: false,
     };
 
     function ligarConector(runSync: jest.Mock, fetchItems: jest.Mock) {

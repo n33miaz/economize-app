@@ -803,6 +803,10 @@ export interface ConnectorItem {
   institution?: string | null;
   createdAt: string;
   lastSyncedAt: string | null;
+  /** Estado estável do provedor; pode faltar em uma API ainda não atualizada. */
+  status?: string | null;
+  /** Quando verdadeiro, a pessoa precisa concluir a reconexão no banco. */
+  needsAttention?: boolean;
 }
 
 /**
@@ -810,9 +814,11 @@ export interface ConnectorItem {
  * outros usuários e nasce amarrado a esta conta — por isso pode trafegar até
  * o navegador que abre o widget.
  */
-export const createConnectToken = async (): Promise<string> => {
+export const createConnectToken = async (itemId?: string): Promise<string> => {
   const response = await api.post<{ accessToken: string }>(
     "/connectors/connect-token",
+    null,
+    { params: itemId ? { itemId } : undefined },
   );
   return response.data.accessToken;
 };
