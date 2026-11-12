@@ -87,6 +87,7 @@ import TransactionRow, {
 import { APP_ROUTES } from "../routes/routeNames";
 import { useTheme } from "../theme/ThemeProvider";
 import { useEsconderBarra } from "../hooks/useEsconderBarra";
+import { useFooterClearance } from "../hooks/useFooterClearance";
 import { radius, spacing } from "../theme/ds";
 import { typography } from "../theme/typography";
 import { useMotionPresets, usePressScale } from "../theme/motionPresets";
@@ -272,6 +273,8 @@ export default function BankIntegration() {
   const t = useTheme();
   // A ilha da barra de abas se esconde quando esta lista rola para baixo
   const barraQueSeEsconde = useEsconderBarra();
+  // Rodapé da lista: o que flutua sobre ela (barra de abas, assistente)
+  const rodape = useFooterClearance();
   const navigation = useNavigation();
   const route = useRoute();
   const { cardEntering, listItemEntering } = useMotionPresets();
@@ -965,7 +968,14 @@ export default function BankIntegration() {
         // scroll. Memoizado, senão um literal novo a cada render re-renderiza
         // toda célula visível de graça
         extraData={cellDeps}
-        contentContainerClassName="px-5 pb-24 pt-4"
+        // Por `style`, não por className: na web o `contentContainerClassName`
+        // de uma SectionList computa padding ZERO (medido), e sem ele o
+        // conteúdo encostava nas bordas e o último botão ficava sob a barra
+        contentContainerStyle={{
+          paddingHorizontal: spacing[5],
+          paddingTop: spacing[4],
+          paddingBottom: rodape,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
