@@ -170,6 +170,40 @@ describe("agruparPorDia", () => {
   });
 });
 
+// Medido: 10,10 + 0,20 - 10,30 em ponto flutuante dá -3,5e-15, e o cabeçalho
+// escrevia "- R$ 0,00". A soma anda em centavos inteiros
+describe("agruparPorDia soma em centavos", () => {
+  it("dia que zera dá zero exato, não resto binário", () => {
+    const [dia] = agruparPorDia([
+      credito("2026-09-16", 10.1),
+      credito("2026-09-16", 0.2),
+      debito("2026-09-16", 10.3),
+    ]);
+    expect(dia.total).toBe(0);
+    expect(Object.is(dia.total, -0)).toBe(false);
+  });
+
+  it("centavos somados batem exato", () => {
+    const [dia] = agruparPorDia([
+      credito("2026-09-16", 0.1),
+      credito("2026-09-16", 0.2),
+    ]);
+    expect(dia.total).toBe(0.3);
+  });
+
+  it("saldo corrido não deriva de um dia para o outro", () => {
+    const dias = agruparPorDia(
+      [
+        debito("2026-09-17", 0.1),
+        debito("2026-09-16", 0.2),
+        debito("2026-09-15", 0.3),
+      ],
+      { saldoAtual: 0.6 },
+    );
+    expect(dias.map((d) => d.saldoNoFim)).toEqual([0.6, 0.7, 0.9]);
+  });
+});
+
 describe("podeMostrarSaldoCorrido", () => {
   const base = {
     saldoAtual: 250,

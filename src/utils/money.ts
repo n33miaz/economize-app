@@ -42,7 +42,15 @@ export function formatBRL(
   opts?: Intl.NumberFormatOptions,
 ): string {
   if (!temValor(value)) return SEM_VALOR;
-  return value.toLocaleString("pt-BR", {
+  // Arredonda nas casas que vão aparecer ANTES de formatar: uma soma em ponto
+  // flutuante que devia dar zero chega como -3,5e-15, e o Intl escreve isso
+  // "-R$ 0,00". O `|| 0` troca o -0 que sobra do arredondamento por 0.
+  // Respeita `maximumFractionDigits` maior (cotação com 4 casas) para não
+  // cortar precisão de quem pediu mais
+  const casas = Math.max(2, opts?.maximumFractionDigits ?? 2);
+  const fator = 10 ** casas;
+  const arredondado = Math.round(value * fator) / fator || 0;
+  return arredondado.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
     ...opts,

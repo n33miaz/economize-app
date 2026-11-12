@@ -125,6 +125,25 @@ describe("formatDecimal", () => {
   });
 });
 
+// A soma em ponto flutuante de um dia que zerou chega como -3,5e-15
+describe("formatBRL arredonda em centavos", () => {
+  it("resto binário perto de zero não vira \"-R$ 0,00\"", () => {
+    expect(plain(formatBRL(-3.5e-15))).toBe("R$ 0,00");
+    expect(plain(formatBRL(-0))).toBe("R$ 0,00");
+    expect(plain(formatBRL(-0.004))).toBe("R$ 0,00");
+  });
+
+  it("negativo de verdade continua negativo", () => {
+    expect(plain(formatBRL(-0.01))).toBe("-R$ 0,01");
+  });
+
+  it("respeita quem pede mais casas", () => {
+    expect(plain(formatBRL(5.1234, { maximumFractionDigits: 4 }))).toBe(
+      "R$ 5,1234",
+    );
+  });
+});
+
 describe("parseAmount — a única leitura de valor digitado", () => {
   it.each([
     // pt-BR com vírgula decimal
