@@ -391,13 +391,78 @@ describe("bankStore", () => {
       ]);
     });
 
+    it("importação com a recarga completa em voo começa outra busca", async () => {
+      // Foco disparou a recarga; o "Abrir com" termina antes dela
+      useBankStore.setState({
+        transactions: [recente, antigo],
+        historyComplete: true,
+        fetchedAt: null,
+      });
+      const antiga = adiada<BankTransaction[]>();
+      const novo = tx("n1", -5);
+      mockGet.mockReturnValueOnce(antiga.promessa);
+      mockGet.mockResolvedValueOnce([novo, recente, antigo]);
+
+      void useBankStore.getState().fetchTransactions();
+      expect(useBankStore.getState().isLoading).toBe(true);
+      await useBankStore.getState().fetchTransactions(true);
+
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(useBankStore.getState().transactions).toEqual([
+        novo,
+        recente,
+        antigo,
+      ]);
+      // A resposta da busca pedida antes da importação chega depois e não
+      // apaga o arquivo novo
+      antiga.resolver([recente, antigo]);
+      await assentar();
+      expect(useBankStore.getState().transactions).toEqual([
+        novo,
+        recente,
+        antigo,
+      ]);
+      expect(useBankStore.getState().isLoading).toBe(false);
+    });
+
+    it("importação durante a fase recente também começa outra busca", async () => {
+      const recenteAntiga = adiada<BankTransaction[]>();
+      mockRecent.mockReturnValueOnce(recenteAntiga.promessa);
+      const novo = tx("n1", -5);
+      mockRecent.mockResolvedValueOnce([novo, recente]);
+      mockGet.mockResolvedValue([novo, recente, antigo]);
+
+      void useBankStore.getState().fetchTransactions();
+      await useBankStore.getState().fetchTransactions(true);
+      recenteAntiga.resolver([recente]);
+      await assentar();
+
+      expect(mockRecent).toHaveBeenCalledTimes(2);
+      expect(useBankStore.getState().transactions).toEqual([
+        novo,
+        recente,
+        antigo,
+      ]);
+      expect(useBankStore.getState().historyComplete).toBe(true);
+    });
+
     it("ensureHistory espera a segunda fase", async () => {
       mockRecent.mockResolvedValue([recente]);
       const historico = adiada<BankTransaction[]>();
       mockGet.mockReturnValue(historico.promessa);
 
       await useBankStore.getState().fetchTransactions();
-      const garantido = useBankStore.getState().ensureHistory();
+      let resolvido: boolean | undefined;
+      const garantido = useBankStore
+        .getState()
+        .ensureHistory()
+        .then((valor) => (resolvido = valor));
+      await assentar();
+
+      // Enquanto a fase 2 não gravou, a exportação continua esperando
+      expect(resolvido).toBeUndefined();
+      expect(useBankStore.getState().historyComplete).toBe(false);
+
       historico.resolver([recente, antigo]);
 
       await expect(garantido).resolves.toBe(true);

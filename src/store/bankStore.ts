@@ -72,9 +72,11 @@ const API_MAX_WINDOW_DAYS = 366;
  * A janela da primeira fase: 90 dias para trás e o resto do teto para a frente.
  *
  * A folga para a frente pega lançamento com data futura (parcela, agendamento)
- * que o histórico inteiro também traria — sem ela a lista mudaria de forma na
- * segunda fase. Ela também torna irrelevante a diferença entre o "hoje" do
- * aparelho e o corte em UTC do servidor: as bordas ficam longe do dia de hoje.
+ * até hoje + 275 dias, que é o que sobra do teto depois dos 90 para trás. O que
+ * estiver além disso (parcela de longo prazo) só aparece na segunda fase, no
+ * topo da lista — o teto da API não deixa ir mais longe numa busca só. A folga
+ * também torna irrelevante a diferença entre o "hoje" do aparelho e o corte em
+ * UTC do servidor: as bordas ficam longe do dia de hoje.
  */
 export function recentStatementRange(now: Date = new Date()): AnalysisRange {
   const start = addDays(todayIso(now), -RECENT_WINDOW_DAYS);
@@ -297,11 +299,14 @@ export const useBankStore = create<BankState>((set, get) => {
       const { fetchedAt, isLoading, historyComplete, transactions } = get();
       // Uma busca em voo também basta: dois focos no mesmo instante (montagem +
       // volta de sheet) pediam a mesma lista duas vezes. Devolve a promessa dela
-      // para quem espera (a exportação) esperar a lista de verdade
-      if (isLoading) return cargaEmVoo ?? Promise.resolve();
-      // O histórico já está a caminho: sem `force`, ele é a busca que este foco
-      // pediria. Com `force` (importação, puxar para atualizar) a busca em voo
-      // foi pedida ANTES da mudança e não serve — a geração nova a descarta
+      // para quem espera (a exportação) esperar a lista de verdade.
+      //
+      // Com `force` (importação, desfazer, puxar para atualizar) NÃO: a busca
+      // em voo — fase 1, fase 2 ou recarga — foi pedida ANTES da escrita no
+      // servidor e traria a lista sem ela, com `fetchedAt` novo prendendo o
+      // erro pelo minuto de cache. Começa outra, e a geração nova descarta a
+      // resposta da antiga
+      if (isLoading && !force) return cargaEmVoo ?? Promise.resolve();
       if (historicoEmVoo && !force) return Promise.resolve();
       if (
         !force &&
