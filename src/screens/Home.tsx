@@ -76,6 +76,7 @@ import CycleWindowChip from "../components/CycleWindowChip";
 import HighlightCard from "../components/HighlightCard";
 import PageContainer from "../components/PageContainer";
 import Skeleton from "../components/Skeleton";
+import ErrorState from "../components/ErrorState";
 import ScreenHeader from "../components/ScreenHeader";
 import IndicatorDetailSheet from "../components/IndicatorDetailSheet";
 import AssistantFAB from "../components/AssistantFAB";
@@ -206,6 +207,8 @@ export default function Home() {
     isHomeLoading: monthlyLoading,
     months: monthsWithData,
     fetchHomeMonthly,
+    homeError,
+    homeDataAt,
   } = useAnalyticsStore();
   const { transactions: walletTxs, fetchTransactions: fetchWallet } =
     useWalletStore();
@@ -224,10 +227,15 @@ export default function Home() {
    */
   const parcelamentos = useInstallmentsStore((s) => s.overview);
   const fetchInstallments = useInstallmentsStore((s) => s.fetchInstallments);
-  const mesCorrente = useMemo(() => {
-    const hoje = new Date();
-    return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
+  /**
+   * O dia de hoje, relido a cada foco. Era `useMemo(..., [])`: com o app aberto
+   * de 31/10 para 01/11 a Home continuava pedindo o recorte de outubro até
+   * alguém matar o app. Guardado em estado (e não lido a cada render) para que
+   * mês e recorte só mudem quando o dia muda de verdade — senão cada render
+   * criaria um recorte novo e o `useFocusEffect` buscaria em laço.
+   */
+  const [hojeIso, setHojeIso] = useState(() => todayIso());
+  const mesCorrente = hojeIso.slice(0, 7);
   /**
    * O recorte que a chamada pede: do mês corrente MENOS 14 dias até hoje.
    *
@@ -241,15 +249,15 @@ export default function Home() {
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
         d.getDate(),
       ).padStart(2, "0")}`;
-    const hoje = new Date();
-    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const [ano, mes] = hojeIso.split("-").map(Number);
+    const inicio = new Date(ano, mes - 1, 1);
     inicio.setDate(inicio.getDate() - 14);
     return {
       kind: "window" as const,
       start: iso(inicio),
-      end: iso(hoje),
+      end: hojeIso,
     };
-  }, []);
+  }, [hojeIso]);
   // A semana sai dos MESMOS dias do calendário, nunca de outra consulta
   const semana = useMemo(() => currentWeek(diasDoMes), [diasDoMes]);
   const ritmoDaSemana = useMemo(() => weekComparison(semana), [semana]);
@@ -392,6 +400,14 @@ export default function Home() {
   // foco, que já cobre a montagem: uma busca só, sem duas correndo juntas
   useFocusEffect(
     useCallback(() => {
+      // Virou o dia com a Home montada: troca o dia e sai. O novo recorte
+      // muda este callback, e o foco roda de novo já com o mês certo — buscar
+      // agora seria pedir o recorte velho e logo em seguida o novo
+      const hoje = todayIso();
+      if (hoje !== hojeIso) {
+        setHojeIso(hoje);
+        return;
+      }
       fetchPendingCount();
       fetchHomeMonthly();
       fetchRecurrences();
@@ -419,6 +435,7 @@ export default function Home() {
       fetchInstallments,
       fetchIncomePattern,
       recorteDiario,
+      hojeIso,
     ]),
   );
 
@@ -496,6 +513,12 @@ export default function Home() {
   // Ciclo parado com extrato na conta é estado de período vazio, não onboarding
   const hasStatement = monthsWithData.length > 0;
   const hasMonthData = hasMovement(monthly);
+  // A busca caiu e não há nada que valha mostrar no lugar: nem mês, nem um mês
+  // zerado de quem sabidamente tem extrato. `months` não vai para o disco, e
+  // depois de reabrir com a API fora um instantâneo zerado cairia no
+  // onboarding — o mesmo convite enganoso do caso sem instantâneo
+  const homeFalhouSemMes =
+    homeError !== null && (monthly === null || (!hasMonthData && !hasStatement));
   // O período já respondeu (mesmo que zerado): é o que libera a janela e a
   // engrenagem na tela, como o comentário do bloco "Para onde foi" sempre pediu
   const hasPeriod = monthly !== null;
@@ -686,6 +709,17 @@ export default function Home() {
               entering={cardEntering}
               className="mx-5 mb-5 bg-surface border border-border rounded-3xl p-5"
             >
+              {/* Falhou, mas há um mês na mão: o número fica e o aviso entra
+                  por cima, com a hora da última leitura boa — zerar a tela por
+                  uma busca que caiu seria trocar dado velho por dado nenhum */}
+              {homeError && monthly !== null && !homeFalhouSemMes ? (
+                <ErrorState
+                  compact
+                  message={homeError}
+                  lastGoodAt={homeDataAt}
+                  onRetry={fetchHomeMonthly}
+                />
+              ) : null}
               {/* O `monthly === null` explícito é o que estreita o tipo para o ramo
                   de baixo; `hasMonthData` sozinho é boolean e não estreita nada */}
               {monthly === null || !hasMonthData ? (
@@ -701,6 +735,15 @@ export default function Home() {
                       borderRadius={radius.full}
                     />
                   </View>
+                ) : homeFalhouSemMes && homeError ? (
+                  // Sem mês nenhum e a busca caiu: NÃO SABER não é o mesmo que
+                  // não ter extrato. Cair no "Tudo começa com um extrato" aqui
+                  // mandava importar quem tem anos de extrato na conta
+                  <ErrorState
+                    title="Não foi possível carregar o seu mês"
+                    message={homeError}
+                    onRetry={fetchHomeMonthly}
+                  />
                 ) : hasStatement ? (
                   // Tem extrato, o ciclo é que está parado. Pedir importação aqui
                   // era mentira; o que falta é poder mexer no recorte, então a
@@ -1109,7 +1152,11 @@ export default function Home() {
                       </Text>
                     ) : expenseDeltaPct !== null ? (
                       <>
-                        {expenseDeltaPct <= 0 ? (
+                        {/* Abaixo de meio ponto o arredondamento dá "0%", e
+                            "-0%" com seta verde anunciava uma melhora que não
+                            houve. Nessa faixa a leitura é "igual", sem seta e
+                            sem cor */}
+                        {Math.abs(expenseDeltaPct) < 0.5 ? null : expenseDeltaPct < 0 ? (
                           <ArrowDownRight size={14} color={t.chart.up} />
                         ) : (
                           <ArrowUpRight size={14} color={t.chart.down} />
@@ -1117,15 +1164,23 @@ export default function Home() {
                         <Text
                           style={{
                             color:
-                              expenseDeltaPct <= 0 ? t.chart.up : t.chart.down,
+                              Math.abs(expenseDeltaPct) < 0.5
+                                ? t.text.secondary
+                                : expenseDeltaPct < 0
+                                  ? t.chart.up
+                                  : t.chart.down,
                             fontSize: 12,
                             fontWeight: "700",
                             fontVariant: ["tabular-nums"],
                             marginLeft: 2,
                           }}
                         >
-                          {expenseDeltaPct > 0 ? "+" : ""}
-                          {expenseDeltaPct.toFixed(0)}%
+                          {Math.abs(expenseDeltaPct) < 0.5
+                            ? "Igual"
+                            : formatPercent(expenseDeltaPct, {
+                                decimals: 0,
+                                signed: true,
+                              })}
                         </Text>
                         <Text
                           numberOfLines={1}
