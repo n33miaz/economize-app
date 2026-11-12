@@ -3,7 +3,10 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import api, { Indicator, isCurrencyData, isIndexData } from "../services/api";
-import { describeLoadFailure } from "../services/requestFailure";
+import {
+  describeLoadFailure,
+  summarizeErrorForLog,
+} from "../services/requestFailure";
 import {
   AssetListFilters,
   DEFAULT_ASSET_FILTERS,
@@ -153,7 +156,11 @@ export const useIndicatorStore = create<IndicatorState>()(
             lastFetched: Date.now(),
           });
         } catch (e) {
-          console.error("Erro ao buscar indicadores:", e);
+          // Resumo, nunca o erro do axios inteiro: ele carrega o Bearer
+          console.error(
+            "Erro ao buscar indicadores:",
+            summarizeErrorForLog(e),
+          );
           // "Não foi possível conectar ao servidor" acusava o servidor até
           // num 404; a causa de transporte, quando é ela, vem do classificador
           const message = describeLoadFailure(
@@ -179,7 +186,8 @@ export const useIndicatorStore = create<IndicatorState>()(
           });
           return response.data;
         } catch (e) {
-          console.error("Erro na busca dinâmica:", e);
+          // Idem: o erro inteiro levaria o token e o termo buscado
+          console.error("Erro na busca dinâmica:", summarizeErrorForLog(e));
           return [];
         }
       },

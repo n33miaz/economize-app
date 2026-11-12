@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../services/api";
+import { summarizeErrorForLog } from "../services/requestFailure";
 
 export interface ChatMessage {
   id: string;
@@ -110,7 +111,9 @@ export const useAiStore = create(
           }));
           return true;
         } catch (error) {
-          console.error("Erro ao consultar IA:", error);
+          // Só o resumo: o erro inteiro levaria o Bearer e a pergunta feita
+          // à IA para o console (ver `summarizeErrorForLog`)
+          console.error("Erro ao consultar IA:", summarizeErrorForLog(error));
           set((state) => ({
             messages: state.messages.map((msg) =>
               msg.id === userMsgId ? { ...msg, isError: true } : msg,
