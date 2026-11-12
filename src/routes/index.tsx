@@ -51,6 +51,10 @@ import {
   slideRightTransition,
 } from "./transitions";
 import SegmentedTopTabBar from "./SegmentedTopTabBar";
+import {
+  pagerScrollLockStyle,
+  restingShiftInterpolator,
+} from "./pagerScrollLock";
 import TabBarWithIndicator from "./TabBarWithIndicator";
 import AnimatedTabIcon from "./AnimatedTabIcon";
 import SideRail from "./SideRail";
@@ -181,6 +185,15 @@ const renderSegmented = (props: MaterialTopTabBarProps) => (
   <SegmentedTopTabBar {...props} />
 );
 
+// Na web, o contêiner das abas de cima (Mercado e Finanças) não pode ser
+// rolado pelo navegador (scrollIntoView, foco de teclado): ver o porquê em
+// `pagerScrollLock.ts`. Em escopo de módulo para o navegador receber sempre o
+// mesmo objeto.
+const pinnedPagerStyle = pagerScrollLockStyle();
+// Pelo mesmo motivo, o "shift" da barra de baixo não deixa aba invisível
+// parada 50 px à direita na web — ver `restingShiftInterpolator`
+const bottomTabShift = restingShiftInterpolator();
+
 // Moedas e Índices
 function IndicatorsTabs() {
   const reducedMotion = useReducedMotion();
@@ -204,6 +217,7 @@ function IndicatorsTabs() {
       <TopTab.Navigator
         initialLayout={{ width: larguraDaJanela }}
         tabBar={renderSegmented}
+        style={pinnedPagerStyle}
         screenOptions={{
           // Deslizar entre Moedas e Índices é parte da navegação: o gesto
           // fica explícito e a troca por toque no rótulo anima o deslize —
@@ -239,6 +253,7 @@ function FinanceTabs() {
       <TopTab.Navigator
         initialLayout={{ width: larguraDaJanela }}
         tabBar={renderSegmented}
+        style={pinnedPagerStyle}
         screenOptions={{
           // Mesmo gate do bloco de Mercado: com "reduzir movimento" ativo a
           // troca de aba é seca em todo o app
@@ -298,6 +313,7 @@ function MainTabs() {
         // "shift" desliza + esmaece na troca de tab — mesma família de movimento
         // da entrada do assistente, no lugar do corte seco do fade
         animation: reducedMotion ? "none" : "shift",
+        sceneStyleInterpolator: bottomTabShift,
         // Na web o React Navigation renderiza cada aba como <a href="/Main/...">
         // e o botão dele chama preventDefault no clique. Trocar por um
         // TouchableOpacity cru tirava esse preventDefault: o navegador seguia o

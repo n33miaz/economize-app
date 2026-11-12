@@ -162,6 +162,51 @@ test("b. importa o extrato OFX sintético pela tela de Extrato", async () => {
   await captura(page, "extrato-com-dados");
 });
 
+test("b2. abas de Finanças não saem do lugar com scrollIntoView ou foco", async () => {
+  // As cenas vizinhas ficam montadas (com aria-hidden) ao lado da visível; o
+  // contêiner delas era rolável e um scrollIntoView/foco num elemento do
+  // Extrato, com a Carteira aberta, deixava meia aba de cada lado na tela
+  // As abas de cima não publicam aria-selected no web (só a barra de baixo
+  // publica): quem prova que a Carteira continua na tela é o elemento do
+  // Extrato seguir inteiro fora dela, conferido no fim
+  await tocarAba(page, "Carteira");
+  const doExtrato = page.getByRole("button", {
+    name: "Ver de onde estes números foram somados",
+    includeHidden: true,
+  });
+  await expect(doExtrato).toHaveCount(1);
+
+  await doExtrato.evaluate((el) => el.scrollIntoView({ block: "nearest", inline: "start" }));
+  await doExtrato.evaluate((el) => (el as HTMLElement).focus());
+  await page.waitForTimeout(300);
+
+  // Nenhum ancestral pode ter sido rolado na horizontal — prova a causa sem
+  // depender de saber qual nó é o contêiner da biblioteca
+  const rolados = await doExtrato.evaluate((el) => {
+    const achados: string[] = [];
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      if (n.scrollLeft !== 0) {
+        const s = getComputedStyle(n);
+        achados.push(
+          `${n.tagName}.${n.className} scrollLeft=${n.scrollLeft} ` +
+            `(largura ${n.clientWidth}/${n.scrollWidth}, overflow-x ${s.overflowX}, ` +
+            `aria-hidden ${n.getAttribute("aria-hidden")}, style "${n.getAttribute("style") ?? ""}")`,
+        );
+      }
+    }
+    return achados;
+  });
+  expect(rolados, "ancestrais deslocados na horizontal").toEqual([]);
+
+  // E o efeito visível: o Extrato continua inteiro fora da tela, à direita
+  const largura = page.viewportSize()!.width;
+  const caixa = await doExtrato.boundingBox();
+  expect(caixa, "caixa do elemento do Extrato").not.toBeNull();
+  expect(caixa!.x, "elemento do Extrato segue fora da tela").toBeGreaterThanOrEqual(largura);
+  await doExtrato.evaluate((el) => (el as HTMLElement).blur());
+  await captura(page, "carteira-apos-scrollintoview-do-extrato");
+});
+
 // --------------------------------------------------------------------- c. home
 
 test("c. Home: entradas e saídas do mês batem com o fixture", async () => {
