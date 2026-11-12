@@ -417,3 +417,173 @@ describe("limpeza com o store ainda não hidratado", () => {
     expect(JSON.stringify(useAiStore.getState().messages)).toContain("DE-ANA");
   });
 });
+
+/**
+ * A quarta rede: o `catch` que grava erro.
+ *
+ * A resposta de quem saiu é rejeitada com `SessionEndedError`, e o `catch` do
+ * store roda já com a conta seguinte em tela. Frase fixa ali é o "falha ao
+ * carregar" de uma pessoa no estado da outra. A leitura comum devolve frase
+ * vazia para esse caso; o que este teste cobra é o caminho inteiro:
+ *
+ *   const message = describeLoadFailure(e, "...");
+ *   if (!message) return;
+ *   set({ error: message });
+ *
+ * Lê a árvore do TypeScript, e não o texto: quebra de linha, comentário ou
+ * chave dentro de string não mudam o resultado. O que ele NÃO vê: erro gravado
+ * por uma função chamada de dentro do `catch`.
+ */
+describe("catch de store não grava erro de sessão encerrada", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ts = require("typescript") as typeof import("typescript");
+
+  /** Quem lê a falha e devolve "" para a sessão encerrada (ver o teste de cada um). */
+  const READERS = new Set([
+    "describeLoadFailure",
+    "describeSaveFailure",
+    "translateFamilyError",
+    "translateRecurrenceError",
+    "translateWishError",
+  ]);
+  const EXEMPT: Record<string, string> = {
+    // Login e cadastro vão sem sessão: nunca são resposta órfã (ver api.ts)
+    authStore: "requisição sem sessão",
+    // Carrinho: fora do alcance desta rodada
+    shoppingStore: "fora do escopo",
+  };
+  const ERROR_FIELD = /^error$|Error$/;
+
+  type Node = import("typescript").Node;
+
+  const walk = (node: Node, visit: (n: Node) => void) => {
+    visit(node);
+    node.forEachChild((child) => walk(child, visit));
+  };
+
+  const isWrite = (node: Node): node is import("typescript").CallExpression => {
+    if (!ts.isCallExpression(node)) return false;
+    const callee = node.expression;
+    if (ts.isIdentifier(callee)) return /^set[A-Z]?/.test(callee.text);
+    return ts.isPropertyAccessExpression(callee) && callee.name.text === "setState";
+  };
+
+  function offendersOf(file: string): string[] {
+    const full = path.join(STORE_DIR, `${file}.ts`);
+    const source = ts.createSourceFile(
+      full,
+      fs.readFileSync(full, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const offenders: string[] = [];
+    const at = (node: Node) =>
+      `${file}.ts:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+
+    const inspect = (clause: import("typescript").CatchClause) => {
+      const fromReader = new Set<string>();
+      const guarded = new Set<string>();
+      walk(clause.block, (node) => {
+        if (
+          ts.isVariableDeclaration(node) &&
+          ts.isIdentifier(node.name) &&
+          node.initializer
+        ) {
+          let reads = false;
+          walk(node.initializer, (inner) => {
+            if (
+              ts.isCallExpression(inner) &&
+              ts.isIdentifier(inner.expression) &&
+              READERS.has(inner.expression.text)
+            ) {
+              reads = true;
+            }
+          });
+          if (reads) fromReader.add(node.name.text);
+        }
+        if (
+          ts.isIfStatement(node) &&
+          ts.isPrefixUnaryExpression(node.expression) &&
+          node.expression.operator === ts.SyntaxKind.ExclamationToken &&
+          ts.isIdentifier(node.expression.operand)
+        ) {
+          let leaves = false;
+          walk(node.thenStatement, (inner) => {
+            if (ts.isReturnStatement(inner) || ts.isThrowStatement(inner)) leaves = true;
+          });
+          if (leaves) guarded.add(node.expression.operand.text);
+        }
+      });
+
+      const safe = (name: string) => fromReader.has(name) && guarded.has(name);
+      walk(clause.block, (node) => {
+        if (!isWrite(node)) return;
+        node.arguments.forEach((argument) =>
+          walk(argument, (inner) => {
+            if (ts.isShorthandPropertyAssignment(inner)) {
+              if (ERROR_FIELD.test(inner.name.text) && !safe(inner.name.text)) {
+                offenders.push(at(inner));
+              }
+              return;
+            }
+            if (!ts.isPropertyAssignment(inner)) return;
+            const name = inner.name.getText(source).replace(/^["']|["']$/g, "");
+            if (!ERROR_FIELD.test(name)) return;
+            const value = inner.initializer;
+            const literal =
+              value.kind === ts.SyntaxKind.NullKeyword ||
+              value.kind === ts.SyntaxKind.TrueKeyword ||
+              value.kind === ts.SyntaxKind.FalseKeyword;
+            if (literal) return;
+            if (ts.isIdentifier(value) && safe(value.text)) return;
+            offenders.push(at(inner));
+          }),
+        );
+      });
+    };
+
+    walk(source, (node) => {
+      if (ts.isCatchClause(node)) inspect(node);
+    });
+    return [...new Set(offenders)];
+  }
+
+  it("todo erro gravado num catch passa pela leitura comum e sai quando ela vem vazia", () => {
+    const offenders = storeFiles
+      .filter((file) => !(file in EXEMPT))
+      .flatMap(offendersOf);
+    expect(offenders).toEqual([]);
+  });
+
+  it("cada leitura da lista devolve frase vazia para a sessão encerrada", () => {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const modules: Record<string, unknown>[] = [
+      require("../../services/requestFailure"),
+      require("../../utils/family"),
+      require("../../utils/recurrence"),
+      require("../../utils/wishes"),
+    ];
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const { SessionEndedError } = modules[0] as {
+      SessionEndedError: new () => Error;
+    };
+    READERS.forEach((name) => {
+      const reader = modules.find((m) => typeof m[name] === "function")?.[
+        name
+      ] as ((error: unknown, fallback: string) => string) | undefined;
+      expect([name, typeof reader]).toEqual([name, "function"]);
+      expect([name, reader?.(new SessionEndedError(), "Falha fixa.")]).toEqual([
+        name,
+        "",
+      ]);
+      expect([name, reader?.(new Error("x"), "Falha fixa.")]).toEqual([
+        name,
+        "Falha fixa.",
+      ]);
+    });
+  });
+
+  it("a isenção aponta para arquivo que existe", () => {
+    Object.keys(EXEMPT).forEach((file) => expect(storeFiles).toContain(file));
+  });
+});

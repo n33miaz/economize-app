@@ -133,8 +133,13 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
       const series = await getRecurrences();
       set({ series, isLoading: false, hasLoadedOnce: true });
     } catch (e) {
+      const message = translateRecurrenceError(
+        e,
+        "Falha ao carregar suas recorrências.",
+      );
+      if (!message) return;
       set({
-        error: translateRecurrenceError(e, "Falha ao carregar suas recorrências."),
+        error: message,
         isLoading: false,
         hasLoadedOnce: true,
       });
@@ -149,12 +154,14 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
     } catch (e) {
       // lista secundária: falhar aqui não derruba a tela principal, mas a aba
       // precisa dizer que falhou — o vazio silencioso afirmava "nada descartado"
+      const message = translateRecurrenceError(
+        e,
+        "Falha ao carregar as recorrências descartadas.",
+      );
+      if (!message) return;
       set({
         isLoadingDismissed: false,
-        dismissedError: translateRecurrenceError(
-          e,
-          "Falha ao carregar as recorrências descartadas.",
-        ),
+        dismissedError: message,
       });
     }
   },
@@ -318,11 +325,13 @@ export const useRecurrenceStore = create<RecurrenceState>((set, get) => ({
       });
     } catch (e) {
       if (requestId !== forecastRequestId) return;
+      const message = translateRecurrenceError(
+        e,
+        "Falha ao calcular a previsão de saldo.",
+      );
+      if (!message) return;
       set({
-        forecastError: translateRecurrenceError(
-          e,
-          "Falha ao calcular a previsão de saldo.",
-        ),
+        forecastError: message,
         isForecastLoading: false,
         hasLoadedForecastOnce: true,
       });

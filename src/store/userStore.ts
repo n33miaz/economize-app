@@ -7,6 +7,10 @@ import {
   updateUserMe,
 } from "../services/api";
 import { usePlanStore } from "./planStore";
+import {
+  describeLoadFailure,
+  describeSaveFailure,
+} from "../services/requestFailure";
 
 interface UserState {
   me: UserMe | null;
@@ -44,8 +48,13 @@ export const useUserStore = create<UserState>((set, get) => ({
       // O plano vem junto do perfil: quem decide se há anúncio é o servidor,
       // e o planStore é só o lugar onde as telas leem isso
       usePlanStore.getState().hydrateFromUser(me);
-    } catch {
-      set({ error: "Falha ao carregar seus dados.", isLoading: false });
+    } catch (e) {
+      const message = describeLoadFailure(e, "Falha ao carregar seus dados.");
+      if (!message) return;
+      set({
+        error: message,
+        isLoading: false,
+      });
     }
   },
 
@@ -71,9 +80,13 @@ export const useUserStore = create<UserState>((set, get) => ({
       const { useAuthStore } = require("./authStore");
       useAuthStore.setState({ userName: me.name });
       return true;
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || "Falha ao salvar o nome.", isSaving: false });
+    } catch (e) {
+      const message = describeSaveFailure(e, "Falha ao salvar o nome.");
+      if (!message) return false;
+      set({
+        error: message,
+        isSaving: false,
+      });
       return false;
     }
   },

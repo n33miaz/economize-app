@@ -60,11 +60,13 @@ export const useImportSourcesStore = create<ImportSourcesState>((set, get) => ({
     } catch (e) {
       // `hasLoadedOnce` fica FALSO: um 500 no cold start não pode desligar a
       // procedência pelo resto da sessão (mesma lição do accountsStore)
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível carregar os arquivos importados agora.",
+      );
+      if (!message) return;
       set({
-        error: describeLoadFailure(
-          e,
-          "Não foi possível carregar os arquivos importados agora.",
-        ),
+        error: message,
         isLoading: false,
       });
     }

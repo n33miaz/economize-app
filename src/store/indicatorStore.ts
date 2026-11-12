@@ -156,11 +156,17 @@ export const useIndicatorStore = create<IndicatorState>()(
           console.error("Erro ao buscar indicadores:", e);
           // "Não foi possível conectar ao servidor" acusava o servidor até
           // num 404; a causa de transporte, quando é ela, vem do classificador
+          const message = describeLoadFailure(
+            e,
+            "Não foi possível carregar as cotações agora.",
+          );
+          // `loading` é do aparelho e sobrevive ao logout: só ele é desligado
+          if (!message) {
+            set({ loading: false });
+            return;
+          }
           set({
-            error: describeLoadFailure(
-              e,
-              "Não foi possível carregar as cotações agora.",
-            ),
+            error: message,
             loading: false,
           });
         }

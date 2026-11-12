@@ -72,8 +72,10 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({ items: response.data?.content ?? [], isLoading: false });
     } catch (e) {
       if (minhaVez !== ultimaBusca) return;
+      const message = describeLoadFailure(e, "Falha ao carregar relatórios");
+      if (!message) return;
       set({
-        error: describeLoadFailure(e, "Falha ao carregar relatórios"),
+        error: message,
         isLoading: false,
       });
     }
@@ -92,8 +94,13 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         isGenerating: false,
       });
       return response.data;
-    } catch {
-      set({ error: "Falha ao gerar relatório", isGenerating: false });
+    } catch (e) {
+      const message = describeLoadFailure(e, "Falha ao gerar relatório");
+      if (!message) return null;
+      set({
+        error: message,
+        isGenerating: false,
+      });
       return null;
     }
   },
@@ -106,8 +113,10 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       // o que dizer continuava anunciando fracasso depois de dar certo
       set({ items: get().items.filter((r) => r.id !== id), error: null });
       return true;
-    } catch {
-      set({ error: "Falha ao remover relatório" });
+    } catch (e) {
+      const message = describeLoadFailure(e, "Falha ao remover relatório");
+      if (!message) return false;
+      set({ error: message });
       return false;
     }
   },

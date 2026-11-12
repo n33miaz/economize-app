@@ -14,6 +14,7 @@ import { SessionEndedError, describeRequestFailure } from "./requestFailure";
 export {
   describeLoadFailure,
   describeRequestFailure,
+  describeSaveFailure,
   FAILURE_MESSAGES,
   isSessionEnded,
   SessionEndedError,

@@ -124,9 +124,13 @@ export function lastDayOfMonth(monthKey: string): string {
   );
 }
 
-/** Hoje em UTC — o mesmo relógio que a API usa para datar o lançamento. */
+/**
+ * Hoje no relógio do aparelho. Em UTC, às 21h de São Paulo o app já pedia o
+ * ciclo seguinte. Só o "hoje" é local: o dia de cada lançamento segue sendo o
+ * que veio no extrato.
+ */
 export function todayIso(now: Date = new Date()): string {
-  return isoDate(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate());
+  return isoDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
 }
 
 /** Dia 1 é o único valor em que ciclo e mês de calendário coincidem. */

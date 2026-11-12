@@ -7,6 +7,10 @@ import {
   getCategories,
   updateCategory,
 } from "../services/api";
+import {
+  describeLoadFailure,
+  describeSaveFailure,
+} from "../services/requestFailure";
 
 interface CategoriesState {
   items: Category[];
@@ -57,8 +61,13 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
     try {
       const items = await getCategories();
       set({ items, isLoading: false });
-    } catch {
-      set({ error: "Falha ao carregar categorias.", isLoading: false });
+    } catch (e) {
+      const message = describeLoadFailure(e, "Falha ao carregar categorias.");
+      if (!message) return;
+      set({
+        error: message,
+        isLoading: false,
+      });
     }
   },
 
@@ -68,10 +77,14 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
       const category = await createCategory(data);
       set({ items: [...get().items, category], isSaving: false });
       return category;
-    } catch (e: any) {
+    } catch (e) {
       // 400 do backend traz a causa real (ex.: nome duplicado) no ProblemDetail
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || "Falha ao criar categoria.", isSaving: false });
+      const message = describeSaveFailure(e, "Falha ao criar categoria.");
+      if (!message) return null;
+      set({
+        error: message,
+        isSaving: false,
+      });
       return null;
     }
   },
@@ -91,9 +104,13 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
         isSaving: false,
       });
       return category;
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || "Falha ao salvar categoria.", isSaving: false });
+    } catch (e) {
+      const message = describeSaveFailure(e, "Falha ao salvar categoria.");
+      if (!message) return null;
+      set({
+        error: message,
+        isSaving: false,
+      });
       return null;
     }
   },
@@ -118,9 +135,13 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
         isSaving: false,
       });
       return "archived";
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      set({ error: detail || "Falha ao remover categoria.", isSaving: false });
+    } catch (e) {
+      const message = describeSaveFailure(e, "Falha ao remover categoria.");
+      if (!message) return null;
+      set({
+        error: message,
+        isSaving: false,
+      });
       return null;
     }
   },

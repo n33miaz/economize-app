@@ -1,3 +1,4 @@
+import { SessionEndedError } from "../../services/requestFailure";
 import api from "../../services/api";
 import { useIndicatorStore } from "../indicatorStore";
 
@@ -196,5 +197,19 @@ describe("indicatorStore", () => {
     useIndicatorStore.getState().removeFavoriteSnapshot("f1");
 
     expect(useIndicatorStore.getState().favoriteSnapshots.map((s) => s.id)).toEqual(["f2"]);
+  });
+});
+
+describe("indicatorStore — resposta de sessão encerrada", () => {
+  it("não grava erro, mas desliga o carregando que o logout não limpa", async () => {
+    jest.clearAllMocks();
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    useIndicatorStore.setState({ ...ESTADO_LIMPO });
+    mockGet.mockRejectedValue(new SessionEndedError());
+
+    await useIndicatorStore.getState().fetchIndicators();
+
+    expect(useIndicatorStore.getState().error).toBeNull();
+    expect(useIndicatorStore.getState().loading).toBe(false);
   });
 });

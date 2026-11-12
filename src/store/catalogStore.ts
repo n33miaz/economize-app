@@ -117,8 +117,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       });
     } catch (e) {
       if (id !== requestId) return;
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível carregar o catálogo.",
+      );
+      if (!message) return;
       set({
-        error: describeLoadFailure(e, "Não foi possível carregar o catálogo."),
+        error: message,
         isLoading: false,
       });
     }
@@ -153,12 +158,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         page: data.page,
         isLoadingMore: false,
       });
-    } catch {
+    } catch (e) {
       if (id !== requestId) return;
       // A lista que já está na tela continua válida: o erro é só da próxima
       // página, e some na próxima tentativa de rolagem
+      const message = describeLoadFailure(
+        e,
+        "Não foi possível carregar mais itens.",
+      );
+      if (!message) return;
       set({
-        error: "Não foi possível carregar mais itens.",
+        error: message,
         isLoadingMore: false,
       });
     }
