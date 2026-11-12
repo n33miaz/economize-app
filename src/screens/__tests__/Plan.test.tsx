@@ -13,6 +13,11 @@ import { useToastStore } from "../../store/toastStore";
 
 import type { PlansResponse } from "../../services/api";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 jest.mock("../../services/api", () => ({
   __esModule: true,
   default: {},
@@ -83,7 +88,10 @@ describe("Plan", () => {
       .mockImplementation(() => {});
   });
 
-  afterEach(() => showToastSpy.mockRestore());
+  afterEach(() => {
+    showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
+  });
 
   it("mostra o plano atual, a comparação e a nota honesta", async () => {
     mockPlans.mockResolvedValue(CATALOGO);

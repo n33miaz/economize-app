@@ -6,6 +6,11 @@ import { useToastStore } from "../../store/toastStore";
 import { useVersionStore } from "../../store/versionStore";
 import { APP_VERSION } from "../../utils/appVersion";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 // O dublê tem de ser o AXIOS, não este módulo: os interceptors e as funções
 // fecham sobre a instância criada aqui dentro. O `get` solto no default é a
 // consulta de versão, que vai pelo axios cru de propósito.
@@ -123,6 +128,7 @@ describe("api — versão e plano", () => {
     // E a consulta completa foi disparada (pelo axios cru)
     expect(axiosCru.get).toHaveBeenCalledTimes(1);
     showToast.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
   });
 
   it("a consulta de versão vai pelo axios cru, curta e com os cabeçalhos", async () => {

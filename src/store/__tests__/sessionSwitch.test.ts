@@ -32,6 +32,11 @@ import { useToastStore } from "../toastStore";
 import { useUserStore } from "../userStore";
 import { useWalletStore } from "../walletStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 /**
  * Um JWT com a cara do que o servidor emite: o `sub` é o e-mail da conta, e
  * é dele que o app tira "quem é esta pessoa". A assinatura não é conferida no
@@ -229,6 +234,7 @@ beforeEach(async () => {
 afterEach(() => {
   // o toast de "sessão expirada" arma um timer; sem recolher, ele vaza
   useToastStore.getState().hideToast();
+  useToastStore.setState({ showToast: realShowToast });
 });
 
 describe("A sai, B entra", () => {
