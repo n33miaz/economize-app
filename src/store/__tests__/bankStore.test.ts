@@ -1,13 +1,18 @@
 import * as DocumentPicker from "expo-document-picker";
 
-import { getBankTransactions, uploadBankStatement } from "../../services/api";
+import {
+  getBankTransactions,
+  getTransactions,
+  uploadBankStatement,
+} from "../../services/api";
 import { copiarParaCache, lerInicioEmBase64 } from "../../services/arquivoLocal";
-import { useBankStore } from "../bankStore";
+import { recentStatementRange, useBankStore } from "../bankStore";
 
 import type { BankTransaction } from "../../services/api";
 
 jest.mock("../../services/api", () => ({
   getBankTransactions: jest.fn(),
+  getTransactions: jest.fn(),
   uploadBankStatement: jest.fn(),
 }));
 
@@ -23,6 +28,7 @@ jest.mock("../../services/arquivoLocal", () => ({
 }));
 
 const mockGet = getBankTransactions as jest.MockedFunction<typeof getBankTransactions>;
+const mockRecent = getTransactions as jest.MockedFunction<typeof getTransactions>;
 const mockUpload = uploadBankStatement as jest.MockedFunction<typeof uploadBankStatement>;
 const mockPicker = DocumentPicker.getDocumentAsync as jest.MockedFunction<
   typeof DocumentPicker.getDocumentAsync
@@ -45,9 +51,31 @@ const tx = (id: string, valor: number): BankTransaction =>
     reviewStatus: "CONFIRMED",
   }) as BankTransaction;
 
+/** Uma resposta que só chega quando o teste mandar. */
+function adiada<T>() {
+  let resolver!: (valor: T) => void;
+  let rejeitar!: (erro: unknown) => void;
+  const promessa = new Promise<T>((res, rej) => {
+    resolver = res;
+    rejeitar = rej;
+  });
+  return { promessa, resolver, rejeitar };
+}
+
+/** Deixa as promessas encadeadas (a segunda fase) terminarem. */
+const assentar = async () => {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
+
 describe("bankStore", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // `reset` também esquece as buscas em voo do teste anterior, que vivem
+    // fora do estado do zustand
+    useBankStore.getState().reset();
+    // Lista recente vazia: os testes antigos seguem pelo caminho de sempre
+    // (a fase recente vazia não é publicada e cai na busca completa)
+    mockRecent.mockResolvedValue([]);
     useBankStore.setState({
       transactions: [],
       isLoading: false,
@@ -179,6 +207,215 @@ describe("bankStore", () => {
     expect(metricas.expense).toBe(300);
     expect(metricas.total).toBe(700);
   });
+
+  describe("primeira carga em duas fases", () => {
+    const recente = tx("r1", -12);
+    const antigo = { ...tx("a1", -99), date: "2024-01-10T00:00:00Z" } as BankTransaction;
+
+    it("a janela recente tem 90 dias para trás e cabe no teto de 366 da API", () => {
+      const janela = recentStatementRange(new Date(2026, 10, 12, 21, 30));
+
+      expect(janela).toEqual({
+        kind: "window",
+        start: "2026-08-14",
+        // 2026-08-14 + 365 dias: inclusivo, são exatamente 366
+        end: "2027-08-14",
+      });
+    });
+
+    it("pinta a lista recente primeiro e depois troca pelo histórico inteiro", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      const historico = adiada<BankTransaction[]>();
+      mockGet.mockReturnValue(historico.promessa);
+
+      await useBankStore.getState().fetchTransactions();
+
+      // A tela já tem o que mostrar, sem esperar o histórico
+      let estado = useBankStore.getState();
+      expect(estado.transactions).toEqual([recente]);
+      expect(estado.isLoading).toBe(false);
+      expect(estado.historyComplete).toBe(false);
+      expect(estado.isLoadingHistory).toBe(true);
+      expect(estado.fetchedAt).toBeNull();
+      expect(mockRecent).toHaveBeenCalledWith({ range: recentStatementRange() });
+      expect(mockRecent.mock.invocationCallOrder[0]).toBeLessThan(
+        mockGet.mock.invocationCallOrder[0],
+      );
+
+      historico.resolver([recente, antigo]);
+      await assentar();
+
+      estado = useBankStore.getState();
+      expect(estado.transactions).toEqual([recente, antigo]);
+      expect(estado.historyComplete).toBe(true);
+      expect(estado.isLoadingHistory).toBe(false);
+      expect(estado.fetchedAt).not.toBeNull();
+    });
+
+    it("foco durante a segunda fase não pede o histórico de novo", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      const historico = adiada<BankTransaction[]>();
+      mockGet.mockReturnValue(historico.promessa);
+
+      await useBankStore.getState().fetchTransactions();
+      await useBankStore.getState().fetchTransactions();
+
+      expect(mockRecent).toHaveBeenCalledTimes(1);
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      historico.resolver([recente, antigo]);
+      await assentar();
+    });
+
+    it("se a fase recente falha, cai direto na busca completa", async () => {
+      mockRecent.mockRejectedValue(new Error("offline"));
+      mockGet.mockResolvedValue([recente, antigo]);
+
+      await useBankStore.getState().fetchTransactions();
+
+      const estado = useBankStore.getState();
+      expect(estado.transactions).toEqual([recente, antigo]);
+      expect(estado.historyComplete).toBe(true);
+      expect(estado.error).toBeNull();
+    });
+
+    it("se o histórico falha, a lista recente fica e o próximo foco tenta de novo", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      mockGet.mockRejectedValueOnce(new Error("offline"));
+
+      await useBankStore.getState().fetchTransactions();
+      await assentar();
+
+      let estado = useBankStore.getState();
+      expect(estado.transactions).toEqual([recente]);
+      expect(estado.historyComplete).toBe(false);
+      expect(estado.isLoadingHistory).toBe(false);
+      expect(estado.fetchedAt).toBeNull();
+      // A frase vai para o aviso compacto acima da lista, que continua lá
+      expect(estado.error).toMatch(/extrato/i);
+
+      mockGet.mockResolvedValueOnce([recente, antigo]);
+      await useBankStore.getState().fetchTransactions();
+
+      // A nova tentativa é só a busca completa: a recente já está na tela
+      expect(mockRecent).toHaveBeenCalledTimes(1);
+      estado = useBankStore.getState();
+      expect(estado.transactions).toEqual([recente, antigo]);
+      expect(estado.historyComplete).toBe(true);
+      expect(estado.error).toBeNull();
+    });
+
+    it("lista recente vazia não é publicada: a tela espera o histórico", async () => {
+      mockRecent.mockResolvedValue([]);
+      const historico = adiada<BankTransaction[]>();
+      mockGet.mockReturnValue(historico.promessa);
+
+      const busca = useBankStore.getState().fetchTransactions();
+      await assentar();
+
+      // Publicar [] mostraria "Nenhum extrato importado" a quem tem histórico
+      expect(useBankStore.getState().isLoading).toBe(true);
+
+      historico.resolver([antigo]);
+      await busca;
+      expect(useBankStore.getState().transactions).toEqual([antigo]);
+      expect(useBankStore.getState().isLoading).toBe(false);
+    });
+
+    it("com o histórico completo, a recarga é uma busca só", async () => {
+      useBankStore.setState({
+        transactions: [recente, antigo],
+        historyComplete: true,
+        fetchedAt: null,
+      });
+      mockGet.mockResolvedValue([recente, antigo]);
+
+      await useBankStore.getState().fetchTransactions();
+
+      expect(mockRecent).not.toHaveBeenCalled();
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(useBankStore.getState().historyComplete).toBe(true);
+    });
+
+    it("fim de sessão entre as fases: o histórico de quem saiu não escreve", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      const historico = adiada<BankTransaction[]>();
+      mockGet.mockReturnValue(historico.promessa);
+
+      await useBankStore.getState().fetchTransactions();
+      useBankStore.getState().reset();
+      historico.resolver([recente, antigo]);
+      await assentar();
+
+      const estado = useBankStore.getState();
+      expect(estado.transactions).toEqual([]);
+      expect(estado.historyComplete).toBe(false);
+      expect(estado.fetchedAt).toBeNull();
+    });
+
+    it("edição confirmada entre as fases sobrevive à troca pela lista completa", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      const historico = adiada<BankTransaction[]>();
+      mockGet.mockReturnValue(historico.promessa);
+
+      await useBankStore.getState().fetchTransactions();
+      useBankStore
+        .getState()
+        .applyTransaction({ ...recente, description: "MERCADO DA ESQUINA" });
+      // O servidor montou a resposta antes de gravar o apelido
+      historico.resolver([recente, antigo]);
+      await assentar();
+
+      const lista = useBankStore.getState().transactions;
+      expect(lista).toHaveLength(2);
+      expect(lista.find((t) => t.id === "r1")?.description).toBe(
+        "MERCADO DA ESQUINA",
+      );
+    });
+
+    it("a busca pedida depois (importação) vence a segunda fase atrasada", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      const atrasada = adiada<BankTransaction[]>();
+      mockGet.mockReturnValueOnce(atrasada.promessa);
+      const novo = tx("n1", -5);
+      mockGet.mockResolvedValueOnce([novo, recente, antigo]);
+
+      await useBankStore.getState().fetchTransactions();
+      await useBankStore.getState().fetchTransactions(true);
+      atrasada.resolver([recente, antigo]);
+      await assentar();
+
+      expect(useBankStore.getState().transactions).toEqual([
+        novo,
+        recente,
+        antigo,
+      ]);
+    });
+
+    it("ensureHistory espera a segunda fase", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      const historico = adiada<BankTransaction[]>();
+      mockGet.mockReturnValue(historico.promessa);
+
+      await useBankStore.getState().fetchTransactions();
+      const garantido = useBankStore.getState().ensureHistory();
+      historico.resolver([recente, antigo]);
+
+      await expect(garantido).resolves.toBe(true);
+      expect(useBankStore.getState().transactions).toHaveLength(2);
+      expect(mockGet).toHaveBeenCalledTimes(1);
+    });
+
+    it("ensureHistory devolve false quando o histórico não chega", async () => {
+      mockRecent.mockResolvedValue([recente]);
+      mockGet.mockRejectedValue(new Error("offline"));
+
+      await expect(useBankStore.getState().ensureHistory()).resolves.toBe(false);
+      // Uma tentativa a mais antes de desistir
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(useBankStore.getState().transactions).toEqual([recente]);
+    });
+  });
+
   describe("arquivo que chega de fora (\"Abrir com\")", () => {
     it("sem arquivo parqueado não faz nada", async () => {
       const resultado = await useBankStore.getState().importarArquivoRecebido();

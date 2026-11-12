@@ -3,6 +3,7 @@ import {
   BankTransaction,
   StatementUploadResult,
   getBankTransactions,
+  getTransactions,
   uploadBankStatement,
 } from "../services/api";
 import {
@@ -13,6 +14,7 @@ import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { calculateBankMetrics } from "../utils/bankMetrics";
 import { replaceTransaction } from "../utils/transactions";
+import { addDays, todayIso, type AnalysisRange } from "../utils/cycleWindow";
 import {
   bytesDeBase64,
   formatoPelaUri,
@@ -50,6 +52,67 @@ const PICKER_TYPES =
  * Mercado e voltar não custe nada. Puxar para atualizar ignora a janela.
  */
 export const BANK_CACHE_TTL_MS = 60 * 1000;
+
+/**
+ * Quantos dias para trás a primeira pintura do Extrato cobre.
+ *
+ * O histórico inteiro (1.970 linhas, 1,5 MB) levava de 3 a 10 s no servidor
+ * grátis, e a tela esperava tudo para mostrar os lançamentos da semana. Três
+ * meses é o que se rola de fato ao abrir a aba; o resto chega em seguida.
+ */
+export const RECENT_WINDOW_DAYS = 90;
+
+/**
+ * Teto da janela de `/transactions` (`AnalysisWindow.MAX_DAYS` na API): datas
+ * INCLUSIVAS, `end - start + 1` dias, e acima disso a resposta é 400.
+ */
+const API_MAX_WINDOW_DAYS = 366;
+
+/**
+ * A janela da primeira fase: 90 dias para trás e o resto do teto para a frente.
+ *
+ * A folga para a frente pega lançamento com data futura (parcela, agendamento)
+ * que o histórico inteiro também traria — sem ela a lista mudaria de forma na
+ * segunda fase. Ela também torna irrelevante a diferença entre o "hoje" do
+ * aparelho e o corte em UTC do servidor: as bordas ficam longe do dia de hoje.
+ */
+export function recentStatementRange(now: Date = new Date()): AnalysisRange {
+  const start = addDays(todayIso(now), -RECENT_WINDOW_DAYS);
+  return {
+    kind: "window",
+    start,
+    end: addDays(start, API_MAX_WINDOW_DAYS - 1),
+  };
+}
+
+/**
+ * Qual busca é a mais nova. Sobe a cada busca do extrato e no `reset`; uma
+ * resposta só escreve se a geração dela ainda for a atual.
+ *
+ * O interceptor da API já descarta a resposta de sessão encerrada, mas não
+ * ordena duas buscas da MESMA sessão: a segunda fase pedida antes de uma
+ * importação chegaria depois da busca pós-importação e devolveria a lista sem
+ * o arquivo novo. Fica fora do estado porque não é dado de tela.
+ */
+let geracao = 0;
+/** A busca em primeiro plano em andamento (fase 1 ou busca completa). */
+let cargaEmVoo: Promise<void> | null = null;
+/** A busca do histórico inteiro em andamento (fase 2 ou busca completa). */
+let historicoEmVoo: Promise<void> | null = null;
+/**
+ * Edições confirmadas depois que o histórico inteiro foi pedido. O servidor
+ * pode ter montado a resposta antes de gravar a edição; sem reaplicá-las, a
+ * troca pela lista completa desfaria um apelido que a pessoa acabou de salvar.
+ */
+let editadasNoVoo: Map<string, BankTransaction> | null = null;
+
+function reaplicarEdicoes(
+  lista: BankTransaction[],
+  editadas: Map<string, BankTransaction> | null,
+): BankTransaction[] {
+  if (!editadas || editadas.size === 0) return lista;
+  return lista.map((tx) => editadas.get(tx.id) ?? tx);
+}
 
 /**
  * O envio em si, compartilhado pelos dois caminhos de importação (o seletor de
@@ -124,8 +187,18 @@ interface BankState {
   // RefreshControl girar durante a importação de arquivo
   isImporting: boolean;
   error: string | null;
-  /** `Date.now()` da última lista boa; null = nunca carregou. */
+  /**
+   * `Date.now()` da última lista COMPLETA; null = nunca carregou. A lista
+   * recente da primeira fase não conta: o próximo foco tem de buscar o resto.
+   */
   fetchedAt: number | null;
+  /**
+   * A lista é o histórico inteiro? Falso entre as duas fases da primeira carga
+   * (e se a segunda falhar). Quem soma, conta ou exporta espera por ele.
+   */
+  historyComplete: boolean;
+  /** O histórico inteiro está a caminho (a lista na tela é a recente). */
+  isLoadingHistory: boolean;
 
   /**
    * A URI de um arquivo que o Android mandou para cá ("Abrir com › Economize!")
@@ -135,7 +208,17 @@ interface BankState {
    */
   arquivoRecebido: string | null;
 
+  /**
+   * Resolve quando há lista para pintar: na primeira carga, depois da fase
+   * recente — o histórico inteiro segue em segundo plano.
+   */
   fetchTransactions: (force?: boolean) => Promise<void>;
+  /**
+   * Garante o histórico inteiro na store (espera a busca em voo, ou busca).
+   * Devolve false quando ele não chegou — quem exporta não gera arquivo pela
+   * metade.
+   */
+  ensureHistory: () => Promise<boolean>;
   importStatement: () => Promise<StatementUploadResult | null>;
   /** Guarda o arquivo que chegou de fora até alguém poder enviá-lo. */
   receberArquivo: (uri: string) => void;
@@ -150,127 +233,227 @@ interface BankState {
   reset: () => void;
 }
 
-export const useBankStore = create<BankState>((set, get) => ({
-  transactions: [],
-  isLoading: false,
-  isImporting: false,
-  error: null,
-  fetchedAt: null,
-  arquivoRecebido: null,
+export const useBankStore = create<BankState>((set, get) => {
+  /**
+   * Busca o histórico inteiro e SUBSTITUI a lista — é a segunda fase da
+   * primeira carga e também a recarga de sempre. Registra-se como o histórico
+   * em voo para que focos seguidos não peçam a mesma lista de novo.
+   */
+  const carregarHistorico = (minha: number): Promise<void> => {
+    editadasNoVoo = new Map();
+    if (!get().historyComplete) set({ isLoadingHistory: true });
+    const busca = (async () => {
+      try {
+        const data = await getBankTransactions();
+        if (minha !== geracao) return;
+        // `error: null` também no sucesso: a busca de uma sessão encerrada
+        // pode ter escrito a sua falha DEPOIS do início desta, e lista boa com
+        // erro ao lado é a tela discordando de si mesma
+        set({
+          transactions: reaplicarEdicoes(data, editadasNoVoo),
+          isLoading: false,
+          isLoadingHistory: false,
+          historyComplete: true,
+          error: null,
+          fetchedAt: Date.now(),
+        });
+      } catch (e) {
+        // A frase vai para o ErrorState da tela, não para toast: leitura que
+        // falha se explica no lugar, com "tentar de novo" ao lado. Com a
+        // lista recente na tela ele é o aviso compacto ACIMA dela — a lista
+        // fica. `fetchedAt` NÃO avança: falha não vale como leitura boa, e o
+        // próximo foco tem de tentar outra vez
+        const message = describeLoadFailure(e, "Falha ao carregar extrato.");
+        if (!message) return;
+        // Falha de uma busca que já foi superada não apaga o que a nova trouxer
+        if (minha !== geracao) return;
+        set({
+          error: message,
+          isLoading: false,
+          isLoadingHistory: false,
+        });
+      }
+    })();
+    historicoEmVoo = busca;
+    return busca.finally(() => {
+      if (historicoEmVoo === busca) {
+        historicoEmVoo = null;
+        editadasNoVoo = null;
+      }
+    });
+  };
 
-  fetchTransactions: async (force = false) => {
-    const { fetchedAt, isLoading } = get();
-    // Uma busca em voo também basta: dois focos no mesmo instante (montagem +
-    // volta de sheet) pediam a mesma lista duas vezes
-    if (isLoading) return;
-    if (
-      !force &&
-      fetchedAt !== null &&
-      Date.now() - fetchedAt < BANK_CACHE_TTL_MS
-    ) {
-      return;
-    }
-    set({ isLoading: true, error: null });
-    try {
-      const data = await getBankTransactions();
-      // `error: null` também no sucesso: a busca de uma sessão encerrada
-      // pode ter escrito a sua falha DEPOIS do início desta, e lista boa com
-      // erro ao lado é a tela discordando de si mesma
-      set({
-        transactions: data,
-        isLoading: false,
-        error: null,
-        fetchedAt: Date.now(),
-      });
-    } catch (e) {
-      // A frase vai para o ErrorState da tela, não para toast: leitura que
-      // falha se explica no lugar, com "tentar de novo" ao lado.
-      // `fetchedAt` NÃO avança: falha não vale como leitura boa, e o próximo
-      // foco tem de tentar outra vez
-      const message = describeLoadFailure(e, "Falha ao carregar extrato.");
-      if (!message) return;
-      set({
-        error: message,
-        isLoading: false,
-      });
-    }
-  },
+  return {
+    transactions: [],
+    isLoading: false,
+    isImporting: false,
+    error: null,
+    fetchedAt: null,
+    historyComplete: false,
+    isLoadingHistory: false,
+    arquivoRecebido: null,
 
-  importStatement: async () => {
-    set({ isImporting: true, error: null });
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: PICKER_TYPES,
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        set({ isImporting: false });
-        return null;
+    fetchTransactions: (force = false) => {
+      const { fetchedAt, isLoading, historyComplete, transactions } = get();
+      // Uma busca em voo também basta: dois focos no mesmo instante (montagem +
+      // volta de sheet) pediam a mesma lista duas vezes. Devolve a promessa dela
+      // para quem espera (a exportação) esperar a lista de verdade
+      if (isLoading) return cargaEmVoo ?? Promise.resolve();
+      // O histórico já está a caminho: sem `force`, ele é a busca que este foco
+      // pediria. Com `force` (importação, puxar para atualizar) a busca em voo
+      // foi pedida ANTES da mudança e não serve — a geração nova a descarta
+      if (historicoEmVoo && !force) return Promise.resolve();
+      if (
+        !force &&
+        fetchedAt !== null &&
+        Date.now() - fetchedAt < BANK_CACHE_TTL_MS
+      ) {
+        return Promise.resolve();
       }
 
-      // a validação de formato é do backend (EC-048) — o erro dele já vem
-      // com a mensagem certa e cobre formatos que o cliente nem conhece
-      return await enviarArquivo(result.assets[0], get, set);
-    } catch (e: any) {
-      const message = describeSaveFailure(e, e?.message || "Erro no upload");
-      if (!message) throw e;
-      set({
-        error: message,
-        isImporting: false,
+      const minha = ++geracao;
+      // Duas fases só na primeira carga. Com a lista completa na tela, a recarga
+      // a mantém enquanto busca: voltar para a recente seria a tela encolhendo
+      // a cada foco
+      const emDuasFases = !historyComplete && transactions.length === 0;
+      set({ isLoading: true, error: null });
+
+      const carga = (async () => {
+        if (emDuasFases) {
+          let recentes: BankTransaction[] | null = null;
+          try {
+            recentes = await getTransactions({ range: recentStatementRange() });
+          } catch (e) {
+            // Sessão encerrada não escreve nada (frase vazia). Qualquer outra
+            // falha cai na busca completa abaixo, que é o caminho de antes
+            if (!describeLoadFailure(e, "Falha ao carregar extrato.")) return;
+          }
+          if (minha !== geracao) return;
+          // Lista recente VAZIA não é publicada: quem só tem lançamento antigo
+          // veria "Nenhum extrato importado" até a segunda fase chegar
+          if (recentes && recentes.length > 0) {
+            set({ transactions: recentes, isLoading: false, error: null });
+            // Sem `await` de propósito: a tela já tem o que pintar
+            void carregarHistorico(minha);
+            return;
+          }
+        }
+        await carregarHistorico(minha);
+      })();
+
+      cargaEmVoo = carga;
+      return carga.finally(() => {
+        if (cargaEmVoo === carga) cargaEmVoo = null;
       });
-      throw e;
-    }
-  },
+    },
 
-  receberArquivo: (uri) => set({ arquivoRecebido: uri }),
+    ensureHistory: async () => {
+      // Laço, e não uma espera só: uma busca nova (importação) pode tomar o
+      // lugar da que estava em voo enquanto se espera
+      const esperarBuscas = async () => {
+        while (cargaEmVoo || historicoEmVoo) {
+          await (cargaEmVoo ?? historicoEmVoo);
+        }
+      };
+      await get().fetchTransactions();
+      await esperarBuscas();
+      if (!get().historyComplete) {
+        // A segunda fase falhou: uma tentativa a mais antes de desistir
+        await get().fetchTransactions(true);
+        await esperarBuscas();
+      }
+      return get().historyComplete;
+    },
 
-  descartarArquivoRecebido: () => set({ arquivoRecebido: null }),
+    importStatement: async () => {
+      set({ isImporting: true, error: null });
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: PICKER_TYPES,
+          copyToCacheDirectory: true,
+        });
 
-  importarArquivoRecebido: async () => {
-    const uri = get().arquivoRecebido;
-    if (!uri) return null;
-    if (get().isImporting) return null;
-    // Sai da fila ANTES do envio: se a rede falhar, a tela mostra o erro e o
-    // seletor de arquivos continua ali. Deixar parqueado faria a tela tentar
-    // de novo sozinha a cada foco, que é a forma mais rápida de transformar um
-    // arquivo problemático num laço.
-    set({ isImporting: true, error: null, arquivoRecebido: null });
-    try {
-      const asset = await descreverArquivoRecebido(uri);
-      return await enviarArquivo(asset, get, set);
-    } catch (e: any) {
-      const message = describeSaveFailure(e, e?.message || "Erro no upload");
-      if (!message) throw e;
+        if (result.canceled) {
+          set({ isImporting: false });
+          return null;
+        }
+
+        // a validação de formato é do backend (EC-048) — o erro dele já vem
+        // com a mensagem certa e cobre formatos que o cliente nem conhece
+        return await enviarArquivo(result.assets[0], get, set);
+      } catch (e: any) {
+        const message = describeSaveFailure(e, e?.message || "Erro no upload");
+        if (!message) throw e;
+        set({
+          error: message,
+          isImporting: false,
+        });
+        throw e;
+      }
+    },
+
+    receberArquivo: (uri) => set({ arquivoRecebido: uri }),
+
+    descartarArquivoRecebido: () => set({ arquivoRecebido: null }),
+
+    importarArquivoRecebido: async () => {
+      const uri = get().arquivoRecebido;
+      if (!uri) return null;
+      if (get().isImporting) return null;
+      // Sai da fila ANTES do envio: se a rede falhar, a tela mostra o erro e o
+      // seletor de arquivos continua ali. Deixar parqueado faria a tela tentar
+      // de novo sozinha a cada foco, que é a forma mais rápida de transformar um
+      // arquivo problemático num laço.
+      set({ isImporting: true, error: null, arquivoRecebido: null });
+      try {
+        const asset = await descreverArquivoRecebido(uri);
+        return await enviarArquivo(asset, get, set);
+      } catch (e: any) {
+        const message = describeSaveFailure(e, e?.message || "Erro no upload");
+        if (!message) throw e;
+        set({
+          error: message,
+          isImporting: false,
+        });
+        throw e;
+      }
+    },
+
+    applyTransaction: (updated) => {
+      // Edição com o histórico a caminho: guardada para sobreviver à troca
+      editadasNoVoo?.set(updated.id, updated);
+      set({ transactions: replaceTransaction(get().transactions, updated) });
+    },
+
+    calculateMetrics: () => calculateBankMetrics(get().transactions),
+
+    // Fim de sessão. `fetchedAt` volta a null junto com a lista: era ele que
+    // fazia a próxima conta ver o extrato da anterior por até um minuto, porque
+    // a janela de cache respondia "ainda está bom" sem perguntar DE QUEM era.
+    // `isLoading` cai para o primeiro foco da conta nova poder buscar — a
+    // resposta que ainda estiver em voo é descartada pelo interceptor da API, e
+    // a geração nova a descarta também aqui (a segunda fase de quem saiu não
+    // escreve na lista de quem entrou). `historyComplete` volta a false: a
+    // próxima conta começa outra vez pela lista recente.
+    //
+    // `arquivoRecebido` fica de fora DE PROPÓSITO: é um arquivo que o Android
+    // entregou ao aparelho, não dado de conta, e foi desenhado para atravessar
+    // uma tela de login inteira (ver o campo). Apagá-lo aqui perderia o "Abrir
+    // com" de quem estava deslogado ou saiu pela tranca da biometria
+    reset: () => {
+      geracao++;
+      cargaEmVoo = null;
+      historicoEmVoo = null;
+      editadasNoVoo = null;
       set({
-        error: message,
+        transactions: [],
+        isLoading: false,
         isImporting: false,
+        error: null,
+        fetchedAt: null,
+        historyComplete: false,
+        isLoadingHistory: false,
       });
-      throw e;
-    }
-  },
-
-  applyTransaction: (updated) =>
-    set({ transactions: replaceTransaction(get().transactions, updated) }),
-
-  calculateMetrics: () => calculateBankMetrics(get().transactions),
-
-  // Fim de sessão. `fetchedAt` volta a null junto com a lista: era ele que
-  // fazia a próxima conta ver o extrato da anterior por até um minuto, porque
-  // a janela de cache respondia "ainda está bom" sem perguntar DE QUEM era.
-  // `isLoading` cai para o primeiro foco da conta nova poder buscar — a
-  // resposta que ainda estiver em voo é descartada pelo interceptor da API.
-  //
-  // `arquivoRecebido` fica de fora DE PROPÓSITO: é um arquivo que o Android
-  // entregou ao aparelho, não dado de conta, e foi desenhado para atravessar
-  // uma tela de login inteira (ver o campo). Apagá-lo aqui perderia o "Abrir
-  // com" de quem estava deslogado ou saiu pela tranca da biometria
-  reset: () =>
-    set({
-      transactions: [],
-      isLoading: false,
-      isImporting: false,
-      error: null,
-      fetchedAt: null,
-    }),
-}));
+    },
+  };
+});

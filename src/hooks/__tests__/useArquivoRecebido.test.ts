@@ -6,6 +6,7 @@ import { useBankStore } from "../../store/bankStore";
 
 jest.mock("../../services/api", () => ({
   getBankTransactions: jest.fn(),
+  getTransactions: jest.fn(),
   uploadBankStatement: jest.fn(),
 }));
 jest.mock("../../services/arquivoLocal", () => ({
