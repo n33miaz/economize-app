@@ -54,8 +54,12 @@ function warn(operation: string, key: string): void {
  * Copia o valor da chave antiga do AsyncStorage para o cofre e apaga a antiga.
  * Devolve o valor achado (ou nulo), mesmo que a cópia falhe: a pessoa não pode
  * sair da conta por causa da atualização. Se a cópia falhar, a chave antiga
- * FICA, para a próxima abertura tentar de novo — apagar sem ter copiado seria
- * perder a sessão.
+ * não é apagada AQUI, e a sessão segue aberta nesta execução. Não há promessa
+ * de nova tentativa: a primeira escrita do store (a própria hidratação já
+ * escreve) apaga a chave antiga — ver `setItem`. Num aparelho cujo cofre não
+ * grava, a próxima abertura cai no login, que é o comportamento de "cofre
+ * indisponível"; o contrário (manter o texto claro) faria o logout não fechar
+ * a sessão.
  */
 async function migrateFromLegacy(key: string): Promise<string | null> {
   let legacy: string | null;
@@ -74,8 +78,8 @@ async function migrateFromLegacy(key: string): Promise<string | null> {
   try {
     await AsyncStorage.removeItem(key);
   } catch {
-    // Já está no cofre; a cópia em texto claro sai na próxima escrita (ver
-    // `setItem`), que também apaga a chave antiga
+    // Já está no cofre; a cópia em texto claro é apagada de novo em toda
+    // escrita (ver `setItem`)
   }
   return legacy;
 }

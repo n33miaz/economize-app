@@ -69,12 +69,12 @@ describe("secureStorage", () => {
     );
   });
 
-  it("migração que não consegue copiar mantém a pessoa logada e a chave antiga", async () => {
+  it("migração que não consegue copiar ainda devolve a sessão desta abertura", async () => {
     antigo.get.mockResolvedValue("tok-antigo");
     cofre.set.mockRejectedValue(new Error("Keystore"));
 
     expect(await getItem(CHAVE)).toBe("tok-antigo");
-    // fica para a próxima abertura tentar de novo
+    // a leitura não apaga o que não conseguiu copiar; quem apaga é a escrita
     expect(antigo.del).not.toHaveBeenCalled();
   });
 
