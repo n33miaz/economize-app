@@ -132,6 +132,24 @@ export function formatDecimal(
 // fração de dólar) e lê-los como milhar multiplicaria o valor por mil
 const MILHAR_SO_COM_PONTO = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
 
+// O campo pode receber a moeda que o próprio app mostra, mas não pode
+// "limpar" letras arbitrárias: antes, "12abc" virava silenciosamente 12.
+// O sinal só existe antes do número (antes ou depois da moeda de prefixo).
+const VALOR_COM_MOEDA = /^[ \u00a0]*([+-])?[ \u00a0]*(?:(R\$|US\$|\$)[ \u00a0]*)?([+-])?[ \u00a0]*(\d[\d,.]*)(?:[ \u00a0]*(R\$|US\$|\$))?[ \u00a0]*$/;
+
+/** Extrai somente uma escrita numérica com moeda conhecida nas extremidades. */
+function numeroDigitado(raw: string): string | null {
+  const match = VALOR_COM_MOEDA.exec(raw);
+  if (match == null) return null;
+
+  const [, sinalAntes, moedaPrefixo, sinalDepoisDaMoeda, digitos, moedaSufixo] = match;
+  // Dois sinais ("--5") e duas moedas ("R$ 5 $") não são uma entrada humana
+  // inequívoca, mesmo que cada símbolo isolado seja conhecido.
+  if ((sinalAntes && sinalDepoisDaMoeda) || (moedaPrefixo && moedaSufixo)) return null;
+
+  return `${sinalAntes ?? sinalDepoisDaMoeda ?? ""}${digitos}`;
+}
+
 /**
  * Texto do campo de valor → número. A ÚNICA leitura de valor digitado do app:
  * cada tela tinha a sua, e a que tratava "2.500" como R$ 2,50 gravava o valor
@@ -159,8 +177,8 @@ const MILHAR_SO_COM_PONTO = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
  * campo vazio não pode virar 0 e ser aceito pelo servidor como valor.
  */
 export function parseAmount(raw: string): number | null {
-  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
-  if (!/\d/.test(cleaned)) return null;
+  const cleaned = numeroDigitado(raw);
+  if (cleaned == null) return null;
   let normalized: string;
   if (cleaned.includes(",")) {
     // Vírgula é o decimal em pt-BR; o ponto que sobra é de milhar. Mais de
@@ -194,8 +212,8 @@ const MILHAR_EM_GRUPOS = /^-?\d{1,3}(\.\d{3}){2,}$/;
  * | "", "abc", "1.2.3", "1,2,3" | null | não é número que se leia          |
  */
 export function parseQuantity(raw: string): number | null {
-  const cleaned = raw.trim().replace(/[^\d,.-]/g, "");
-  if (!/\d/.test(cleaned)) return null;
+  const cleaned = numeroDigitado(raw);
+  if (cleaned == null) return null;
   let normalized: string;
   if (cleaned.includes(",")) {
     // Mais de uma vírgula vira NaN no Number abaixo e sai null
