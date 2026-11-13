@@ -1,5 +1,6 @@
 // O mock do AsyncStorage é global, em jest.setup.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
 import { clearLocalData } from "../localData";
 import { useAuthStore } from "../../store/authStore";
@@ -115,6 +116,14 @@ describe("clearLocalData", () => {
   it("clears the entire device storage", async () => {
     await clearLocalData();
     expect(AsyncStorage.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it("also forgets the trusted-device secret kept in the system vault", async () => {
+    // o `clear()` do AsyncStorage não alcança o cofre do sistema
+    await clearLocalData();
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+      "_economize_device_token",
+    );
   });
 
   it("restores persisted stores to first-install defaults", async () => {

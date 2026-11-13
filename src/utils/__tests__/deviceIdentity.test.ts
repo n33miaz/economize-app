@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
 import {
   deviceLabel,
@@ -7,14 +7,14 @@ import {
   saveDeviceToken,
 } from "../deviceIdentity";
 
-jest.mock("@react-native-async-storage/async-storage", () => ({
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-}));
-
-const storage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
-const CHAVE = "@economize_device_token";
+// O segredo mora no cofre do sistema (mock global em jest.setup.js). A chave
+// do cofre é a antiga saneada: o SecureStore não aceita "@"
+const storage = {
+  getItem: SecureStore.getItemAsync as jest.Mock,
+  setItem: SecureStore.setItemAsync as jest.Mock,
+  removeItem: SecureStore.deleteItemAsync as jest.Mock,
+};
+const CHAVE = "_economize_device_token";
 
 /**
  * O segredo que faz este aparelho ser reconhecido no login.
@@ -26,7 +26,11 @@ const CHAVE = "@economize_device_token";
  * pede o código.
  */
 describe("deviceIdentity", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => jest.restoreAllMocks());
 
   it("lê o segredo guardado", async () => {
     storage.getItem.mockResolvedValue("segredo-abc");

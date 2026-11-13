@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as secureStorage from "./secureStorage";
 
 /**
  * O segredo que faz este aparelho ser reconhecido no login.
@@ -9,16 +9,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * senha. Fator que atrapalha o dono é fator que o dono desliga, e aí a conta
  * fica sem nenhum.
  *
- * <p>Guardado no mesmo armazenamento da sessão. Ele NÃO é uma sessão: sozinho
- * não abre nada — só dispensa o segundo passo de quem já sabe a senha. Por isso
- * SOBREVIVE ao logout, que é o ponto: sair da conta no próprio celular não pode
+ * <p>Guardado no mesmo cofre da sessão (`utils/secureStorage`: Keychain e
+ * Keystore no celular; no web, o armazenamento de sempre): quem lê o segredo
+ * pula o segundo fator, então ele não pode ficar em texto claro. Ele NÃO é uma
+ * sessão: sozinho não abre nada — só dispensa o segundo passo de quem já sabe
+ * a senha. Por isso SOBREVIVE ao logout, que é o ponto: sair da conta no próprio celular não pode
  * transformá-lo num aparelho estranho na próxima entrada.
  */
 const CHAVE = "@economize_device_token";
 
 export async function readDeviceToken(): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(CHAVE);
+    return await secureStorage.getItem(CHAVE);
   } catch {
     // armazenamento indisponível é "aparelho desconhecido": pede o código
     return null;
@@ -27,7 +29,7 @@ export async function readDeviceToken(): Promise<string | null> {
 
 export async function saveDeviceToken(token: string): Promise<void> {
   try {
-    await AsyncStorage.setItem(CHAVE, token);
+    await secureStorage.setItem(CHAVE, token);
   } catch {
     // sem onde guardar, o próximo login pede o código de novo — é o
     // comportamento seguro, e não vale derrubar o login por causa disso
@@ -36,7 +38,7 @@ export async function saveDeviceToken(token: string): Promise<void> {
 
 export async function forgetDeviceToken(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(CHAVE);
+    await secureStorage.removeItem(CHAVE);
   } catch {
     // idem
   }
