@@ -375,4 +375,36 @@ describe("familyStore (EC-150)", () => {
     expect(state.hasLoadedOnce).toBe(false);
     expect(state.scope).toBe("me");
   });
+
+  // ------------------------------------------------------- toque duplo
+
+  it("dois toques em criar mandam um POST só", async () => {
+    let solta: (v: unknown) => void = () => {};
+    mock.create.mockImplementation(
+      () => new Promise((resolve) => (solta = resolve)) as never,
+    );
+
+    const primeiro = useFamilyStore.getState().create("Casa");
+    const segundo = await useFamilyStore.getState().create("Casa");
+    solta(casa());
+    await primeiro;
+
+    expect(segundo.ok).toBe(false);
+    expect(mock.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("dois toques em entrar mandam um POST só", async () => {
+    let solta: (v: unknown) => void = () => {};
+    mock.join.mockImplementation(
+      () => new Promise((resolve) => (solta = resolve)) as never,
+    );
+
+    const primeiro = useFamilyStore.getState().join("ABC123");
+    const segundo = await useFamilyStore.getState().join("ABC123");
+    solta(casa({ role: "MEMBER" }));
+    await primeiro;
+
+    expect(segundo.ok).toBe(false);
+    expect(mock.join).toHaveBeenCalledTimes(1);
+  });
 });
