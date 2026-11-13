@@ -1,5 +1,6 @@
 import React from "react";
-import { Share } from "react-native";
+import { Platform, Share } from "react-native";
+import * as FileSystem from "expo-file-system";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
@@ -23,6 +24,28 @@ jest.mock("../../services/api", () => ({
   default: {},
   tidyStatement: jest.fn(),
 }));
+
+jest.mock("expo-file-system", () => ({
+  cacheDirectory: "file:///cache/",
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+  StorageAccessFramework: {
+    requestDirectoryPermissionsAsync: jest.fn(),
+    createFileAsync: jest.fn(),
+  },
+}));
+
+const fs = FileSystem as jest.Mocked<typeof FileSystem>;
+const saf = FileSystem.StorageAccessFramework as jest.Mocked<
+  typeof FileSystem.StorageAccessFramework
+>;
+
+/** Troca a plataforma só durante o teste: o Platform do jest é um objeto comum. */
+const comPlataforma = (os: string) => {
+  const original = Platform.OS;
+  Object.defineProperty(Platform, "OS", { value: os, configurable: true });
+  return () =>
+    Object.defineProperty(Platform, "OS", { value: original, configurable: true });
+};
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
@@ -63,6 +86,9 @@ describe("Opções avançadas", () => {
     useCategoriesStore.setState({ items: [] } as never);
     usePreferencesStore.setState({ notificationsEnabled: true } as never);
     faxina.mockReset();
+    fs.writeAsStringAsync.mockClear();
+    saf.requestDirectoryPermissionsAsync.mockReset();
+    saf.createFileAsync.mockReset();
   });
 
   it("abre com o título e o subtítulo da tela", async () => {
@@ -216,6 +242,115 @@ describe("Opções avançadas", () => {
       );
       expect(compartilhar).not.toHaveBeenCalled();
       compartilhar.mockRestore();
+    });
+
+    it("no iOS compartilha o ARQUIVO, não o JSON como texto", async () => {
+      const compartilhar = jest
+        .spyOn(Share, "share")
+        .mockResolvedValue({ action: "sharedAction" } as never);
+      prepararFontes(true);
+
+      const { getByText } = montar();
+      fireEvent.press(await waitFor(() => getByText("Exportar meus dados")));
+
+      await waitFor(() => expect(compartilhar).toHaveBeenCalled());
+      const [conteudo] = compartilhar.mock.calls[0];
+      expect(conteudo).toMatchObject({
+        url: expect.stringMatching(/^file:\/\/\/cache\/economize-dados-.*\.json$/),
+      });
+      // O texto do extrato inteiro pelo share sheet é o que estoura o Binder
+      expect(conteudo).not.toHaveProperty("message");
+      expect(fs.writeAsStringAsync).toHaveBeenCalledWith(
+        (conteudo as { url: string }).url,
+        expect.any(String),
+      );
+      compartilhar.mockRestore();
+    });
+
+    it("no Android grava pelo SAF na pasta escolhida, sem Share", async () => {
+      const restaurar = comPlataforma("android");
+      const compartilhar = jest.spyOn(Share, "share");
+      saf.requestDirectoryPermissionsAsync.mockResolvedValue({
+        granted: true,
+        directoryUri: "content://pasta",
+      });
+      saf.createFileAsync.mockResolvedValue("content://pasta/arquivo");
+      prepararFontes(true);
+
+      try {
+        const { getByText } = montar();
+        fireEvent.press(await waitFor(() => getByText("Exportar meus dados")));
+
+        await waitFor(() =>
+          expect(fs.writeAsStringAsync).toHaveBeenCalledWith(
+            "content://pasta/arquivo",
+            expect.any(String),
+          ),
+        );
+        // O SAF põe a extensão pelo tipo: o nome vai sem ".json"
+        expect(saf.createFileAsync).toHaveBeenCalledWith(
+          "content://pasta",
+          expect.not.stringMatching(/\.json$/),
+          "application/json",
+        );
+        expect(compartilhar).not.toHaveBeenCalled();
+        expect(useToastStore.getState().message).toMatch(/pasta escolhida/);
+      } finally {
+        restaurar();
+        compartilhar.mockRestore();
+      }
+    });
+
+    it("no Android, desistir da pasta não grava nem acusa erro", async () => {
+      const restaurar = comPlataforma("android");
+      saf.requestDirectoryPermissionsAsync.mockResolvedValue({ granted: false });
+      useToastStore.setState({ message: "", lastMessage: "" } as never);
+      prepararFontes(true);
+
+      try {
+        const { getByText } = montar();
+        fireEvent.press(await waitFor(() => getByText("Exportar meus dados")));
+
+        await waitFor(() =>
+          expect(saf.requestDirectoryPermissionsAsync).toHaveBeenCalled(),
+        );
+        expect(fs.writeAsStringAsync).not.toHaveBeenCalled();
+        expect(useToastStore.getState().message).toBe("");
+      } finally {
+        restaurar();
+      }
+    });
+
+    it("na web revoga a URL do blob só depois, para o Safari baixar", async () => {
+      const restaurar = comPlataforma("web");
+      const criar = jest.fn().mockReturnValue("blob:x");
+      const revogar = jest.fn();
+      const urlOriginal = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+      URL.createObjectURL = criar;
+      URL.revokeObjectURL = revogar;
+      const docOriginal = (global as { document?: unknown }).document;
+      const ancora = { click: jest.fn(), remove: jest.fn() } as Record<string, unknown>;
+      (global as { document?: unknown }).document = {
+        createElement: () => ancora,
+        body: { appendChild: jest.fn() },
+      };
+      prepararFontes(true);
+
+      try {
+        const { getByText } = montar();
+        fireEvent.press(await waitFor(() => getByText("Exportar meus dados")));
+
+        await waitFor(() => expect(ancora.click).toHaveBeenCalled());
+        expect(revogar).not.toHaveBeenCalled();
+        await waitFor(() => expect(revogar).toHaveBeenCalledWith("blob:x"), {
+          timeout: 2500,
+        });
+      } finally {
+        restaurar();
+        URL.createObjectURL = urlOriginal.create;
+        URL.revokeObjectURL = urlOriginal.revoke;
+        (global as { document?: unknown }).document = docOriginal;
+      }
     });
   });
 });

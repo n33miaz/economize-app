@@ -37,6 +37,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import AdSlot from "../components/AdSlot";
 import Skeleton from "../components/Skeleton";
+import ErrorState from "../components/ErrorState";
 import AssistantFAB, {
   ASSISTANT_FAB_HEIGHT,
 } from "../components/AssistantFAB";
@@ -269,7 +270,8 @@ export default function Reports() {
   // Card de relatório é bloco fechado e de altura parecida — o caso em que
   // uma grade de duas colunas ganha o dobro de leitura sem custo nenhum
   const { columns } = useBreakpoint();
-  const { items, isLoading, isGenerating, fetch, generate } = useReportsStore();
+  const { items, isLoading, isGenerating, loadError, fetch, generate } =
+    useReportsStore();
   const showToast = useToastStore((s) => s.showToast);
   const anchorDay = usePreferencesStore(selectCycleAnchorDay);
   const [tab, setTab] = useState<ReportPeriod>("MONTHLY");
@@ -313,6 +315,9 @@ export default function Reports() {
 
   const gerarDaJanela = async (janela: ReportWindow) => {
     setPeriodoAberto(false);
+    // Já gerando: o store devolveria null pela trava do toque duplo, e esse
+    // null viraria aqui um toast de falha enquanto o primeiro pedido dá certo
+    if (useReportsStore.getState().isGenerating) return;
     const { startDate, endDate } = toInstantRange(janela);
     const created = await generate(tab, startDate, endDate);
     if (!created) {
@@ -391,6 +396,10 @@ export default function Reports() {
             <TouchableOpacity
               key={p}
               onPress={() => setTab(p)}
+              // Leitor de tela: sem papel e estado, os três chips soavam como
+              // texto solto e ninguém sabia qual período estava aberto
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
               activeOpacity={0.8}
               style={{
                 flex: 1,
@@ -482,6 +491,11 @@ export default function Reports() {
                 </View>
               ))}
             </View>
+          ) : loadError ? (
+            // Falha ao buscar não é "nenhum relatório": convidar a gerar o
+            // primeiro esconderia que os já gerados só não chegaram. Sessão
+            // encerrada não vira `error` no store, então não cai aqui
+            <ErrorState message={loadError} onRetry={() => fetch(tab)} />
           ) : (
             // EC-231: o pote vazio conta o estado; a frase fica livre para
             // dizer o que fazer, e o botão repete o "Gerar" do cabeçalho para

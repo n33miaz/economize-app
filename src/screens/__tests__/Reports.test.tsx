@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -59,6 +59,7 @@ describe("Relatórios", () => {
       isLoading: false,
       isGenerating: false,
       error: null,
+      loadError: null,
       fetch: jest.fn().mockResolvedValue(undefined),
       remove: jest.fn().mockResolvedValue(true),
     } as never);
@@ -102,5 +103,50 @@ describe("Relatórios", () => {
 
     await waitFor(() => expect(getByText("Relatórios")).toBeTruthy());
     expect(queryByText("Publicidade")).toBeNull();
+  });
+
+  it("falha ao buscar mostra o erro com tentar de novo, não o vazio", async () => {
+    const fetch = jest.fn().mockResolvedValue(undefined);
+    useReportsStore.setState({
+      items: [],
+      loadError: "Falha ao carregar relatórios",
+      fetch,
+    } as never);
+
+    const { getByText, getAllByLabelText, queryByText } = montar();
+
+    await waitFor(() =>
+      expect(getByText("Falha ao carregar relatórios")).toBeTruthy(),
+    );
+    expect(queryByText(/Nenhum relatório/)).toBeNull();
+    fetch.mockClear();
+    fireEvent.press(getAllByLabelText("Tentar de novo")[0]);
+    expect(fetch).toHaveBeenCalledWith("MONTHLY");
+  });
+
+  it("os chips de período dizem qual está aberto", async () => {
+    const { getAllByRole } = montar();
+
+    await waitFor(() => expect(getAllByRole("tab")).toHaveLength(3));
+    const selecionados = getAllByRole("tab").filter(
+      (el) => el.props.accessibilityState?.selected,
+    );
+    expect(selecionados).toHaveLength(1);
+  });
+
+  it("falha ao GERAR não troca o vazio pelo erro de carga", async () => {
+    // Gerar já avisa por toast; o vazio fica com o seu "Gerar relatório"
+    useReportsStore.setState({
+      items: [],
+      error: "Falha ao gerar relatório",
+      loadError: null,
+    } as never);
+
+    const { getByText, queryByLabelText } = montar();
+
+    await waitFor(() =>
+      expect(getByText("Nenhum relatório mensais ainda")).toBeTruthy(),
+    );
+    expect(queryByLabelText("Tentar de novo")).toBeNull();
   });
 });

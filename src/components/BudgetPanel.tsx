@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import Plus from "lucide-react-native/dist/esm/icons/plus";
 import Target from "lucide-react-native/dist/esm/icons/target";
 
@@ -7,7 +8,9 @@ import BudgetBar from "./BudgetBar";
 import BudgetSheet, { type BudgetTarget } from "./BudgetSheet";
 import Card from "./Card";
 import CategoryPickerSheet from "./CategoryPickerSheet";
+import ErrorState from "./ErrorState";
 import { type BudgetStatus, getBudgetStatus } from "../services/api";
+import { describeLoadFailure } from "../services/requestFailure";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacing, touchArea } from "../theme/ds";
 import type { AnalysisRange } from "../utils/cycleWindow";
@@ -40,17 +43,38 @@ export default function BudgetPanel({ range }: Props) {
   const [status, setStatus] = useState<BudgetStatus | null>(null);
   const [picking, setPicking] = useState(false);
   const [target, setTarget] = useState<BudgetTarget | null>(null);
+  // Falha própria do painel. Antes a falha virava `status = null`, e o painel
+  // sem dado se confundia com o painel sem teto: a tela convidava a "pôr um
+  // teto" quem já tinha vários, só porque a rede caiu
+  const [error, setError] = useState<string | null>(null);
+  // Sequência das leituras: na troca rápida de mês, a resposta atrasada do
+  // mês anterior chegava depois e desenhava as barras erradas
+  const ultimaLeitura = useRef(0);
 
   const load = useCallback(() => {
     if (!range) return;
-    // Best-effort, como as demais leituras de apoio da tela: uma falha aqui
-    // apaga o painel e mantém a Análise, que é a resposta principal
+    const minhaVez = ++ultimaLeitura.current;
+    // Continua sendo leitura de apoio: a falha fica DENTRO do painel e a
+    // Análise, que é a resposta principal, segue de pé
     getBudgetStatus(range)
-      .then(setStatus)
-      .catch(() => setStatus(null));
+      .then((next) => {
+        if (minhaVez !== ultimaLeitura.current) return;
+        setStatus(next);
+        setError(null);
+      })
+      .catch((e) => {
+        if (minhaVez !== ultimaLeitura.current) return;
+        const message = describeLoadFailure(e, "Não foi possível carregar os tetos.");
+        // Sessão encerrada devolve frase vazia: não há o que mostrar a quem saiu
+        if (!message) return;
+        setError(message);
+      });
   }, [range]);
 
-  useEffect(load, [load]);
+  // No foco, e não só na montagem: depois de categorizar na Revisão e
+  // voltar, o gasto por categoria mudou e as barras ficavam velhas. O
+  // useFocusEffect também roda de novo quando `load` muda (recorte novo)
+  useFocusEffect(load);
 
   const linhas = status?.lines ?? [];
 
@@ -82,7 +106,16 @@ export default function BudgetPanel({ range }: Props) {
           </TouchableOpacity>
         </View>
 
+        {error ? (
+          // Com barras antigas na tela, elas ficam e a faixa avisa por cima;
+          // sem nenhuma, a faixa ocupa o lugar do convite
+          <View style={{ marginTop: spacing[3] }}>
+            <ErrorState compact message={error} onRetry={load} />
+          </View>
+        ) : null}
+
         {linhas.length === 0 ? (
+          error ? null : (
           <Text
             style={{
               color: t.text.secondary,
@@ -93,6 +126,7 @@ export default function BudgetPanel({ range }: Props) {
             Ponha um teto numa categoria e o app avisa quando você estourar — e
             antes disso, quando o ritmo estiver levando lá.
           </Text>
+          )
         ) : (
           <>
             <Text

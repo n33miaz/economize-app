@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -9,6 +9,7 @@ import Profile from "../Profile";
 import { useAuthStore } from "../../store/authStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
+import { useToastStore } from "../../store/toastStore";
 import { useUserStore } from "../../store/userStore";
 
 jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
@@ -125,5 +126,26 @@ describe("Perfil", () => {
     const { queryByText } = montar();
 
     await waitFor(() => expect(queryByText("1752")).toBeNull());
+  });
+
+  it("moeda padrão avisa que vem em breve e não troca o valor", async () => {
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Moeda padrão")).toBeTruthy());
+    fireEvent.press(getByText("Moeda padrão"));
+
+    // Nada formata por ela ainda: trocar para USD só mudaria o rótulo
+    expect(usePreferencesStore.getState().defaultCurrency).toBe("BRL");
+    expect(useToastStore.getState().message).toMatch(/em breve/);
+  });
+
+  it("quem ficou em USD de versão anterior volta para reais ao tocar", async () => {
+    usePreferencesStore.setState({ defaultCurrency: "USD" } as never);
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Moeda padrão")).toBeTruthy());
+    fireEvent.press(getByText("Moeda padrão"));
+
+    expect(usePreferencesStore.getState().defaultCurrency).toBe("BRL");
   });
 });

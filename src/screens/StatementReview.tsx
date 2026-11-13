@@ -520,7 +520,42 @@ export default function StatementReview() {
   const handleApproveAll = async () => {
     if (isApplying || approveTxCount === 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const confirmed = await confirmAll();
+
+    // As correções feitas à mão entram ANTES do confirm-all, pelo mesmo
+    // caminho do "Salvar escolhas". O confirm-all do servidor grava a
+    // sugestão do motor em tudo o que ainda está pendente: se ele rodasse
+    // primeiro, um grupo corrigido de Transporte para Trabalho seria gravado
+    // como Transporte e a correção se perderia. Aplicadas antes, essas
+    // transações deixam a fila e o confirm-all só alcança o resto.
+    let corrected = 0;
+    if (chosenGroups.length > 0) {
+      const items = chosenGroups.map((group) => ({
+        transactionIds: group.transactions.map((tx) => tx.id),
+        categoryId: choices[groupKey(group)].id,
+      }));
+      const { confirmed: applied, failedItems } = await applyMany(items);
+      corrected = applied;
+      if (failedItems.length > 0) {
+        // Uma leva de correções falhou: seguir para o confirm-all gravaria a
+        // sugestão justamente nesses grupos. Para aqui, com as escolhas na
+        // tela, para o usuário tentar de novo
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        showToast(
+          `${failedItems.length} ${plural(failedItems.length, "correção não foi salva", "correções não foram salvas")} — nada foi aprovado ainda. Toque em aprovar de novo.`,
+          "warning",
+        );
+        return;
+      }
+      if (useReviewStore.getState().error) return;
+      // As correções já entraram: as escolhas locais saem como no salvar
+      setChoices((prev) => {
+        const next = { ...prev };
+        chosenGroups.forEach((group) => delete next[groupKey(group)]);
+        return next;
+      });
+    }
+
+    const confirmed = corrected + (await confirmAll());
     if (confirmed > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(

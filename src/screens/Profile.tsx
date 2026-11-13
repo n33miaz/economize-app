@@ -338,11 +338,17 @@ export default function Profile() {
     }
   };
 
+  // Moeda padrão: nenhuma tela formata valor por ela (tudo sai em reais pelo
+  // formatBRL); só a exportação a copiava. Alternar BRL/USD/EUR mudava o
+  // rótulo e mais nada — uma promessa falsa. Mesmo caminho do Idioma, mas
+  // sem trocar o valor: a linha fica, dizendo a verdade (Real), e o toque
+  // avisa que as outras chegam depois. Esconder a linha deixaria preso em
+  // USD/EUR quem já tinha alternado numa versão anterior, sem jeito de ver;
+  // por isso o toque também traz de volta para BRL o valor antigo.
   const cycleCurrency = () => {
     Haptics.selectionAsync();
-    const order: Currency[] = ["BRL", "USD", "EUR"];
-    const next = order[(order.indexOf(defaultCurrency) + 1) % order.length];
-    setDefaultCurrency(next);
+    if (defaultCurrency !== "BRL") setDefaultCurrency("BRL");
+    showToast("Outras moedas chegam em breve. Por enquanto, tudo em reais.", "info");
   };
 
   const cycleLanguage = () => {

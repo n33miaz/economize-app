@@ -99,3 +99,22 @@ describe("reportsStore — resposta de sessão encerrada", () => {
     expect(useReportsStore.getState()).toMatchObject(limpo);
   });
 });
+
+describe("generate — toque duplo", () => {
+  it("dois toques rápidos mandam um POST só", async () => {
+    let solta: (v: unknown) => void = () => {};
+    api.post.mockImplementation(
+      () => new Promise((resolve) => (solta = resolve)),
+    );
+    useReportsStore.setState({ isGenerating: false });
+    const store = useReportsStore.getState();
+
+    const primeiro = store.generate("MONTHLY", "2026-08-12", "2026-09-11");
+    const segundo = await store.generate("MONTHLY", "2026-08-12", "2026-09-11");
+    solta({ data: relatorio("r9") });
+    await primeiro;
+
+    expect(segundo).toBeNull();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+});
