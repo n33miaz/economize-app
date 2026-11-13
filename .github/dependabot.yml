@@ -43,6 +43,13 @@ updates:
       # Zustand 5 muda a API do seletor. É upgrade planejado, não rotina
       - dependency-name: "zustand"
         update-types: ["version-update:semver-major"]
+      # Navegação e ícones ficam junto do SDK: as correções das abas no web
+      # (pager das abas de cima, deslocamento da barra de baixo) dependem de
+      # detalhes internos do react-navigation/react-native-tab-view, e uma
+      # versão nova pode desfazê-las sem quebrar nenhum tipo. Sobem juntos,
+      # com o roteiro e2e, quando o Expo subir
+      - dependency-name: "@react-navigation/*"
+      - dependency-name: "lucide-react-native"
       # A cadeia de build acompanha o SDK, não o calendário do npm:
       # `eslint-config-expo` versiona junto do Expo (a 57 é a linha do SDK 54),
       # e o major do Babel quebra o bundle do Metro antes de quebrar um teste
