@@ -8,6 +8,7 @@
 //
 // O mock do AsyncStorage é global, em jest.setup.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { AxiosError } from "axios";
 import type { AxiosResponse, InternalAxiosRequestConfig } from "axios";
 
@@ -451,8 +452,13 @@ describe("o que só existe no aparelho", () => {
 
     const { lastUserKey } = useAuthStore.getState();
     expect(lastUserKey).toMatch(/^[0-9a-f]+$/);
-    expect(lastWritten("@auth_storage")).not.toContain("ana@casa.dev");
-    expect(lastWritten("@auth_storage")).not.toContain(TOK_ANA);
+    // O authStore mora no cofre do sistema (chave saneada, sem o "@")
+    const calls = (SecureStore.setItemAsync as jest.Mock).mock.calls.filter(
+      ([k]) => k === "_auth_storage",
+    );
+    const gravado = String(calls[calls.length - 1][1]);
+    expect(gravado).not.toContain("ana@casa.dev");
+    expect(gravado).not.toContain(TOK_ANA);
   });
 
   it("token que não diz de quem é conta como OUTRA pessoa", async () => {

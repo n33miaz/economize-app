@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../services/api";
 import {
   deviceLabel,
   readDeviceToken,
   saveDeviceToken,
 } from "../utils/deviceIdentity";
+import { secureStorage } from "../utils/secureStorage";
 import { userKeyFromToken } from "../utils/sessionIdentity";
 import { clearPersonalData, clearSessionData } from "./sessionReset";
 
@@ -280,7 +280,13 @@ export const useAuthStore = create(
     }),
     {
       name: "@auth_storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      // O store INTEIRO vai para o cofre do sistema (Keychain/Keystore), e
+      // não só o token: são três campos pequenos, gravados juntos num único
+      // valor — separar o token num segundo lugar criaria dois discos que
+      // podem discordar (nome de uma pessoa, token de outra) e uma ordem de
+      // hidratação a coordenar. A migração de quem já estava logado acontece
+      // na leitura do adaptador, antes de o merge abaixo ver o resultado
+      storage: createJSONStorage(() => secureStorage),
       partialize: (state) => pickPersisted(state),
       // Quem atualizar o app ainda tem no disco o estado inteiro gravado pela
       // versão anterior — talvez com `isLoading: true` de um login

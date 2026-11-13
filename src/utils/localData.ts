@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "../store/authStore";
 import { usePreferencesStore } from "../store/preferencesStore";
 import { clearPersonalData } from "../store/sessionReset";
+import { forgetDeviceToken } from "./deviceIdentity";
 
 // Apaga o rastro local do app (EC-104): o storage inteiro e o estado em
 // memória dos stores, terminando no logout — que troca a árvore de navegação
@@ -19,6 +20,11 @@ import { clearPersonalData } from "../store/sessionReset";
 // sem limpar o extrato.
 export async function clearLocalData(): Promise<void> {
   await AsyncStorage.clear();
+  // O segredo do aparelho confiável saiu do AsyncStorage para o cofre do
+  // sistema, e o `clear()` acima não alcança o cofre: sem isto, "apagar dados
+  // locais" deixaria o aparelho reconhecido e o segundo fator dispensado. A
+  // sessão no cofre é sobrescrita pelo `logout()` do fim
+  await forgetDeviceToken();
 
   // reset() zera inclusive biometricChoiceMade: sem dados locais, o modal do
   // login volta a oferecer a escolha da biometria — coerente com um app recém
