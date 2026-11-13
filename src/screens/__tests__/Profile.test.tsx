@@ -140,6 +140,27 @@ describe("Perfil", () => {
 
     await waitFor(() => expect(queryByText("1752")).toBeNull());
   });
+
+  it("moeda padrão avisa que vem em breve e não troca o valor", async () => {
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Moeda padrão")).toBeTruthy());
+    fireEvent.press(getByText("Moeda padrão"));
+
+    // Nada formata por ela ainda: trocar para USD só mudaria o rótulo
+    expect(usePreferencesStore.getState().defaultCurrency).toBe("BRL");
+    expect(useToastStore.getState().message).toMatch(/em breve/);
+  });
+
+  it("quem ficou em USD de versão anterior volta para reais ao tocar", async () => {
+    usePreferencesStore.setState({ defaultCurrency: "USD" } as never);
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Moeda padrão")).toBeTruthy());
+    fireEvent.press(getByText("Moeda padrão"));
+
+    expect(usePreferencesStore.getState().defaultCurrency).toBe("BRL");
+  });
 });
 
 describe("Perfil — sair de todos os aparelhos", () => {

@@ -15,6 +15,11 @@ import { useConnectorStore } from "../../store/connectorStore";
 import { EMPTY_SUMMARY, useInvestmentStore } from "../../store/investmentStore";
 import { useToastStore } from "../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 // O prefixo "mock" é exigência do Jest: só nomes assim podem ser lidos de
 // dentro da fábrica do jest.mock, que sobe para o topo do arquivo
 const mockNavigate = jest.fn();
@@ -250,7 +255,10 @@ describe("Investments", () => {
       .mockImplementation(() => {});
   });
 
-  afterEach(() => showToastSpy.mockRestore());
+  afterEach(() => {
+    showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
+  });
 
   it("sem investimentos, convida a conectar o banco ou cadastrar à mão", async () => {
     semInvestimentos();

@@ -3,7 +3,7 @@ import { create } from "zustand";
 import {
   ConnectorItem,
   ConnectorStatus,
-  StatementUploadResult,
+  ConnectorSyncResult,
   createConnectToken,
   getConnectorStatus,
   listConnectorItems,
@@ -47,10 +47,13 @@ interface ConnectorState {
    * URL da ponte com token, destino e widget no fragmento; null se o token
    * falhar ou se o servidor ainda não disse qual widget carregar.
    */
-  buildConnectUrl: (redirect: string) => Promise<string | null>;
+  buildConnectUrl: (
+    redirect: string,
+    itemId?: string,
+  ) => Promise<string | null>;
   finishConnect: (itemId: string) => Promise<boolean>;
   unlink: (id: string) => Promise<boolean>;
-  runSync: (days?: number) => Promise<StatementUploadResult | null>;
+  runSync: (days?: number) => Promise<ConnectorSyncResult | null>;
   clearError: () => void;
   reset: () => void;
 }
@@ -88,7 +91,7 @@ export const useConnectorStore = create<ConnectorState>((set, get) => ({
     }
   },
 
-  buildConnectUrl: async (redirect) => {
+  buildConnectUrl: async (redirect, itemId) => {
     const widget = get().status.widget;
     // Sem o script do widget a ponte só saberia mostrar erro: melhor dizer
     // aqui, antes de abrir o navegador para nada
@@ -101,7 +104,7 @@ export const useConnectorStore = create<ConnectorState>((set, get) => ({
     }
     set({ isLinking: true, error: null });
     try {
-      const token = await createConnectToken();
+      const token = await createConnectToken(itemId);
       set({ isLinking: false });
       // Tudo no FRAGMENTO: fragmento não vai ao servidor, não entra em log de
       // acesso e não vaza no Referer. O script e o tipo do widget vão junto

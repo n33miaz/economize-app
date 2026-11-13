@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -10,6 +10,7 @@ import { useAccountsStore } from "../../store/accountsStore";
 import { useCategoriesStore } from "../../store/categoriesStore";
 import { useFamilyStore } from "../../store/familyStore";
 import { useToastStore } from "../../store/toastStore";
+import { shareScopeLabel } from "../../utils/family";
 import { reconcileFamilyTransfers } from "../../services/api";
 
 const descontar = reconcileFamilyTransfers as jest.MockedFunction<
@@ -179,5 +180,48 @@ describe("Família", () => {
     await waitFor(() =>
       expect(useToastStore.getState().message).toContain("nome completo"),
     );
+  });
+
+  it("renomear a casa não apaga o compartilhamento ainda não salvo", async () => {
+    useFamilyStore.setState({ ...BASE, family: CASA, hasFamily: true } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Casa Salada")).toBeTruthy());
+    fireEvent.press(getByText(shareScopeLabel("TOTALS")));
+    await waitFor(() =>
+      expect(getByText("Salvar o que eu compartilho")).toBeTruthy(),
+    );
+
+    // O servidor devolve a família inteira: `mySharing` chega com referência
+    // nova e o mesmo conteúdo de antes
+    act(() => {
+      useFamilyStore.setState({
+        family: { ...CASA, name: "Casa Nova", mySharing: { ...CASA.mySharing } },
+      } as never);
+    });
+
+    await waitFor(() => expect(getByText("Casa Nova")).toBeTruthy());
+    expect(getByText("Salvar o que eu compartilho")).toBeTruthy();
+  });
+
+  it("trocar de casa ressemeia o rascunho", async () => {
+    useFamilyStore.setState({ ...BASE, family: CASA, hasFamily: true } as never);
+
+    const { getByText } = montar();
+
+    await waitFor(() => expect(getByText("Casa Salada")).toBeTruthy());
+    fireEvent.press(getByText(shareScopeLabel("TOTALS")));
+    await waitFor(() =>
+      expect(getByText("Salvar o que eu compartilho")).toBeTruthy(),
+    );
+
+    act(() => {
+      useFamilyStore.setState({
+        family: { ...CASA, id: "f2", name: "Outra casa", mySharing: { ...CASA.mySharing } },
+      } as never);
+    });
+
+    await waitFor(() => expect(getByText("Tudo salvo")).toBeTruthy());
   });
 });

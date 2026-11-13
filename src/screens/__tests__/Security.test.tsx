@@ -10,6 +10,11 @@ import * as api from "../../services/api";
 import { useConfirmStore } from "../../store/confirmStore";
 import { useToastStore } from "../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 jest.mock("../../services/api", () => ({
   __esModule: true,
   default: {},
@@ -85,7 +90,10 @@ describe("Security", () => {
     useConfirmStore.setState({ request: null });
   });
 
-  afterEach(() => showToastSpy.mockRestore());
+  afterEach(() => {
+    showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
+  });
 
   it("desligada, oferece ativar e diz o que protege a conta hoje", async () => {
     mocked.getMfaStatus.mockResolvedValue(DESLIGADO);
@@ -228,7 +236,7 @@ describe("Security", () => {
     await waitFor(() => expect(getByText("Desligada")).toBeTruthy());
   });
 
-  it("gerar novos códigos substitui o lote na tela", async () => {
+  it("gerar novos códigos pede confirmação e só então substitui o lote", async () => {
     mocked.getMfaStatus.mockResolvedValue(LIGADO);
     mocked.rotateMfaRecoveryCodes.mockResolvedValue(["ZZZZ999999"]);
 
@@ -237,7 +245,46 @@ describe("Security", () => {
 
     fireEvent.press(getByLabelText("Gerar novos códigos de recuperação"));
 
+    // O lote guardado morre na hora: nunca em um toque só
+    expect(useConfirmStore.getState().request).not.toBeNull();
+    expect(mocked.rotateMfaRecoveryCodes).not.toHaveBeenCalled();
+
+    await useConfirmStore.getState().request!.onConfirm();
+
     await waitFor(() => expect(getByText("ZZZZ999999")).toBeTruthy());
+  });
+
+  async function desligarFalhando(erro: unknown) {
+    mocked.getMfaStatus.mockResolvedValue(LIGADO);
+    mocked.disableMfa.mockRejectedValue(erro);
+
+    const { getByLabelText, getByText } = montar();
+    await waitFor(() => expect(getByText("Ativada")).toBeTruthy());
+    fireEvent.changeText(getByLabelText("Sua senha"), "senha-da-ana");
+    fireEvent.press(getByLabelText("Desligar verificação em duas etapas"));
+    await useConfirmStore.getState().request!.onConfirm();
+  }
+
+  it("senha recusada pelo servidor diz 'Senha incorreta.'", async () => {
+    await desligarFalhando({ response: { status: 400, data: {} } });
+
+    await waitFor(() =>
+      expect(showToastSpy).toHaveBeenCalledWith("Senha incorreta.", "error"),
+    );
+  });
+
+  it("servidor com defeito ao desligar NÃO culpa a senha", async () => {
+    await desligarFalhando({ response: { status: 500, data: {} } });
+
+    await waitFor(() => expect(showToastSpy).toHaveBeenCalled());
+    expect(showToastSpy).not.toHaveBeenCalledWith("Senha incorreta.", "error");
+  });
+
+  it("sem conexão ao desligar NÃO culpa a senha", async () => {
+    await desligarFalhando({ code: "ERR_NETWORK", request: {} });
+
+    await waitFor(() => expect(showToastSpy).toHaveBeenCalled());
+    expect(showToastSpy).not.toHaveBeenCalledWith("Senha incorreta.", "error");
   });
 
   it("servidor fora do ar mostra o estado de erro, com repetir", async () => {

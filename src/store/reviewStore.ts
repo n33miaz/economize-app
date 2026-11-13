@@ -3,6 +3,7 @@ import {
   BankTransaction,
   ReviewApplyItem,
   ReviewGroup,
+  ReviewUploadScope,
   applyReview,
   confirmAllReview,
   getReviewCount,
@@ -29,6 +30,8 @@ interface ReviewState {
   groups: ReviewGroup[];
   // escopo atual da fila: uma importação específica ou tudo que está pendente
   uploadId: string | null;
+  // uploads da sincronização; uploadId fica para o estado e cliente antigos
+  uploadIds: string[] | null;
   isLoading: boolean;
   isApplying: boolean;
   error: string | null;
@@ -45,7 +48,7 @@ interface ReviewState {
    */
   applyProgress: { done: number; total: number } | null;
 
-  fetchQueue: (uploadId?: string) => Promise<void>;
+  fetchQueue: (uploadIds?: ReviewUploadScope) => Promise<void>;
   /** Só o número (Home). Não toca em `groups` nem no estado de carga da fila. */
   fetchPendingCount: () => Promise<void>;
   apply: (items: ReviewApplyItem[]) => Promise<number>;
@@ -73,16 +76,23 @@ interface ReviewState {
 export const useReviewStore = create<ReviewState>((set, get) => ({
   groups: [],
   uploadId: null,
+  uploadIds: null,
   pendingCount: null,
   applyProgress: null,
   isLoading: false,
   isApplying: false,
   error: null,
 
-  fetchQueue: async (uploadId) => {
-    set({ isLoading: true, error: null, uploadId: uploadId ?? null });
+  fetchQueue: async (scope) => {
+    const uploadIds = !scope ? null : typeof scope === "string" ? [scope] : scope;
+    set({
+      isLoading: true,
+      error: null,
+      uploadId: uploadIds?.[0] ?? null,
+      uploadIds,
+    });
     try {
-      const groups = await getReviewQueue(uploadId);
+      const groups = await getReviewQueue(scope);
       // A fila em mão é a contagem mais fresca que existe — quem já a tem não
       // precisa perguntar de novo
       set({
@@ -207,7 +217,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       const outcome = await recategorizePending();
       // Recarrega a fila: as linhas que ganharam sugestão têm de aparecer com a
       // categoria na tela, senão o número anunciado não se confirma em nada
-      await get().fetchQueue(get().uploadId ?? undefined);
+      await get().fetchQueue(get().uploadIds ?? get().uploadId ?? undefined);
       set({ isApplying: false });
       return {
         ok: true,
@@ -244,7 +254,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   confirmAll: async () => {
     set({ isApplying: true, error: null });
     try {
-      const scope = get().uploadId ?? undefined;
+      const scope = get().uploadIds ?? get().uploadId ?? undefined;
       const outcome = await confirmAllReview(scope);
       if (outcome.confirmed === 0) {
         // o servidor não confirmou nada: podar a lista aqui esvaziaria a tela
@@ -288,6 +298,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set({
       groups: [],
       uploadId: null,
+      uploadIds: null,
       pendingCount: null,
       applyProgress: null,
       isLoading: false,

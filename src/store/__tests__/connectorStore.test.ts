@@ -38,6 +38,8 @@ const item = (id: string) => ({
   institution: "Banco Inter S.A.",
   createdAt: "2026-08-30T00:00:00Z",
   lastSyncedAt: null,
+  status: "UPDATED",
+  needsAttention: false,
 });
 
 beforeEach(() => {
@@ -96,6 +98,16 @@ describe("buildConnectUrl", () => {
     );
     expect(url!.split("#")[0]).not.toContain("tok-secreto");
     expect(url!.split("#")[0]).not.toContain("exemplo.test");
+  });
+
+  it("pede o token em modo atualizacao para reconectar a instituicao certa", async () => {
+    api.createConnectToken.mockResolvedValue("tok-secreto");
+
+    await useConnectorStore
+      .getState()
+      .buildConnectUrl("economize://conectar", "item-reconectar");
+
+    expect(api.createConnectToken).toHaveBeenCalledWith("item-reconectar");
   });
 
   it("sem widget no status, não abre o navegador e explica", async () => {
@@ -187,5 +199,53 @@ describe("fetchItems e unlink", () => {
     expect(ok).toBe(true);
     expect(useConnectorStore.getState().items.map((i) => i.id)).toEqual(["b"]);
     expect(api.getConnectorStatus).toHaveBeenCalled();
+  });
+});
+
+describe("runSync", () => {
+  it("devolve os bancos pulados que a API mandou", async () => {
+    api.syncConnector.mockResolvedValue({
+      transactionsImported: 2,
+      skippedConnections: [{ id: "x", name: "Itaú", reason: "NOT_FOUND" }],
+    });
+
+    const r = await useConnectorStore.getState().runSync();
+
+    expect(r?.skippedConnections?.[0].name).toBe("Itaú");
+  });
+
+  it("503 da leitura do banco deixa no error o detail com o nome dele", async () => {
+    const detail =
+      "Não foi possível ler Nubank no provedor agora; nada foi importado. Tente de novo em alguns minutos.";
+    api.syncConnector.mockRejectedValue({
+      response: {
+        status: 503,
+        data: {
+          type: "https://economize.app/erros/servico-indisponivel",
+          detail,
+        },
+      },
+    });
+
+    await expect(useConnectorStore.getState().runSync()).rejects.toBeTruthy();
+
+    expect(useConnectorStore.getState().error).toBe(detail);
+    expect(useConnectorStore.getState().isSyncing).toBe(false);
+  });
+
+  it("409 diz que já há uma sincronização em andamento", async () => {
+    api.syncConnector.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          type: "https://economize.app/erros/conflito",
+          detail: "Já existe uma sincronização em andamento. Aguarde ela terminar.",
+        },
+      },
+    });
+
+    await expect(useConnectorStore.getState().runSync()).rejects.toBeTruthy();
+
+    expect(useConnectorStore.getState().error).toMatch(/em andamento/);
   });
 });

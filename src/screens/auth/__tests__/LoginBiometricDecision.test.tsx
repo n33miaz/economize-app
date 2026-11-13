@@ -12,6 +12,11 @@ import { useAuthStore } from "../../../store/authStore";
 import { usePreferencesStore } from "../../../store/preferencesStore";
 import { useToastStore } from "../../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 jest.mock("expo-local-authentication", () => ({
   hasHardwareAsync: jest.fn(),
   isEnrolledAsync: jest.fn(),
@@ -86,6 +91,7 @@ describe("Login — decisão de biometria pós-credenciais", () => {
 
   afterEach(() => {
     showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
   });
 
   beforeEach(() => {

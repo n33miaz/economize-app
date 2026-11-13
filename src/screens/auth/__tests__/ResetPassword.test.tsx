@@ -5,6 +5,11 @@ import ResetPassword from "../ResetPassword";
 import { resetPassword } from "../../../services/api";
 import { useToastStore } from "../../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 // Só a chamada de rede é mockada; getApiErrorDetail continua real para o
 // teste cobrir a extração do ProblemDetail de verdade
 jest.mock("../../../services/api", () => {
@@ -43,6 +48,7 @@ describe("ResetPassword — validações e envio", () => {
 
   afterEach(() => {
     showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
   });
 
   it("bloqueia senha com menos de 8 caracteres sem chamar a API", () => {
@@ -53,6 +59,20 @@ describe("ResetPassword — validações e envio", () => {
     fireEvent.press(getByLabelText("Redefinir senha"));
 
     expect(getByText("A senha deve ter pelo menos 8 caracteres.")).toBeTruthy();
+    expect(mockedResetPassword).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia senha acima de 72 bytes sem chamar a API", () => {
+    const { getByLabelText, getByText } = renderScreen();
+    const senhaLonga = "😀".repeat(19);
+
+    fireEvent.changeText(getByLabelText("Nova senha"), senhaLonga);
+    fireEvent.changeText(getByLabelText("Confirmar nova senha"), senhaLonga);
+    fireEvent.press(getByLabelText("Redefinir senha"));
+
+    expect(
+      getByText("A senha pode ter no máximo 72 bytes — emojis contam mais de um."),
+    ).toBeTruthy();
     expect(mockedResetPassword).not.toHaveBeenCalled();
   });
 

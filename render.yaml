@@ -31,6 +31,18 @@ services:
       # Expo SDK 52 é testado com a linha 20; sem fixar, o Render escolhe sozinho
       - key: NODE_VERSION
         value: "20"
+    # O pacote JS e os assets saem do `expo export` com o hash do conteúdo no
+    # nome: um arquivo novo sempre tem nome novo. Por isso podem ficar em cache
+    # por um ano sem risco de servir versão velha, e a visita seguinte não
+    # baixa (nem revalida) os ~825 KB de novo. O index.html fica de fora de
+    # propósito: é ele que aponta para o pacote novo a cada publicação.
+    headers:
+      - path: /_expo/static/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
     routes:
       # ORDEM IMPORTA, e esta rota existe por causa de um defeito real: a
       # reescrita geral abaixo é avaliada ANTES do arquivo estático, então

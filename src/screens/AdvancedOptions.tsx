@@ -14,6 +14,7 @@ import LifeBuoy from "lucide-react-native/dist/esm/icons/life-buoy";
 import FileUp from "lucide-react-native/dist/esm/icons/file-up";
 import Trash from "lucide-react-native/dist/esm/icons/trash";
 import { useNavigation } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system";
 import Animated from "react-native-reanimated";
 
 import { APP_ROUTES } from "../routes/routeNames";
@@ -57,7 +58,49 @@ function downloadJsonOnWeb(json: string, fileName: string) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  // Revogar na mesma volta do `click()` cancela o download no Safari: ele só
+  // começa a ler o blob depois. Um segundo de folga basta e não vaza nada
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Entrega o JSON como ARQUIVO no aparelho, e não como texto do share sheet.
+ *
+ * `Share.share({ message: json })` atravessa o Binder do Android, que tem
+ * teto de ~1 MB por transação: o extrato de dois anos passa disso e o app
+ * morria com TransactionTooLargeException. Por isso o conteúdo vai para o
+ * disco e só o endereço circula.
+ *
+ * - iOS: grava no cache e compartilha a URL do arquivo (o share sheet do iOS
+ *   aceita `url` de arquivo local e oferece "Salvar em Arquivos").
+ * - Android: o `Share` do React Native ignora `url` ali, e o `expo-sharing`
+ *   (que abriria o share sheet com o arquivo) não está instalado. O caminho
+ *   sem dependência nova é o Storage Access Framework do próprio
+ *   expo-file-system: a pessoa escolhe a pasta (Downloads, Drive...) e o
+ *   arquivo é gravado lá direto.
+ *
+ * Devolve `false` quando a pessoa desistiu de escolher a pasta.
+ */
+async function saveJsonOnDevice(json: string, fileName: string): Promise<boolean> {
+  if (Platform.OS === "android") {
+    const saf = FileSystem.StorageAccessFramework;
+    const permissao = await saf.requestDirectoryPermissionsAsync();
+    if (!permissao.granted) return false;
+    // O SAF acrescenta a extensão pelo tipo: passar "x.json" viraria "x.json.json"
+    const uri = await saf.createFileAsync(
+      permissao.directoryUri,
+      fileName.replace(/\.json$/, ""),
+      "application/json",
+    );
+    await FileSystem.writeAsStringAsync(uri, json);
+    return true;
+  }
+  const pasta = FileSystem.cacheDirectory;
+  if (!pasta) throw new Error("Sem pasta de cache neste ambiente.");
+  const fileUri = `${pasta}${fileName}`;
+  await FileSystem.writeAsStringAsync(fileUri, json);
+  await Share.share({ title: fileName, url: fileUri });
+  return true;
 }
 
 export default function AdvancedOptions() {
@@ -156,10 +199,12 @@ export default function AdvancedOptions() {
         downloadJsonOnWeb(json, exportFileName());
         showToast("Arquivo gerado — confira seus downloads.", "success");
       } else {
-        await Share.share({
-          title: exportFileName(),
-          message: json,
-        });
+        const salvo = await saveJsonOnDevice(json, exportFileName());
+        // Desistir da pasta não é erro: sem toast vermelho, sem vibração
+        if (!salvo) return;
+        if (Platform.OS === "android") {
+          showToast("Arquivo salvo na pasta escolhida.", "success");
+        }
       }
       Haptics.notificationAsync();
     } catch {

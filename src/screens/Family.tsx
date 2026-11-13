@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -105,13 +105,30 @@ function MemberRow({
           onPress={onRemove}
           accessibilityRole="button"
           accessibilityLabel={`Remover ${member.name}`}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          // Alvo de 44 px de verdade, e não só por hitSlop: o hitSlop não
+          // conta na web e o ícone de 16 px ficava difícil de acertar
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
           <Trash size={16} color={t.semantic.danger} />
         </Pressable>
       )}
     </View>
   );
+}
+
+/** Forma comparável do compartilhamento: listas ordenadas, ordem fixa. */
+function sharingKey(s: FamilySharing): string {
+  return JSON.stringify([
+    s.shareScope,
+    s.includeUnassigned,
+    [...s.hiddenCategoryIds].sort(),
+    [...s.sharedAccountIds].sort(),
+  ]);
 }
 
 /** Switch no padrão das telas de conta, com o rótulo à esquerda. */
@@ -219,8 +236,31 @@ export default function Family() {
   }, [fetchFamily, fetchCategories, fetchAccounts]);
 
   const mySharing = family?.mySharing;
+  const familyId = family?.id ?? null;
+  // Semeia o rascunho uma vez por casa, no padrão `seededId` do
+  // RecurrenceForm. Ressemear a cada referência nova de `mySharing` apagava o
+  // que a pessoa mexeu sem salvar: renomear a casa ou "Descontar
+  // transferências" devolvem a família inteira, e com ela um `mySharing` novo
+  // de mesmo conteúdo. Agora só ressemeia se mudou a casa ou se não há
+  // alteração pendente em relação ao que foi semeado.
+  const seededId = useRef<string | null>(null);
+  const seededSharing = useRef<FamilySharing | null>(null);
+  // O efeito lê o rascunho pela ref para não rodar a cada toque num switch
+  const draftRef = useRef<FamilySharing | null>(null);
   useEffect(() => {
     if (!mySharing) return;
+    const draftNow = draftRef.current;
+    const pending =
+      seededId.current === familyId &&
+      seededSharing.current !== null &&
+      draftNow !== null &&
+      sharingKey(draftNow) !== sharingKey(seededSharing.current) &&
+      // Se o servidor já tem exatamente o rascunho (acabou de salvar), não há
+      // nada a proteger: ressemear só atualiza a base da comparação
+      sharingKey(draftNow) !== sharingKey(mySharing);
+    if (pending) return;
+    seededId.current = familyId;
+    seededSharing.current = mySharing;
     setDraftScope(mySharing.shareScope);
     setHidden(new Set(mySharing.hiddenCategoryIds));
     setSharedAccounts(
@@ -229,7 +269,7 @@ export default function Family() {
         : null,
     );
     setIncludeUnassigned(mySharing.includeUnassigned);
-  }, [mySharing]);
+  }, [mySharing, familyId]);
 
   const isOwner = family?.role === "OWNER";
 
@@ -260,6 +300,7 @@ export default function Family() {
     }),
     [draftScope, hidden, sharedAccounts, includeUnassigned],
   );
+  draftRef.current = draft;
 
   const isDirty = useMemo(() => {
     if (!mySharing) return false;

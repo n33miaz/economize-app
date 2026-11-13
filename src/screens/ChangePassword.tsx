@@ -17,10 +17,15 @@ import { useAuthStore } from "../store/authStore";
 import { useToastStore } from "../store/toastStore";
 import { useUserStore } from "../store/userStore";
 import { validateNewPassword } from "../utils/passwordPolicy";
+import { utf8ByteLength } from "../utils/utf8ByteLength";
 
 import ScreenHeader from "../components/ScreenHeader";
 import PageContainer from "../components/PageContainer";
 import FloatingLabelInput from "../components/FloatingLabelInput";
+
+const PASSWORD_MAX_BYTES = 72;
+const PASSWORD_MAX_BYTES_ERROR =
+  "A senha pode ter no máximo 72 bytes — emojis contam mais de um.";
 
 interface Props {
   /**
@@ -55,10 +60,15 @@ export default function ChangePassword({ forced = false }: Props) {
     const nextCurrentError =
       current.length === 0 ? "Informe a senha atual." : null;
     const errors = validateNewPassword(password, confirmation);
+    const passwordError =
+      errors.passwordError ??
+      (utf8ByteLength(password) > PASSWORD_MAX_BYTES
+        ? PASSWORD_MAX_BYTES_ERROR
+        : null);
     setCurrentError(nextCurrentError);
-    setPasswordError(errors.passwordError);
+    setPasswordError(passwordError);
     setConfirmationError(errors.confirmationError);
-    if (nextCurrentError || errors.passwordError || errors.confirmationError) {
+    if (nextCurrentError || passwordError || errors.confirmationError) {
       return;
     }
 

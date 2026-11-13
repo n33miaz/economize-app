@@ -186,6 +186,11 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   },
 
   create: async (name) => {
+    // Trava contra o toque duplo (padrão do recurrenceStore): o segundo POST
+    // criaria duas casas
+    if (get().isSaving) {
+      return { ok: false, message: "Ainda estamos salvando — um instante." };
+    }
     set({ isSaving: true });
     try {
       const family = await createFamily(name);
@@ -254,6 +259,11 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   },
 
   join: async (code) => {
+    // Trava contra o toque duplo (padrão do recurrenceStore): o segundo POST
+    // mandaria o mesmo código duas vezes, e a segunda voltaria como erro de quem já entrou
+    if (get().isSaving) {
+      return { ok: false, message: "Ainda estamos salvando — um instante." };
+    }
     set({ isSaving: true });
     try {
       const family = await joinFamily(code);

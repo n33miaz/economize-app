@@ -21,6 +21,15 @@ export type LoginOutcome =
   | { kind: "session"; token: string; name: string }
   | { kind: "mfa"; mfaToken: string };
 
+/** Código recusado com o desafio ainda válido: a pessoa fica no passo. */
+export const MFA_WRONG_CODE_MESSAGE = "Código inválido. Confira e tente de novo.";
+
+/** Desafio de 5 minutos vencido: não há código que sirva, só a senha de novo. */
+export const MFA_EXPIRED_MESSAGE = "O código expirou. Entre de novo.";
+
+/** Validade do desafio do segundo fator — a mesma do servidor (`JwtUtil`). */
+export const MFA_CHALLENGE_MS = 5 * 60 * 1000;
+
 interface AuthState {
   token: string | null;
   userName: string | null;
@@ -90,8 +99,31 @@ function openSession(token: string, userName: string): void {
   });
 }
 
+/**
+ * O que do authStore sobrevive a fechar o app — e NADA além disso.
+ *
+ * <p>Sem esta lista o `persist` gravava o estado inteiro, `isLoading` e
+ * `error` junto. Fechar o app no meio de um login lento (a API acordando)
+ * deixava `isLoading: true` no disco, e na abertura seguinte "Entrar" e
+ * "Cadastrar" nasciam desabilitados para sempre, com o erro antigo na tela.
+ * Estado de requisição em voo não tem significado depois de reabrir.
+ *
+ * <p>O resto do que a abertura precisa já mora em outro lugar: o segredo do
+ * aparelho confiável fica em `utils/deviceIdentity` e a escolha da biometria
+ * no preferencesStore. `hasHydrated` é recalculado a cada abertura.
+ */
+type PersistedAuth = Pick<AuthState, "token" | "userName" | "lastUserKey">;
+
+function pickPersisted(state: Partial<AuthState>): PersistedAuth {
+  return {
+    token: state.token ?? null,
+    userName: state.userName ?? null,
+    lastUserKey: state.lastUserKey ?? null,
+  };
+}
+
 export const useAuthStore = create(
-  persist<AuthState>(
+  persist<AuthState, [], [], PersistedAuth>(
     (set) => ({
       token: null,
       userName: null,
@@ -171,11 +203,14 @@ export const useAuthStore = create(
           return undefined;
         } catch (error: any) {
           // O servidor responde o MESMO 401 para código errado e para desafio
-          // expirado, de propósito — a mensagem aqui cobre os dois sem mentir
+          // expirado, de propósito. Quem separa os dois é a tela, pela hora
+          // em que o desafio chegou (ver `Login`): lá o desafio vencido volta
+          // para a senha. O que chega até aqui como 401 é tratado como código
+          // errado — e "tente de novo" passa a ser verdade
           set({
             error:
               error.response?.status === 401
-                ? "Código inválido ou expirado. Tente de novo."
+                ? MFA_WRONG_CODE_MESSAGE
                 : "Erro ao conectar com o servidor.",
             isLoading: false,
           });
@@ -246,6 +281,17 @@ export const useAuthStore = create(
     {
       name: "@auth_storage",
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => pickPersisted(state),
+      // Quem atualizar o app ainda tem no disco o estado inteiro gravado pela
+      // versão anterior — talvez com `isLoading: true` de um login
+      // interrompido. O merge padrão copiaria esse lixo de volta; aqui só
+      // entram os campos da lista, e o resto fica com o valor inicial
+      // (disco vazio não apaga o que já está na memória: o zustand chama o
+      // merge mesmo sem nada gravado, com `persisted` indefinido)
+      merge: (persisted, current) =>
+        persisted
+          ? { ...current, ...pickPersisted(persisted as Partial<AuthState>) }
+          : current,
       // Sinaliza o fim da hidratação via setState para as rotas esperarem o
       // token persistido — sem isso o cold start pisca a tela de Login
       onRehydrateStorage: () => () => {
@@ -257,6 +303,11 @@ export const useAuthStore = create(
         useAuthStore.setState({
           hasHydrated: true,
           lastUserKey: lastUserKey ?? userKeyFromToken(token),
+          // Segunda trava, além do merge: nenhuma requisição sobrevive a
+          // fechar o app, então nada pode abrir "carregando" ou com o erro
+          // de uma tentativa que já não existe
+          isLoading: false,
+          error: null,
         });
       },
     },

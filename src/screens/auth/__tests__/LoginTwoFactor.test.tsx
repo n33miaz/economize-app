@@ -12,6 +12,11 @@ import { useAuthStore } from "../../../store/authStore";
 import { usePreferencesStore } from "../../../store/preferencesStore";
 import { useToastStore } from "../../../store/toastStore";
 
+// O `set` do store copia o espião para o estado novo, e o `mockRestore`
+// só devolve o original ao objeto antigo: sem repor aqui, o showToast
+// dos testes seguintes seria o dublê sem implementação, que não mostra nada
+const realShowToast = useToastStore.getState().showToast;
+
 jest.mock("expo-local-authentication", () => ({
   hasHardwareAsync: jest.fn().mockResolvedValue(false),
   isEnrolledAsync: jest.fn().mockResolvedValue(false),
@@ -76,6 +81,7 @@ describe("Login — verificação em duas etapas", () => {
 
   afterEach(() => {
     showToastSpy.mockRestore();
+    useToastStore.setState({ showToast: realShowToast });
   });
 
   beforeEach(() => {
@@ -158,10 +164,117 @@ describe("Login — verificação em duas etapas", () => {
     fireEvent.press(getByLabelText("Verificar código"));
 
     await waitFor(() => {
-      expect(getByText("Código inválido ou expirado. Tente de novo.")).toBeTruthy();
+      expect(getByText("Código inválido. Confira e tente de novo.")).toBeTruthy();
     }, ESPERA);
     expect(useAuthStore.getState().token).toBeNull();
     expect(getByLabelText("Código de verificação")).toBeTruthy();
+  });
+
+  describe("desafio vencido", () => {
+    let agora: number;
+    let nowSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      agora = Date.now();
+      nowSpy = jest.spyOn(Date, "now").mockImplementation(() => agora);
+    });
+
+    afterEach(() => nowSpy.mockRestore());
+
+    async function abrirDesafio(getByLabelText: any) {
+      await submitCredentials(getByLabelText);
+      await waitFor(() => {
+        expect(getByLabelText("Código de verificação")).toBeTruthy();
+      }, ESPERA);
+    }
+
+    it("passados 5 minutos, volta à senha sem gastar a ida ao servidor", async () => {
+      mockedPost.mockResolvedValueOnce({
+        data: { mfaRequired: true, mfaToken: "desafio-123" },
+      });
+      const { getByLabelText, getByText, queryByLabelText } = renderLogin();
+      await abrirDesafio(getByLabelText);
+      mockedPost.mockClear();
+
+      // o código certo, mas tarde demais: nenhum código serve mais
+      agora += 5 * 60 * 1000;
+      fireEvent.changeText(getByLabelText("Código de verificação"), "123456");
+      fireEvent.press(getByLabelText("Verificar código"));
+
+      await waitFor(() => {
+        expect(getByText("O código expirou. Entre de novo.")).toBeTruthy();
+      }, ESPERA);
+      expect(mockedPost).not.toHaveBeenCalled();
+      expect(queryByLabelText("Código de verificação")).toBeNull();
+      expect(getByLabelText("Senha")).toBeTruthy();
+      expect(useAuthStore.getState().token).toBeNull();
+    });
+
+    it("401 no fim da janela é o desafio vencendo no servidor, não código errado", async () => {
+      mockedPost
+        .mockResolvedValueOnce({
+          data: { mfaRequired: true, mfaToken: "desafio-123" },
+        })
+        .mockRejectedValueOnce({ response: { status: 401 } });
+      const { getByLabelText, getByText, queryByLabelText } = renderLogin();
+      await abrirDesafio(getByLabelText);
+
+      // 4min50s aqui: a resposta do login chegou atrasada, e lá já venceu
+      agora += 4 * 60 * 1000 + 50 * 1000;
+      fireEvent.changeText(getByLabelText("Código de verificação"), "123456");
+      fireEvent.press(getByLabelText("Verificar código"));
+
+      await waitFor(() => {
+        expect(getByText("O código expirou. Entre de novo.")).toBeTruthy();
+      }, ESPERA);
+      expect(queryByLabelText("Código de verificação")).toBeNull();
+    });
+
+    it("401 no meio da janela continua sendo código errado, no mesmo passo", async () => {
+      mockedPost
+        .mockResolvedValueOnce({
+          data: { mfaRequired: true, mfaToken: "desafio-123" },
+        })
+        .mockRejectedValueOnce({ response: { status: 401 } });
+      const { getByLabelText, getByText } = renderLogin();
+      await abrirDesafio(getByLabelText);
+
+      agora += 2 * 60 * 1000;
+      fireEvent.changeText(getByLabelText("Código de verificação"), "000000");
+      fireEvent.press(getByLabelText("Verificar código"));
+
+      await waitFor(() => {
+        expect(
+          getByText("Código inválido. Confira e tente de novo."),
+        ).toBeTruthy();
+      }, ESPERA);
+      expect(getByLabelText("Código de verificação")).toBeTruthy();
+    });
+  });
+
+  it("o e-mail vai sem espaços nas pontas e com a caixa que foi digitada", async () => {
+    mockedPost.mockResolvedValue({ data: { token: "tok-abc", name: "Ana" } });
+
+    const { getByLabelText } = renderLogin();
+    await esperarFormulario(getByLabelText);
+    fireEvent.changeText(getByLabelText("E-mail"), "  Ana@Teste.com ");
+    fireEvent.changeText(getByLabelText("Senha"), "senha-da-ana");
+    fireEvent.press(getByLabelText("Entrar"));
+
+    await waitFor(() => expect(useAuthStore.getState().token).toBe("tok-abc"));
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/auth/login",
+      expect.objectContaining({ email: "Ana@Teste.com" }),
+    );
+  });
+
+  it("abre sem o erro deixado por outra tela", async () => {
+    useAuthStore.setState({ error: "Este e-mail já está em uso." });
+
+    const { getByLabelText, queryByText } = renderLogin();
+    await esperarFormulario(getByLabelText);
+
+    expect(queryByText("Este e-mail já está em uso.")).toBeNull();
   });
 
   it("um código de recuperação (com letras) também é enviado", async () => {

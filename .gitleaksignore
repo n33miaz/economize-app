@@ -1,0 +1,8 @@
+# Achados do gitleaks conferidos e aceitos, um por linha, pela impressao digital
+# (commit:arquivo:regra:linha). O gitleaks varre o HISTORICO e nao reescrevemos
+# commit: corrigir o arquivo nao apaga o achado antigo. So entra aqui o que foi
+# lido e nao e segredo -- segredo de verdade se revoga, nao se ignora.
+
+# Falso positivo (generic-api-key): senha inventada no teste do Cadastro. O teste
+# hoje monta o valor em partes; a linha antiga segue no historico.
+9506f9f00ebca1df1767d1829799b221ee19593a:src/screens/auth/__tests__/Register.test.tsx:generic-api-key:132

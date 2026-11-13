@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -111,5 +111,31 @@ describe("Opções de IA", () => {
     const { getByText } = montar();
 
     await waitFor(() => expect(getByText("Tentar de novo")).toBeTruthy());
+  });
+
+  it("recusa chave fora do ASCII imprimível sem salvar", async () => {
+    const save = jest.fn();
+    useAiSettingsStore.setState({
+      ...BASE,
+      save,
+      clearTestResult: jest.fn(),
+    } as never);
+    const { getByLabelText, getByText } = montar();
+
+    fireEvent.changeText(getByLabelText("Sua chave do provedor"), "chave-á");
+    fireEvent.press(getByText("Salvar"));
+
+    expect(
+      getByText("A chave deve conter apenas caracteres ASCII imprimíveis."),
+    ).toBeTruthy();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("limita a chave a 512 caracteres no campo", async () => {
+    const { getByLabelText } = montar();
+
+    await waitFor(() =>
+      expect(getByLabelText("Sua chave do provedor").props.maxLength).toBe(512),
+    );
   });
 });

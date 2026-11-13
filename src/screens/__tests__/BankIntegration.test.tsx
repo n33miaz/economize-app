@@ -16,8 +16,10 @@ import { useConnectorStore } from "../../store/connectorStore";
 import { useFamilyStore } from "../../store/familyStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
+import { useToastStore } from "../../store/toastStore";
 
 const mockOnScrollDaBarra = jest.fn();
+const mockNavigate = jest.fn();
 
 jest.mock("../../hooks/useEsconderBarra", () => ({
   useEsconderBarra: () => ({
@@ -44,7 +46,7 @@ jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({
-    navigate: jest.fn(),
+    navigate: mockNavigate,
     goBack: jest.fn(),
     canGoBack: () => false,
     getState: () => ({ index: 0, routes: [{ name: "Extrato" }] }),
@@ -146,6 +148,7 @@ const montar = () =>
 describe("Extrato", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNavigate.mockClear();
     prepararStores();
   });
 
@@ -282,6 +285,188 @@ describe("Extrato", () => {
     const { queryByText } = montar();
 
     await waitFor(() => expect(queryByText(/[Pp]luggy/)).toBeNull());
+  });
+
+  describe("conexoes que precisam de atencao", () => {
+    const conexaoBase = {
+      id: "c-reconectar",
+      itemId: "item-reconectar",
+      connectorId: 1,
+      connectorName: "Nubank",
+      institution: "Nubank",
+      createdAt: "2026-11-01T12:00:00Z",
+      lastSyncedAt: "2026-11-10T12:00:00Z",
+      status: "UPDATED",
+      needsAttention: false,
+    };
+
+    it("mostra o selo Reconectar quando a conexao precisa de atencao", async () => {
+      useConnectorStore.setState({
+        status: { enabled: true, configured: true, itemCount: 1 },
+        items: [
+          {
+            ...conexaoBase,
+            status: "NEEDS_USER_ACTION",
+            needsAttention: true,
+          },
+        ],
+      } as never);
+
+      const { getByLabelText, getByText } = montar();
+
+      await waitFor(() => expect(getByText("Reconectar")).toBeTruthy());
+      expect(getByLabelText("Nubank precisa reconectar")).toBeTruthy();
+    });
+
+    it("nao mostra o selo Reconectar para conexao saudavel", async () => {
+      useConnectorStore.setState({
+        status: { enabled: true, configured: true, itemCount: 1 },
+        items: [conexaoBase],
+      } as never);
+
+      const { queryByLabelText, queryByText, queryAllByText } = montar();
+
+      // o nome aparece no cabeçalho e na linha da conexão: basta existir
+      await waitFor(() => expect(queryAllByText("Nubank").length).toBeGreaterThan(0));
+      expect(queryByText("Reconectar")).toBeNull();
+      expect(queryByLabelText("Nubank precisa reconectar")).toBeNull();
+    });
+  });
+
+  describe("sincronizar bancos conectados", () => {
+    const conexao = {
+      id: "c1",
+      itemId: "item-1",
+      connectorId: 1,
+      connectorName: "Nubank",
+      institution: "Nubank",
+      createdAt: "2026-11-01T12:00:00Z",
+      lastSyncedAt: "2026-11-10T12:00:00Z",
+      status: "UPDATED",
+      needsAttention: false,
+    };
+
+    function ligarConector(runSync: jest.Mock, fetchItems: jest.Mock) {
+      useToastStore.getState().reset();
+      useConnectorStore.setState({
+        status: { enabled: true, configured: true, itemCount: 1 },
+        items: [conexao],
+        runSync,
+        fetchItems,
+      } as never);
+    }
+
+    function resultadoDaSync(sobrescrever: Record<string, unknown> = {}) {
+      return {
+        message: "Sincronização concluída",
+        uploadId: "upload-1",
+        transactionsImported: 1,
+        suggested: 0,
+        uncategorized: 0,
+        reconciled: 0,
+        format: "PLUGGY",
+        duplicated: false,
+        itemsSynced: 1,
+        skippedConnections: [],
+        ...sobrescrever,
+      };
+    }
+
+    it("sucesso com banco pulado avisa o nome e manda reconectar", async () => {
+      const fetchItems = jest.fn().mockResolvedValue(undefined);
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync({
+        transactionsImported: 3,
+        skippedConnections: [
+          { id: "c2", name: "Itaú", reason: "NEEDS_USER_ACTION" },
+          { id: "c3", name: "Inter", reason: "NOT_FOUND" },
+        ],
+      }));
+      ligarConector(runSync, fetchItems);
+
+      const { getByLabelText } = montar();
+      // A montagem também busca a lista: só conta a busca DEPOIS do toque
+      await waitFor(() => expect(getByLabelText("Sincronizar bancos conectados")).toBeTruthy());
+      fetchItems.mockClear();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(useToastStore.getState().message).toBe(
+          "3 transações importadas. Itaú e Inter ficaram de fora: reconecte para voltar a sincronizar.",
+        ),
+      );
+      expect(useToastStore.getState().type).toBe("warning");
+      await waitFor(() => expect(fetchItems).toHaveBeenCalled());
+    });
+
+    it("sucesso sem banco pulado fica só com o resumo", async () => {
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync());
+      ligarConector(runSync, jest.fn().mockResolvedValue(undefined));
+
+      const { getByLabelText } = montar();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(useToastStore.getState().message).toBe("1 transação importada."),
+      );
+      expect(useToastStore.getState().type).toBe("success");
+    });
+
+    it("leva a revisão com todos os uploads novos da sincronização", async () => {
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync({
+        transactionsImported: 2,
+        suggested: 1,
+        uncategorized: 1,
+        uploadIds: ["upload-1", "upload-2"],
+      }));
+      ligarConector(runSync, jest.fn().mockResolvedValue(undefined));
+
+      const { getByLabelText } = montar();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith(expect.any(String), {
+          uploadIds: ["upload-1", "upload-2"],
+        }),
+      );
+    });
+
+    it("mantém uploadId ao revisar resposta da API anterior", async () => {
+      const runSync = jest.fn().mockResolvedValue(resultadoDaSync({
+        suggested: 1,
+      }));
+      ligarConector(runSync, jest.fn().mockResolvedValue(undefined));
+
+      const { getByLabelText } = montar();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith(expect.any(String), {
+          uploadId: "upload-1",
+        }),
+      );
+    });
+
+    it("falha mostra o erro do store e recarrega as conexões", async () => {
+      const fetchItems = jest.fn().mockResolvedValue(undefined);
+      const runSync = jest.fn().mockImplementation(async () => {
+        useConnectorStore.setState({
+          error:
+            "Não foi possível ler Nubank no provedor agora; nada foi importado.",
+        });
+        throw new Error("503");
+      });
+      ligarConector(runSync, fetchItems);
+
+      const { getByLabelText } = montar();
+      await waitFor(() => expect(getByLabelText("Sincronizar bancos conectados")).toBeTruthy());
+      fetchItems.mockClear();
+      fireEvent.press(getByLabelText("Sincronizar bancos conectados"));
+
+      await waitFor(() =>
+        expect(useToastStore.getState().message).toMatch(/ler Nubank/),
+      );
+      await waitFor(() => expect(fetchItems).toHaveBeenCalled());
+    });
   });
 
   it("sem conector ligado, a seção de conexão não é oferecida", async () => {

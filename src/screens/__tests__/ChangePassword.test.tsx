@@ -128,4 +128,19 @@ describe("Trocar senha", () => {
       expect(useBankStore.getState().transactions).toBe(EXTRATO);
     });
   });
+
+  it("recusa a nova senha acima de 72 bytes sem chamar o servidor", () => {
+    const { getByLabelText, getByText } = montar();
+    const senhaLonga = "😀".repeat(19);
+
+    fireEvent.changeText(getByLabelText("Senha atual"), "senha-atual");
+    fireEvent.changeText(getByLabelText("Nova senha"), senhaLonga);
+    fireEvent.changeText(getByLabelText("Confirmar nova senha"), senhaLonga);
+    fireEvent.press(getByLabelText("Salvar nova senha"));
+
+    expect(
+      getByText("A senha pode ter no máximo 72 bytes — emojis contam mais de um."),
+    ).toBeTruthy();
+    expect(mockTrocar).not.toHaveBeenCalled();
+  });
 });

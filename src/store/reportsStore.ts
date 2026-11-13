@@ -22,6 +22,12 @@ interface ReportsState {
   isLoading: boolean;
   isGenerating: boolean;
   error: string | null;
+  /**
+   * Falha da BUSCA da lista, separada de `error` (que gerar e remover também
+   * usam): a tela troca o vazio por "tentar de novo" só quando o que falhou
+   * foi carregar — falha ao gerar já vira toast e não esconde o "Gerar".
+   */
+  loadError: string | null;
   fetch: (period?: ReportPeriod) => Promise<void>;
   generate: (
     period: ReportPeriod,
@@ -59,10 +65,11 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   isLoading: false,
   isGenerating: false,
   error: null,
+  loadError: null,
 
   fetch: async (period) => {
     const minhaVez = ++ultimaBusca;
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, loadError: null });
     try {
       const response = await api.get<{ content: Report[] }>("/reports", {
         params: { period, page: 0, size: 20 },
@@ -76,12 +83,16 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       if (!message) return;
       set({
         error: message,
+        loadError: message,
         isLoading: false,
       });
     }
   },
 
   generate: async (period, startDate, endDate) => {
+    // Trava contra o toque duplo: dois POST gerariam dois relatórios iguais
+    // do mesmo período, e o segundo só apareceria depois na lista
+    if (get().isGenerating) return null;
     set({ isGenerating: true, error: null });
     try {
       const response = await api.post<Report>("/reports", {
@@ -125,6 +136,12 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   // "a mais recente" e escrever depois da limpeza
   reset: () => {
     ultimaBusca += 1;
-    set({ items: [], isLoading: false, isGenerating: false, error: null });
+    set({
+      items: [],
+      isLoading: false,
+      isGenerating: false,
+      error: null,
+      loadError: null,
+    });
   },
 }));
