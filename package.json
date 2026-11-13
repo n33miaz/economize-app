@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "prod:sim": "expo start --no-dev --minify",
     "lint": "eslint .",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "postinstall": "node scripts/gravar-versao.js"
   },
   "overrides": {
     "react-native-tab-view": "4.2.2"

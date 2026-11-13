@@ -1,0 +1,99 @@
+name: Conferir produção
+
+# O Render publica o develop como o site de produção a cada push, e até aqui
+# nada conferia se a publicação entrou e funciona. Este workflow faz isso
+# depois de cada merge:
+#
+#   1. espera o /version.json do site dizer que o commit publicado é o que
+#      acabou de ser juntado. O arquivo é gravado no build pelo postinstall
+#      (scripts/gravar-versao.js), a partir do RENDER_GIT_COMMIT;
+#   2. faz uma fumaça só de leitura: o index.html responde, o pacote JS que ele
+#      referencia responde e tem tamanho de app de verdade.
+#
+# Falhou ou estourou o tempo: abre uma issue para o dono, com o passo que
+# falhou e o link do run. Passou: silêncio.
+
+on:
+  push:
+    branches: [develop]
+  # Para conferir na mão o que está no ar (compara com o commit escolhido)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# Dois merges seguidos: o Render publica só o mais novo, e a conferência do
+# antigo esperaria um commit que nunca vai aparecer — abriria issue à toa
+concurrency:
+  group: conferir-producao
+  cancel-in-progress: true
+
+env:
+  SITE: https://economize-web.onrender.com
+  ESPERADO: ${{ github.sha }}
+
+jobs:
+  conferir:
+    name: Site novo publicado e inteiro
+    runs-on: ubuntu-latest
+    # Maior que a espera do script (20 min) de propósito: se o teto do JOB
+    # estourasse primeiro, o job seria CANCELADO e o passo da issue não rodaria
+    timeout-minutes: 30
+    steps:
+      - name: Esperar o commit novo no /version.json
+        run: |
+          echo "PASSO=esperar o commit ${ESPERADO::7} no /version.json" >> "$GITHUB_ENV"
+          limite=$(( $(date +%s) + 20 * 60 ))
+          visto=""
+          while [ "$(date +%s)" -lt "$limite" ]; do
+            # Sem o arquivo, a reescrita da SPA responde 200 com o index.html:
+            # só um JSON com o commit certo conta. O parâmetro fura cache
+            visto=$(curl -sS --max-time 60 "$SITE/version.json?_=$GITHUB_RUN_ID-$(date +%s)" \
+              | jq -r '.commit // empty' 2>/dev/null || true)
+            if [ "$visto" = "$ESPERADO" ]; then
+              echo "no ar: $visto"
+              exit 0
+            fi
+            echo "ainda não: no ar '${visto:-?}', esperado '$ESPERADO'"
+            sleep 30
+          done
+          echo "::error::Em 20 min o /version.json não mostrou $ESPERADO (último visto: '${visto:-nada}')"
+          exit 1
+
+      - name: index.html e pacote JS
+        run: |
+          echo "PASSO=GET / = 200" >> "$GITHUB_ENV"
+          codigo=$(curl -sS -o /tmp/index.html -w "%{http_code}" --max-time 60 \
+            --retry 3 --retry-delay 10 --retry-all-errors "$SITE/")
+          echo "index.html: HTTP $codigo"
+          [ "$codigo" = "200" ]
+
+          echo "PASSO=pacote JS referenciado no index.html" >> "$GITHUB_ENV"
+          pacote=$(grep -o '/_expo/static/js/web/[^"]*\.js' /tmp/index.html | head -n 1)
+          if [ -z "$pacote" ]; then
+            echo "::error::O index.html não referencia nenhum pacote JS"
+            exit 1
+          fi
+          read -r codigo tamanho < <(curl -sS -o /dev/null -w "%{http_code} %{size_download}" \
+            --max-time 60 --retry 3 --retry-delay 10 --retry-all-errors "$SITE$pacote")
+          echo "$pacote: HTTP $codigo, $tamanho bytes"
+          [ "$codigo" = "200" ]
+          # O pacote real passa de 800 KB; abaixo de 200 KB é build quebrado
+          # ou a SPA respondendo no lugar do arquivo
+          [ "$tamanho" -gt 200000 ]
+
+      - name: Abrir issue se falhou
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          curto="${ESPERADO::7}"
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          corpo=$(printf '%s\n\n%s\n%s\n%s\n' \
+            "@n33miaz a conferência pós-deploy do site falhou." \
+            "- Commit: $ESPERADO" \
+            "- Passo que falhou: ${PASSO:-desconhecido}" \
+            "- Run: $run")
+          gh issue create --title "Produção: conferência falhou em $curto" --body "$corpo"
