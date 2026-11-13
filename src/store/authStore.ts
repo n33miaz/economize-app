@@ -85,8 +85,31 @@ function openSession(token: string, userName: string): void {
   });
 }
 
+/**
+ * O que do authStore sobrevive a fechar o app — e NADA além disso.
+ *
+ * <p>Sem esta lista o `persist` gravava o estado inteiro, `isLoading` e
+ * `error` junto. Fechar o app no meio de um login lento (a API acordando)
+ * deixava `isLoading: true` no disco, e na abertura seguinte "Entrar" e
+ * "Cadastrar" nasciam desabilitados para sempre, com o erro antigo na tela.
+ * Estado de requisição em voo não tem significado depois de reabrir.
+ *
+ * <p>O resto do que a abertura precisa já mora em outro lugar: o segredo do
+ * aparelho confiável fica em `utils/deviceIdentity` e a escolha da biometria
+ * no preferencesStore. `hasHydrated` é recalculado a cada abertura.
+ */
+type PersistedAuth = Pick<AuthState, "token" | "userName" | "lastUserKey">;
+
+function pickPersisted(state: Partial<AuthState>): PersistedAuth {
+  return {
+    token: state.token ?? null,
+    userName: state.userName ?? null,
+    lastUserKey: state.lastUserKey ?? null,
+  };
+}
+
 export const useAuthStore = create(
-  persist<AuthState>(
+  persist<AuthState, [], [], PersistedAuth>(
     (set) => ({
       token: null,
       userName: null,
@@ -232,6 +255,11 @@ export const useAuthStore = create(
         useAuthStore.setState({
           hasHydrated: true,
           lastUserKey: lastUserKey ?? userKeyFromToken(token),
+          // Segunda trava, além do merge: nenhuma requisição sobrevive a
+          // fechar o app, então nada pode abrir "carregando" ou com o erro
+          // de uma tentativa que já não existe
+          isLoading: false,
+          error: null,
         });
       },
     },
