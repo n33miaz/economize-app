@@ -28,6 +28,18 @@ import FloatingLabelInput from "../components/FloatingLabelInput";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 
+const API_KEY_MAX_LENGTH = 512;
+
+function apiKeyError(value: string): string | null {
+  if (value.length > API_KEY_MAX_LENGTH) {
+    return "A chave deve ter no máximo 512 caracteres.";
+  }
+  if (!/^[\x20-\x7e]+$/.test(value)) {
+    return "A chave deve conter apenas caracteres ASCII imprimíveis.";
+  }
+  return null;
+}
+
 /** Chip de modelo: a lista vem do servidor e qualquer outro valor responde 400. */
 function ModelChip({
   label,
@@ -82,6 +94,7 @@ export default function AiSettings() {
   const [provider, setProvider] = useState<AiProviderId | null>(null);
   const [model, setModel] = useState<string>("");
   const [apiKey, setApiKey] = useState("");
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -112,6 +125,11 @@ export default function AiSettings() {
 
   const handleTest = async () => {
     if (!provider || !apiKey.trim()) return;
+    const validationError = apiKeyError(apiKey.trim());
+    if (validationError) {
+      setKeyError(validationError);
+      return;
+    }
     Haptics.selectionAsync();
     const result = await test({ provider, model, apiKey: apiKey.trim() });
     if (result?.ok) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -120,6 +138,11 @@ export default function AiSettings() {
 
   const handleSave = async () => {
     if (!provider || !apiKey.trim()) return;
+    const validationError = apiKeyError(apiKey.trim());
+    if (validationError) {
+      setKeyError(validationError);
+      return;
+    }
     const ok = await save(provider, model, apiKey.trim());
     if (ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -251,11 +274,13 @@ export default function AiSettings() {
                         value={apiKey}
                         onChangeText={(v) => {
                           setApiKey(v);
+                          setKeyError(null);
                           clearTestResult();
                         }}
                         secureTextEntry
                         autoCapitalize="none"
                         autoCorrect={false}
+                        maxLength={API_KEY_MAX_LENGTH}
                       />
                     </View>
 
@@ -290,9 +315,9 @@ export default function AiSettings() {
                       </View>
                     ) : null}
 
-                    {error ? (
+                    {keyError || error ? (
                       <Text className="text-danger font-regular text-xs mt-3">
-                        {error}
+                        {keyError ?? error}
                       </Text>
                     ) : null}
 

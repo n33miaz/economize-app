@@ -17,6 +17,11 @@ import { useToastStore } from "../../store/toastStore";
 import { useTheme } from "../../theme/ThemeProvider";
 import { useMotionPresets, usePressScale } from "../../theme/motionPresets";
 import { validateNewPassword } from "../../utils/passwordPolicy";
+import { utf8ByteLength } from "../../utils/utf8ByteLength";
+
+const PASSWORD_MAX_BYTES = 72;
+const PASSWORD_MAX_BYTES_ERROR =
+  "A senha pode ter no máximo 72 bytes — emojis contam mais de um.";
 
 export default function ResetPassword({ navigation, route }: any) {
   const t = useTheme();
@@ -38,9 +43,14 @@ export default function ResetPassword({ navigation, route }: any) {
 
   const handleSubmit = async () => {
     const errors = validateNewPassword(password, confirmation);
-    setPasswordError(errors.passwordError);
+    const passwordError =
+      errors.passwordError ??
+      (utf8ByteLength(password) > PASSWORD_MAX_BYTES
+        ? PASSWORD_MAX_BYTES_ERROR
+        : null);
+    setPasswordError(passwordError);
     setConfirmationError(errors.confirmationError);
-    if (errors.passwordError || errors.confirmationError || !token) return;
+    if (passwordError || errors.confirmationError || !token) return;
 
     setIsSaving(true);
     setApiError(null);

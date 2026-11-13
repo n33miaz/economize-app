@@ -50,6 +50,21 @@ import ChartLegend from "../components/ChartLegend";
 import CustomModal from "../components/CustomModal";
 import Skeleton from "../components/Skeleton";
 
+function exceedsDecimalLimit(
+  value: number,
+  integerDigits: number,
+  fractionDigits: number,
+): boolean {
+  const absolute = Math.abs(value);
+  const scale = 10 ** fractionDigits;
+  // A API recebe o número já lido pelos parsers da tela, inclusive vírgulas
+  // decimais e separadores de milhar.
+  return (
+    absolute >= 10 ** integerDigits ||
+    Math.abs(absolute * scale - Math.round(absolute * scale)) > 0.000001
+  );
+}
+
 export default function Wallet() {
   const t = useTheme();
   // Hook, e não Dimensions.get no módulo: no navegador a janela é
@@ -208,6 +223,14 @@ export default function Wallet() {
         "Quantidade e preço precisam ser números maiores que zero.",
         "warning",
       );
+      return;
+    }
+    if (exceedsDecimalLimit(quantity, 11, 8)) {
+      showToast("Quantidade fora da faixa aceita", "warning");
+      return;
+    }
+    if (exceedsDecimalLimit(unitPrice, 15, 4)) {
+      showToast("Preço fora da faixa aceita", "warning");
       return;
     }
 
