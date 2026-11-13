@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -33,7 +33,15 @@ export default function Register({ navigation }: any) {
   const [confirmationError, setConfirmationError] = useState<string | null>(
     null,
   );
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const { register, isLoading, error, clearError } = useAuthStore();
+
+  // O `error` do authStore é o mesmo do Login: sem limpar ao montar, o
+  // cadastro abria com o "E-mail ou senha incorretos." da tentativa anterior
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
   const strength: PasswordStrength = getPasswordStrength(password);
   const strengthColor = {
@@ -43,13 +51,35 @@ export default function Register({ navigation }: any) {
   }[strength];
 
   const handleRegister = async () => {
-    if (!name || !email || !password) return;
+    // Antes um campo vazio fazia o botão simplesmente não responder: a pessoa
+    // tocava em "Cadastrar" e nada acontecia. Agora cada campo diz o que falta
+    const nomeLimpo = name.trim();
+    // Só as pontas, como no "Esqueci a senha". Minúsculas NÃO: a API compara
+    // o e-mail exato, e o login teria de adivinhar a caixa usada aqui
+    const emailLimpo = email.trim();
+    const erroDoNome = nomeLimpo ? null : "Digite seu nome.";
+    const erroDoEmail = !emailLimpo
+      ? "Digite seu e-mail."
+      : // Formato mínimo, o mesmo do "Esqueci a senha": quem confere de
+        // verdade é a API; aqui só pega o erro de digitação óbvio
+        !/^\S+@\S+\.\S+$/.test(emailLimpo)
+        ? "Digite um e-mail válido."
+        : null;
     const errors = validateNewPassword(password, confirmation);
+    setNameError(erroDoNome);
+    setEmailError(erroDoEmail);
     setPasswordError(errors.passwordError);
     setConfirmationError(errors.confirmationError);
-    if (errors.passwordError || errors.confirmationError) return;
+    if (
+      erroDoNome ||
+      erroDoEmail ||
+      errors.passwordError ||
+      errors.confirmationError
+    ) {
+      return;
+    }
     try {
-      await register(name, email, password);
+      await register(nomeLimpo, emailLimpo, password);
     } catch {
       // Erro tratado no store
     }
@@ -96,9 +126,14 @@ export default function Register({ navigation }: any) {
           value={name}
           onChangeText={(text) => {
             setName(text);
+            setNameError(null);
             clearError();
           }}
+          error={nameError}
         />
+        {nameError && (
+          <Text className="text-danger text-xs mt-1 ml-1">{nameError}</Text>
+        )}
       </Animated.View>
 
       <Animated.View entering={listItemEntering(2)} className="mb-4">
@@ -107,11 +142,16 @@ export default function Register({ navigation }: any) {
           value={email}
           onChangeText={(text) => {
             setEmail(text);
+            setEmailError(null);
             clearError();
           }}
           autoCapitalize="none"
           keyboardType="email-address"
+          error={emailError}
         />
+        {emailError && (
+          <Text className="text-danger text-xs mt-1 ml-1">{emailError}</Text>
+        )}
       </Animated.View>
 
       <Animated.View entering={listItemEntering(3)} className="mb-4">

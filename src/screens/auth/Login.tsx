@@ -20,7 +20,12 @@ import BiometricPrompt, {
   DURACAO_SELO_MS,
 } from "../../components/BiometricPrompt";
 import FloatingLabelInput from "../../components/FloatingLabelInput";
-import { useAuthStore, type LoginOutcome } from "../../store/authStore";
+import {
+  MFA_CHALLENGE_MS,
+  MFA_EXPIRED_MESSAGE,
+  useAuthStore,
+  type LoginOutcome,
+} from "../../store/authStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useToastStore } from "../../store/toastStore";
 import { APP_VERSION } from "../../utils/appVersion";
@@ -31,6 +36,14 @@ import { useAnnouncement } from "../../hooks/useAnnouncement";
 import { ANNOUNCEMENT_PRIORITY } from "../../store/announcementStore";
 
 // Formulário de login não ganha nada em ficar largo; 420 é a medida do cartão
+
+/**
+ * Folga para o atraso da rede: o servidor emite o desafio ANTES de a resposta
+ * chegar aqui (com a API acordando, segundos antes). Um 401 nos últimos 30 s
+ * da janela local já pode ser o desafio vencido do lado de lá, e tratá-lo como
+ * "código errado" prenderia a pessoa num passo que não tem mais saída.
+ */
+const MFA_EXPIRY_MARGIN_MS = 30 * 1000;
 
 /** A sessão retida enquanto o modal de biometria está no ar. */
 interface SessaoPendente {
@@ -49,6 +62,9 @@ export default function Login({ navigation }: any) {
   // de senha pelo do código
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  // Quando o desafio chegou. O servidor devolve o MESMO 401 para código
+  // errado e para desafio vencido; só a idade do desafio separa os dois
+  const [mfaIssuedAt, setMfaIssuedAt] = useState<number | null>(null);
   const [sessaoPendente, setSessaoPendente] = useState<SessaoPendente | null>(
     null,
   );
@@ -67,6 +83,12 @@ export default function Login({ navigation }: any) {
   // depender só de a animação terminar.
   const [pronto, setPronto] = useState(false);
   const [revelado, setRevelado] = useState(false);
+
+  // O `error` do authStore é um só para Login e Cadastro: sem limpar ao
+  // montar, a tela abria com a falha de outra tela (ou de outra visita)
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
   /**
    * O halo que se dissipa.
@@ -139,28 +161,61 @@ export default function Login({ navigation }: any) {
     if (outcome.kind === "mfa") {
       setMfaToken(outcome.mfaToken);
       setMfaCode("");
+      setMfaIssuedAt(Date.now());
       return;
     }
     await entrar({ token: outcome.token, name: outcome.name });
   };
 
   const handleLogin = async () => {
-    if (!email || !password) return;
+    // Só as pontas: o teclado do celular costuma deixar um espaço depois do
+    // e-mail sugerido. Minúsculas NÃO — a API compara o e-mail exato, e
+    // quem se cadastrou com maiúscula ficaria trancado para fora
+    const emailLimpo = email.trim();
+    if (!emailLimpo || !password) return;
     try {
-      await seguir(await login(email, password, { deferCommit: true }));
+      await seguir(await login(emailLimpo, password, { deferCommit: true }));
     } catch {
       // Erro tratado no store
     }
   };
 
+  /**
+   * Desafio vencido: nenhum código serve mais, nem o certo. Voltar à senha é
+   * a única saída — antes a tela ficava no passo do código respondendo
+   * "tente de novo" para sempre.
+   */
+  const desafioVencido = () => {
+    setMfaToken(null);
+    setMfaCode("");
+    setMfaIssuedAt(null);
+    setPassword("");
+    useAuthStore.setState({ error: MFA_EXPIRED_MESSAGE, isLoading: false });
+  };
+
+  const idadeDoDesafio = () =>
+    mfaIssuedAt === null ? 0 : Date.now() - mfaIssuedAt;
+
   const handleMfaSubmit = async () => {
     if (!mfaToken || mfaCode.trim().length < 6) return;
+    // Vencido aqui já é vencido lá: nem gasta a ida ao servidor
+    if (idadeDoDesafio() >= MFA_CHALLENGE_MS) {
+      desafioVencido();
+      return;
+    }
     try {
       await seguir(
         await submitMfaCode(mfaToken, mfaCode.trim(), { deferCommit: true }),
       );
-    } catch {
-      // Erro tratado no store
+    } catch (error: any) {
+      // Erro tratado no store — exceto o 401 no fim da janela, que é o
+      // desafio vencendo no servidor e não um código errado
+      if (
+        error?.response?.status === 401 &&
+        idadeDoDesafio() >= MFA_CHALLENGE_MS - MFA_EXPIRY_MARGIN_MS
+      ) {
+        desafioVencido();
+      }
     }
   };
 
@@ -170,7 +225,7 @@ export default function Login({ navigation }: any) {
       usePreferencesStore.getState();
     const showToast = useToastStore.getState().showToast;
 
-    const ok = await enrollBiometrics(email || "Economize!");
+    const ok = await enrollBiometrics(email.trim() || "Economize!");
     if (!ok) {
       showToast(
         "Biometria não confirmada. Você pode ativar depois no Perfil, em Preferências.",
@@ -311,6 +366,7 @@ export default function Login({ navigation }: any) {
                 onPress={() => {
                   setMfaToken(null);
                   setMfaCode("");
+                  setMfaIssuedAt(null);
                   setPassword("");
                   clearError();
                 }}

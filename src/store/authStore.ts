@@ -21,6 +21,15 @@ export type LoginOutcome =
   | { kind: "session"; token: string; name: string }
   | { kind: "mfa"; mfaToken: string };
 
+/** Código recusado com o desafio ainda válido: a pessoa fica no passo. */
+export const MFA_WRONG_CODE_MESSAGE = "Código inválido. Confira e tente de novo.";
+
+/** Desafio de 5 minutos vencido: não há código que sirva, só a senha de novo. */
+export const MFA_EXPIRED_MESSAGE = "O código expirou. Entre de novo.";
+
+/** Validade do desafio do segundo fator — a mesma do servidor (`JwtUtil`). */
+export const MFA_CHALLENGE_MS = 5 * 60 * 1000;
+
 interface AuthState {
   token: string | null;
   userName: string | null;
@@ -189,11 +198,14 @@ export const useAuthStore = create(
           return undefined;
         } catch (error: any) {
           // O servidor responde o MESMO 401 para código errado e para desafio
-          // expirado, de propósito — a mensagem aqui cobre os dois sem mentir
+          // expirado, de propósito. Quem separa os dois é a tela, pela hora
+          // em que o desafio chegou (ver `Login`): lá o desafio vencido volta
+          // para a senha. O que chega até aqui como 401 é tratado como código
+          // errado — e "tente de novo" passa a ser verdade
           set({
             error:
               error.response?.status === 401
-                ? "Código inválido ou expirado. Tente de novo."
+                ? MFA_WRONG_CODE_MESSAGE
                 : "Erro ao conectar com o servidor.",
             isLoading: false,
           });
@@ -244,6 +256,17 @@ export const useAuthStore = create(
     {
       name: "@auth_storage",
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => pickPersisted(state),
+      // Quem atualizar o app ainda tem no disco o estado inteiro gravado pela
+      // versão anterior — talvez com `isLoading: true` de um login
+      // interrompido. O merge padrão copiaria esse lixo de volta; aqui só
+      // entram os campos da lista, e o resto fica com o valor inicial
+      // (disco vazio não apaga o que já está na memória: o zustand chama o
+      // merge mesmo sem nada gravado, com `persisted` indefinido)
+      merge: (persisted, current) =>
+        persisted
+          ? { ...current, ...pickPersisted(persisted as Partial<AuthState>) }
+          : current,
       // Sinaliza o fim da hidratação via setState para as rotas esperarem o
       // token persistido — sem isso o cold start pisca a tela de Login
       onRehydrateStorage: () => () => {
