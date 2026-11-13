@@ -13,11 +13,14 @@ import { useToastStore } from "../../store/toastStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
 import { useUserStore } from "../../store/userStore";
+import { downloadMyData } from "../../utils/myDataExport";
 
 jest.mock("../../services/api", () => ({
   __esModule: true,
   default: {},
   logoutAllSessions: jest.fn(),
+  getMfaStatus: jest.fn().mockResolvedValue({ enabled: false }),
+  deleteMyAccount: jest.fn(),
   // A leitura real do status: o teste da 404 depende dela
   getApiErrorStatus: (e: { response?: { status?: number } }) =>
     e?.response?.status ?? null,
@@ -25,6 +28,14 @@ jest.mock("../../services/api", () => ({
 
 const mockSairDeTudo = logoutAllSessions as jest.MockedFunction<
   typeof logoutAllSessions
+>;
+
+jest.mock("../../utils/myDataExport", () => ({
+  downloadMyData: jest.fn(),
+}));
+
+const mockBaixarDados = downloadMyData as jest.MockedFunction<
+  typeof downloadMyData
 >;
 
 jest.mock("../../utils/biometrics", () => ({
@@ -261,5 +272,57 @@ describe("Perfil — sair de todos os aparelhos", () => {
     });
 
     expect(mockSairDeTudo).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Perfil — meus dados (LGPD)", () => {
+  beforeEach(() => {
+    useAuthStore.setState({ token: "t", userName: "Neemias" } as never);
+    useToastStore.setState({ message: null } as never);
+    mockBaixarDados.mockReset();
+  });
+
+  it("baixar meus dados: dois toques rápidos fazem UM download só", async () => {
+    let soltar!: (salvo: boolean) => void;
+    mockBaixarDados.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        soltar = resolve;
+      }),
+    );
+    const tela = montar();
+    const linha = await waitFor(() => tela.getByLabelText(/^Baixar meus dados/));
+
+    await act(async () => {
+      fireEvent.press(linha);
+      fireEvent.press(linha);
+      soltar(true);
+    });
+
+    expect(mockBaixarDados).toHaveBeenCalledTimes(1);
+  });
+
+  it("baixar meus dados: falha vira aviso e a sessão fica", async () => {
+    mockBaixarDados.mockRejectedValue({ response: { status: 500 } });
+    const tela = montar();
+    const linha = await waitFor(() => tela.getByLabelText(/^Baixar meus dados/));
+
+    await act(async () => {
+      fireEvent.press(linha);
+    });
+
+    await waitFor(() => expect(useToastStore.getState().message).toBeTruthy());
+    expect(useAuthStore.getState().token).toBe("t");
+  });
+
+  it("excluir minha conta abre a confirmação forte, sem chamar o servidor", async () => {
+    const tela = montar();
+    const linha = await waitFor(() =>
+      tela.getByLabelText(/^Excluir minha conta/),
+    );
+
+    fireEvent.press(linha);
+
+    await waitFor(() => expect(tela.getByText(/É permanente/)).toBeTruthy());
+    expect(tela.getByText("Excluir para sempre")).toBeTruthy();
   });
 });

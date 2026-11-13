@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   Switch,
   Text,
@@ -30,6 +31,8 @@ import Glasses from "lucide-react-native/dist/esm/icons/glasses";
 import Tags from "lucide-react-native/dist/esm/icons/tags";
 import Target from "lucide-react-native/dist/esm/icons/target";
 import Clock from "lucide-react-native/dist/esm/icons/clock";
+import Download from "lucide-react-native/dist/esm/icons/download";
+import UserX from "lucide-react-native/dist/esm/icons/user-x";
 import TrendingUp from "lucide-react-native/dist/esm/icons/trending-up";
 import Users from "lucide-react-native/dist/esm/icons/users";
 import X from "lucide-react-native/dist/esm/icons/x";
@@ -73,6 +76,8 @@ import ActionRow from "../components/ActionRow";
 import PremiumOfferSheet from "../components/PremiumOfferSheet";
 import { APP_ROUTES } from "../routes/routeNames";
 import CycleAnchorSheet from "../components/CycleAnchorSheet";
+import DeleteAccountSheet from "../components/DeleteAccountSheet";
+import { downloadMyData } from "../utils/myDataExport";
 import SectionTitle from "../components/SectionTitle";
 import SegmentedControl from "../components/SegmentedControl";
 import {
@@ -370,6 +375,44 @@ export default function Profile() {
       destructive: true,
       onConfirm: () => logout(),
     });
+  };
+
+  // "Baixar meus dados" (LGPD). Trava por ref: o estado só chega no próximo
+  // render, e dois toques rápidos baixariam a conta inteira duas vezes
+  const downloadingRef = useRef(false);
+  const [downloadingData, setDownloadingData] = useState(false);
+  const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
+
+  const handleDownloadMyData = async () => {
+    if (downloadingRef.current) return;
+    downloadingRef.current = true;
+    setDownloadingData(true);
+    try {
+      const salvo = await downloadMyData();
+      // Desistir da pasta não é erro: sem toast vermelho, sem vibração
+      if (!salvo) return;
+      if (Platform.OS === "web") {
+        showToast("Arquivo gerado — confira seus downloads.", "success");
+      } else if (Platform.OS === "android") {
+        showToast("Arquivo salvo na pasta escolhida.", "success");
+      }
+      Haptics.notificationAsync();
+    } catch (e) {
+      if (getApiErrorStatus(e) === 429) {
+        showToast("Você acabou de pedir. Tente de novo em um minuto.", "info");
+      } else if (getApiErrorStatus(e) === 404) {
+        showToast("Esta função ainda não está disponível.", "info");
+      } else {
+        const mensagem = describeSaveFailure(
+          e,
+          "Não foi possível baixar seus dados agora.",
+        );
+        if (mensagem) showToast(mensagem, "error");
+      }
+    } finally {
+      downloadingRef.current = false;
+      setDownloadingData(false);
+    }
   };
 
   // Trava de duplo toque: o `busy` do diálogo cobre o botão de confirmar,
@@ -968,6 +1011,24 @@ export default function Profile() {
             destructive
             onPress={handleLogoutAll}
           />
+          <ActionRow
+            Icon={Download}
+            label="Baixar meus dados"
+            description={
+              downloadingData
+                ? "Preparando o arquivo…"
+                : "Tudo da sua conta num arquivo ZIP, em planilhas"
+            }
+            disabled={downloadingData}
+            onPress={handleDownloadMyData}
+          />
+          <ActionRow
+            Icon={UserX}
+            label="Excluir minha conta"
+            description="Apaga a conta e todos os dados, sem volta"
+            destructive
+            onPress={() => setDeleteSheetOpen(true)}
+          />
         </Animated.View>
         {/* Fim do conteúdo: o slot nunca fica entre o usuário e os
             números dele. Some por completo no Plus */}
@@ -981,6 +1042,11 @@ export default function Profile() {
       <CycleAnchorSheet
         visible={anchorSheetOpen}
         onClose={() => setAnchorSheetOpen(false)}
+      />
+
+      <DeleteAccountSheet
+        visible={deleteSheetOpen}
+        onClose={() => setDeleteSheetOpen(false)}
       />
     </PageContainer>
   );

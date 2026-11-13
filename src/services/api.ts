@@ -1811,6 +1811,55 @@ export const logoutAllSessions = async (): Promise<void> => {
   await api.post("/auth/logout-all");
 };
 
+// --- Meus dados (LGPD) ---
+
+/** Nome sugerido para o ZIP; o servidor manda o mesmo no Content-Disposition. */
+export const myDataFileName = (today: Date = new Date()): string =>
+  `economize-meus-dados-${today.toISOString().slice(0, 10)}.zip`;
+
+/**
+ * Endereço e cabeçalhos do ZIP com todos os dados da conta, para o download
+ * nativo (`FileSystem.downloadAsync`), que grava o binário direto no disco sem
+ * passar pela ponte do JS. Os cabeçalhos são os mesmos do interceptor: sem o
+ * de versão, o servidor recusa o app.
+ */
+export const myDataExportRequest = (): {
+  url: string;
+  headers: Record<string, string>;
+} => {
+  const { useAuthStore } = require("../store/authStore");
+  const token: string | null = useAuthStore.getState().token;
+  return {
+    url: `${api.defaults.baseURL}/users/me/export`,
+    headers: {
+      ...versionHeaders(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  };
+};
+
+/** Web: o ZIP como Blob, pelo cliente de sempre. Conta inteira pode levar mais que 30 s. */
+export const fetchMyDataZip = async (): Promise<Blob> => {
+  const response = await api.get<Blob>("/users/me/export", {
+    responseType: "blob",
+    timeout: 120000,
+  });
+  return response.data;
+};
+
+/**
+ * Exclui a conta de vez. Senha sempre; o código só com o segundo fator ligado.
+ * 400 = senha ou código recusado, 409 = dono de casa com outros membros.
+ */
+export const deleteMyAccount = async (
+  password: string,
+  code?: string,
+): Promise<void> => {
+  await api.delete("/users/me", {
+    data: code ? { password, code } : { password },
+  });
+};
+
 // --- Usuário ---
 export const getUserMe = async (): Promise<UserMe> => {
   const response = await api.get<UserMe>("/users/me");
