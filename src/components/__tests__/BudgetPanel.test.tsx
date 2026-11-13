@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import BudgetPanel from "../BudgetPanel";
@@ -15,6 +15,19 @@ jest.mock("../../services/api", () => ({
 }));
 
 jest.mock("../CategoryPickerSheet", () => () => null);
+
+// O foco da tela, simulado: cada `mockFocar()` é a pessoa voltando para a
+// Análise. Entre focos, o efeito acompanha a identidade do callback, como o
+// useFocusEffect real faz com a tela já em foco
+let mockFocar: () => void = () => {};
+jest.mock("@react-navigation/native", () => ({
+  useFocusEffect: (efeito: () => void) => {
+    const React = require("react");
+    const [foco, setFoco] = React.useState(0);
+    mockFocar = () => setFoco((n: number) => n + 1);
+    React.useEffect(efeito, [efeito, foco]);
+  },
+}));
 
 const buscar = getBudgetStatus as jest.MockedFunction<typeof getBudgetStatus>;
 
@@ -98,15 +111,70 @@ describe("Painel de tetos", () => {
     );
   });
 
-  it("uma falha apaga o painel e não a tela", async () => {
-    buscar.mockRejectedValue(new Error("sem rede"));
+  it("uma falha vira erro do painel, não o convite de quem não tem teto", async () => {
+    buscar.mockRejectedValueOnce(new Error("sem rede"));
 
-    const { getByText, queryByText } = montar(RECORTE);
+    const { getByLabelText, queryByText, findByText } = montar(RECORTE);
 
-    await waitFor(() => expect(buscar).toHaveBeenCalled());
-    // O convite continua: o painel sem dado é o mesmo painel sem teto
-    expect(getByText(/Ponha um teto numa categoria/)).toBeTruthy();
-    expect(queryByText(/neste período/)).toBeNull();
+    await waitFor(() => expect(getByLabelText("Tentar de novo")).toBeTruthy());
+    // Sem dado não é sem teto: convidar a "pôr um teto" seria mentir
+    expect(queryByText(/Ponha um teto numa categoria/)).toBeNull();
+
+    buscar.mockResolvedValueOnce({
+      exceededCount: 0,
+      abovePaceCount: 0,
+      lines: [linha()],
+    });
+    fireEvent.press(getByLabelText("Tentar de novo"));
+
+    expect(await findByText("1 teto neste período · tudo dentro")).toBeTruthy();
+    expect(queryByText(/Tentar de novo/)).toBeNull();
+  });
+
+  it("volta a perguntar ao ganhar foco", async () => {
+    buscar.mockResolvedValue({ exceededCount: 0, abovePaceCount: 0, lines: [] });
+
+    montar(RECORTE);
+    await waitFor(() => expect(buscar).toHaveBeenCalledTimes(1));
+
+    // De volta da Revisão: o gasto por categoria pode ter mudado
+    act(() => mockFocar());
+
+    await waitFor(() => expect(buscar).toHaveBeenCalledTimes(2));
+  });
+
+  it("resposta atrasada do mês anterior não sobrescreve o atual", async () => {
+    let soltaSetembro: (v: unknown) => void = () => {};
+    buscar
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (soltaSetembro = resolve)) as never,
+      )
+      .mockResolvedValueOnce({
+        exceededCount: 0,
+        abovePaceCount: 0,
+        lines: [linha({ categoryName: "Agosto" })],
+      });
+
+    const { rerender, findByLabelText, queryByLabelText } = montar(RECORTE);
+    await waitFor(() => expect(buscar).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <SafeAreaProvider initialMetrics={METRICAS}>
+        <BudgetPanel range={{ kind: "month", month: "2026-08" }} />
+      </SafeAreaProvider>,
+    );
+    expect(await findByLabelText("Ajustar o teto de Agosto")).toBeTruthy();
+
+    await act(async () => {
+      soltaSetembro({
+        exceededCount: 0,
+        abovePaceCount: 0,
+        lines: [linha({ categoryName: "Setembro" })],
+      });
+    });
+
+    expect(queryByLabelText("Ajustar o teto de Setembro")).toBeNull();
+    expect(queryByLabelText("Ajustar o teto de Agosto")).toBeTruthy();
   });
 
   it("sem recorte, não pergunta nada ao servidor", () => {
