@@ -1,0 +1,99 @@
+name: E2E manual
+
+# O roteiro sobe Docker, JVM e WebKit: roda apenas por pedido para não consumir
+# minutos em todo PR.
+on:
+  # O disparo manual só aparece no GitHub quando este arquivo está no ramo
+  # padrão (main). Enquanto as entregas ficam em develop, um push num ramo
+  # e2e-run/<qualquer-coisa> roda o roteiro com a API em develop.
+  push:
+    branches:
+      - "e2e-run/**"
+  workflow_dispatch:
+    inputs:
+      api_ref:
+        description: Ref (branch, tag ou SHA) de n33miaz/economize-api
+        required: false
+        default: develop
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Ponta a ponta (WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Baixar o app
+        # Os dois checkouts ficam lado a lado, como o run.sh espera quando não
+        # recebe E2E_API_DIR. Também evitamos usar ../ no input de checkout,
+        # que é restrito ao GITHUB_WORKSPACE pela action.
+        uses: actions/checkout@v7
+        with:
+          path: app
+
+      - name: Baixar a API no diretório irmão
+        # GITHUB_TOKEN só alcança este repositório. Se a API for privada,
+        # API_REPO_TOKEN precisa ser um PAT com Contents: Read nela; se for
+        # pública, o token padrão é suficiente.
+        uses: actions/checkout@v7
+        with:
+          repository: n33miaz/economize-api
+          ref: ${{ inputs.api_ref || 'develop' }}
+          path: api-e2e
+          token: ${{ secrets.API_REPO_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v7
+        with:
+          # Igual à esteira do app: Expo 52 é validado com Node 20.
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar dependências do app
+        working-directory: app
+        run: npm ci
+
+      - name: Instalar o harness E2E
+        working-directory: app/e2e
+        # O navegador é instalado no passo seguinte para manter o download
+        # explícito e garantir as bibliotecas do WebKit no Ubuntu.
+        run: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --no-audit --no-fund
+
+      - name: Instalar WebKit do Playwright
+        working-directory: app/e2e
+        run: npx playwright install --with-deps webkit
+
+      - name: Baixar a imagem do Postgres usada pelo roteiro
+        # run.sh deliberadamente só aceita uma imagem já local para não lotar
+        # o disco de máquinas de desenvolvimento; no runner efêmero, baixamos
+        # de forma declarada antes de iniciá-lo.
+        run: docker pull postgres:18-alpine
+
+      - name: Executar roteiro E2E
+        env:
+          E2E_API_DIR: ${{ github.workspace }}/api-e2e
+          E2E_API_PORT: "18080"
+          E2E_WEB_PORT: "18081"
+          E2E_PG_PORT: "15432"
+          E2E_MIN_FREE_MB: "1200"
+          # O cache Maven do runner pode estar vazio; localmente o padrão do
+          # roteiro segue offline, mas aqui o Wrapper deve poder baixar tudo.
+          E2E_MAVEN_OFFLINE: "0"
+        run: bash app/e2e/run.sh
+
+      - name: Guardar artefatos E2E
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-artifacts
+          path: app/e2e/artifacts/
+          retention-days: 7
+          if-no-files-found: ignore

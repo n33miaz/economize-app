@@ -22,6 +22,8 @@
 #   E2E_SKIP_BUILD=1 reaproveita o `dist` da rodada anterior (mesma porta da API)
 #   E2E_PG_IMAGE     imagem do Postgres (padrão: postgres:18-alpine, já local)
 #   E2E_MIN_FREE_MB  memória livre mínima para subir JVM/navegador (padrão 1200)
+#   E2E_MAVEN_OFFLINE=0 permite ao Maven baixar dependências (necessário no CI
+#                     limpo; o padrão 1 preserva a validação offline local)
 #   E2E_API_PORT / E2E_WEB_PORT / E2E_PG_PORT  portas preferidas
 #   E2E_HOLD=1       sobe a pilha (fase sem câmbio) e a segura no ar, sem rodar o
 #                    roteiro, até existir e2e/artifacts/stop (para depurar à mão);
@@ -44,6 +46,17 @@ PG_STARTED=""
 KILLED=()
 
 is_windows() { [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; }
+
+# Só o Git Bash reescreve caminhos de argumentos do Docker. No Linux, deixar a
+# variável fora da chamada evita carregar uma particularidade do Windows para o
+# runner do CI.
+docker_cmd() {
+  if is_windows; then
+    MSYS_NO_PATHCONV=1 docker "$@"
+  else
+    docker "$@"
+  fi
+}
 
 log() { printf '\n[e2e %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 die() {
@@ -170,7 +183,7 @@ grep -rqF "$API_URL/api/v1" "$APP_DIR/dist/_expo/static/js" ||
 
 # ----------------------------------------------------------------- 2. o Postgres
 log "subindo Postgres descartável ($PG_IMAGE, dados em tmpfs)"
-MSYS_NO_PATHCONV=1 docker run -d --rm --name "$PG_NAME" --memory 256m \
+docker_cmd run -d --rm --name "$PG_NAME" --memory 256m \
   -e POSTGRES_DB=economize -e POSTGRES_USER=economize -e POSTGRES_PASSWORD=economize \
   --tmpfs /var/lib/postgresql \
   -p "127.0.0.1:$PG_PORT:5432" "$PG_IMAGE" >/dev/null || die "não subi o Postgres"
@@ -184,8 +197,22 @@ sleep 2
 docker exec "$PG_NAME" pg_isready -q -h 127.0.0.1 -U economize -d economize || die "o Postgres não ficou pronto"
 
 # --------------------------------------------------------------------- 3. a API
-log "compilando a API (maven offline)"
-if ! (cd "$API_DIR" && MAVEN_OPTS="-Xmx384m" mvn -o -q -DskipTests compile \
+# O Wrapper fixa a versão do Maven definida pela própria API; em checkouts
+# antigos sem ele, ainda aceitamos o Maven já instalado para não quebrar o uso
+# local. O CI novo precisa liberar downloads no primeiro uso.
+if [[ -f "$API_DIR/mvnw" ]]; then
+  MAVEN=(bash "$API_DIR/mvnw")
+elif command -v mvn >/dev/null 2>&1; then
+  MAVEN=(mvn)
+else
+  die "a API não tem Maven Wrapper nem há 'mvn' no PATH"
+fi
+MAVEN_OFFLINE=()
+if [[ "${E2E_MAVEN_OFFLINE:-1}" != "0" ]]; then
+  MAVEN_OFFLINE=(-o)
+fi
+log "compilando a API (Maven${MAVEN_OFFLINE:+ offline})"
+if ! (cd "$API_DIR" && MAVEN_OPTS="-Xmx384m" "${MAVEN[@]}" "${MAVEN_OFFLINE[@]}" -q -DskipTests compile \
   dependency:build-classpath -Dmdep.includeScope=runtime \
   -Dmdep.outputFile=target/e2e-classpath.txt) >"$ART_DIR/api-build.log" 2>&1; then
   tail -30 "$ART_DIR/api-build.log"
