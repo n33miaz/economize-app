@@ -25,6 +25,10 @@ import { radius, spacing } from "../theme/ds";
 import { useMotionPresets } from "../theme/motionPresets";
 import { copyToClipboard } from "../utils/clipboard";
 import {
+  describeSaveFailure,
+  isSessionEnded,
+} from "../services/requestFailure";
+import {
   activateMfa,
   disableMfa,
   getMfaStatus,
@@ -105,16 +109,28 @@ export default function Security() {
     }
   };
 
-  const girarCodigos = async () => {
-    setWorking(true);
-    try {
-      setRecoveryCodes(await rotateMfaRecoveryCodes());
-      await carregar();
-    } catch {
-      showToast("Não foi possível gerar códigos novos.", "error");
-    } finally {
-      setWorking(false);
-    }
+  // Gerar um lote novo mata o anterior por inteiro — quem guardou os códigos
+  // impressos ou num gerenciador perde a saída de emergência sem perceber.
+  // Por isso pede confirmação, como o "Desligar", e nunca vai num toque só
+  const girarCodigos = () => {
+    askConfirm({
+      title: "Gerar novos códigos de recuperação",
+      message:
+        "Os códigos que você guardou deixam de valer na hora. Você vai precisar guardar os novos.",
+      confirmLabel: "Gerar novos",
+      destructive: true,
+      onConfirm: async () => {
+        setWorking(true);
+        try {
+          setRecoveryCodes(await rotateMfaRecoveryCodes());
+          await carregar();
+        } catch {
+          showToast("Não foi possível gerar códigos novos.", "error");
+        } finally {
+          setWorking(false);
+        }
+      },
+    });
   };
 
   const desligar = () => {
@@ -136,8 +152,22 @@ export default function Security() {
           setRecoveryCodes(null);
           await carregar();
           showToast("Verificação em duas etapas desligada.", "success");
-        } catch {
-          showToast("Senha incorreta.", "error");
+        } catch (error) {
+          // Só a recusa da senha (400 da regra, 401) é "Senha incorreta".
+          // Offline, servidor acordando ou 500 diziam a mesma coisa, e a
+          // pessoa redigitava a senha certa sem fim
+          const status = (error as { response?: { status?: number } } | null)
+            ?.response?.status;
+          if (!isSessionEnded(error) && (status === 400 || status === 401)) {
+            showToast("Senha incorreta.", "error");
+          } else {
+            const mensagem = describeSaveFailure(
+              error,
+              "Não foi possível desligar agora.",
+            );
+            // Vazia quando a sessão acabou: quem sai não leva toast
+            if (mensagem) showToast(mensagem, "error");
+          }
         } finally {
           setWorking(false);
         }
