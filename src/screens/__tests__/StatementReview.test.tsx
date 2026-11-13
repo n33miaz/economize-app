@@ -34,6 +34,34 @@ jest.mock("@react-navigation/native", () => ({
   },
 }));
 
+// Folha de categorias trocada por um botão por categoria: o teste quer a
+// escolha manual entrando no estado da tela, não a navegação da folha real
+jest.mock("../../components/CategoryPickerSheet", () => {
+  const { Text, TouchableOpacity } = require("react-native");
+  return {
+    __esModule: true,
+    default: ({
+      visible,
+      onSelect,
+      onClose,
+    }: {
+      visible: boolean;
+      onSelect: (c: unknown) => void;
+      onClose: () => void;
+    }) =>
+      visible ? (
+        <TouchableOpacity
+          onPress={() => {
+            onSelect({ id: "cat-trabalho", name: "Trabalho" });
+            onClose();
+          }}
+        >
+          <Text>Escolher Trabalho</Text>
+        </TouchableOpacity>
+      ) : null,
+  };
+});
+
 const METRICAS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
@@ -224,5 +252,63 @@ describe("Revisão do extrato", () => {
     montar();
 
     await waitFor(() => expect(fetchQueue).toHaveBeenCalledWith("upload-legado"));
+  });
+
+  it("'Aprovar tudo' grava a correção manual antes da sugestão", async () => {
+    // O grupo veio sugerido como Transporte e o usuário corrigiu para
+    // Trabalho: o aprovar-tudo não pode gravar Transporte por cima
+    const ordem: string[] = [];
+    const applyMany = jest.fn().mockImplementation(async () => {
+      ordem.push("applyMany");
+      return { confirmed: 2, failedItems: [] };
+    });
+    const confirmAll = jest.fn().mockImplementation(async () => {
+      ordem.push("confirmAll");
+      return 3;
+    });
+    useReviewStore.setState({
+      ...BASE,
+      groups: [grupo("UBER", 2, "cat-transporte"), grupo("IFOOD", 3, ALIMENTACAO.id)],
+      applyMany,
+      confirmAll,
+    } as never);
+
+    const { getByText, getByLabelText, getAllByLabelText } = montar();
+
+    await waitFor(() => expect(getByText("UBER")).toBeTruthy());
+    // O primeiro chip é o do grupo UBER
+    fireEvent.press(getAllByLabelText(/Toque para trocar|Escolher categoria/)[0]);
+    fireEvent.press(getByText("Escolher Trabalho"));
+    fireEvent.press(getByLabelText(/Aprovar todas as/));
+
+    await waitFor(() => expect(confirmAll).toHaveBeenCalled());
+    expect(applyMany).toHaveBeenCalledWith([
+      { transactionIds: ["UBER-0", "UBER-1"], categoryId: "cat-trabalho" },
+    ]);
+    expect(ordem).toEqual(["applyMany", "confirmAll"]);
+  });
+
+  it("se a correção falha, 'Aprovar tudo' não confirma a sugestão", async () => {
+    const applyMany = jest.fn().mockResolvedValue({
+      confirmed: 0,
+      failedItems: [{ transactionIds: ["UBER-0"], categoryId: "cat-trabalho" }],
+    });
+    const confirmAll = jest.fn().mockResolvedValue(1);
+    useReviewStore.setState({
+      ...BASE,
+      groups: [grupo("UBER", 1, "cat-transporte")],
+      applyMany,
+      confirmAll,
+    } as never);
+
+    const { getByText, getByLabelText, getAllByLabelText } = montar();
+
+    await waitFor(() => expect(getByText("UBER")).toBeTruthy());
+    fireEvent.press(getAllByLabelText(/Toque para trocar|Escolher categoria/)[0]);
+    fireEvent.press(getByText("Escolher Trabalho"));
+    fireEvent.press(getByLabelText(/Aprovar todas as/));
+
+    await waitFor(() => expect(applyMany).toHaveBeenCalled());
+    expect(confirmAll).not.toHaveBeenCalled();
   });
 });
