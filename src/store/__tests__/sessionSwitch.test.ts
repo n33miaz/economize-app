@@ -47,9 +47,12 @@ const jwtFor = (email: string) =>
 
 const TOK_ANA = jwtFor("ana@casa.dev");
 const TOK_BRUNO = jwtFor("bruno@casa.dev");
+// O token que a troca de senha devolve: mesma pessoa, outra emissão
+const TOK_ANA_NOVO = `${jwtFor("ana@casa.dev")}2`;
 
 const TOKENS: Record<string, string> = {
   [`Bearer ${TOK_ANA}`]: "ANA",
+  [`Bearer ${TOK_ANA_NOVO}`]: "ANA",
   [`Bearer ${TOK_BRUNO}`]: "BRUNO",
 };
 
@@ -605,6 +608,58 @@ describe("a resposta que chega depois da saída", () => {
     expect(showToast).not.toHaveBeenCalled();
     expect(useWalletStore.getState().error).toBeFalsy();
     showToast.mockRestore();
+  });
+});
+
+describe("troca de senha", () => {
+  it("neste aparelho: o token novo entra, nada se perde, e o 401 do pedido antigo não derruba", async () => {
+    await loginAs("ana");
+    await visitTheScreens();
+    const soltar = hold("/wallet/transactions");
+    void useWalletStore.getState().fetchTransactions(true);
+    await settle();
+
+    // A troca derrubou o token velho no servidor e devolveu um novo
+    expired.add(`Bearer ${TOK_ANA}`);
+    useAuthStore.getState().renewSession(TOK_ANA_NOVO, "Ana");
+    // Sem espião no showToast: o `set` do store copiaria o dublê para os
+    // testes seguintes. Basta ver que nenhum aviso foi escrito
+    useToastStore.getState().reset();
+    soltar();
+    await settle();
+
+    expect(useAuthStore.getState().token).toBe(TOK_ANA_NOVO);
+    expect(useToastStore.getState().message).toBe("");
+    // O extrato de Ana segue na memória: é a mesma pessoa
+    expect(useBankStore.getState().transactions).toEqual([
+      expect.objectContaining({ description: "IFOOD DE ANA" }),
+    ]);
+    expect(everythingInMemory()).toContain("Mesada de ANA");
+
+    // E o pedido seguinte já sai com o token novo e é atendido
+    await useBankStore.getState().fetchTransactions(true);
+    expect(hits.get("/bank-statements")?.at(-1)).toBe(`Bearer ${TOK_ANA_NOVO}`);
+    expect(useAuthStore.getState().token).toBe(TOK_ANA_NOVO);
+    expect(useToastStore.getState().message).toBe("");
+  });
+
+  it("em OUTRO aparelho: o próximo pedido daqui volta 401 e cai no login, sem nada travado", async () => {
+    await loginAs("ana");
+    await visitTheScreens();
+    // O servidor derrubou todas as sessões de Ana; este aparelho não sabe
+    expired.add(`Bearer ${TOK_ANA}`);
+
+    void useBankStore.getState().fetchTransactions(true);
+    await settle();
+
+    // token nulo é o que troca a navegação para a tela de login
+    // (o aviso "sessão expirou" é o do 401 comum, já provado em "A sai, B
+    // entra"; aqui não se confere porque os espiões de showToast dos testes
+    // anteriores ficam copiados no estado do store)
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(useBankStore.getState().isLoading).toBe(false);
+    expect(useConfirmStore.getState().request).toBeNull();
+    expect(everythingInMemory()).not.toContain("ANA");
   });
 });
 

@@ -1,18 +1,31 @@
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
 } from "react-native-safe-area-context";
 
 import Profile from "../Profile";
+import { logoutAllSessions } from "../../services/api";
 import { useAuthStore } from "../../store/authStore";
+import { useConfirmStore } from "../../store/confirmStore";
+import { useToastStore } from "../../store/toastStore";
 import { usePlanStore } from "../../store/planStore";
 import { usePreferencesStore } from "../../store/preferencesStore";
-import { useToastStore } from "../../store/toastStore";
 import { useUserStore } from "../../store/userStore";
 
-jest.mock("../../services/api", () => ({ __esModule: true, default: {} }));
+jest.mock("../../services/api", () => ({
+  __esModule: true,
+  default: {},
+  logoutAllSessions: jest.fn(),
+  // A leitura real do status: o teste da 404 depende dela
+  getApiErrorStatus: (e: { response?: { status?: number } }) =>
+    e?.response?.status ?? null,
+}));
+
+const mockSairDeTudo = logoutAllSessions as jest.MockedFunction<
+  typeof logoutAllSessions
+>;
 
 jest.mock("../../utils/biometrics", () => ({
   biometricSupport: jest.fn().mockResolvedValue({ available: false }),
@@ -147,5 +160,106 @@ describe("Perfil", () => {
     fireEvent.press(getByText("Moeda padrão"));
 
     expect(usePreferencesStore.getState().defaultCurrency).toBe("BRL");
+  });
+});
+
+describe("Perfil — sair de todos os aparelhos", () => {
+  beforeEach(() => {
+    mockSairDeTudo.mockReset();
+    useConfirmStore.setState({ request: null });
+    useToastStore.getState().hideToast();
+    useAuthStore.setState({ token: "t", userName: "Neemias" } as never);
+    useUserStore.setState({
+      me: EU,
+      stats: null,
+      isLoading: false,
+      isLoadingStats: false,
+      isSaving: false,
+      fetchMe: jest.fn().mockResolvedValue(undefined),
+      fetchStats: jest.fn().mockResolvedValue(undefined),
+    } as never);
+  });
+
+  afterEach(() => {
+    useToastStore.getState().hideToast();
+  });
+
+  /** Toca na linha e devolve o pedido de confirmação que ela abriu. */
+  const pedirConfirmacao = async () => {
+    const tela = montar();
+    const linha = await waitFor(() =>
+      tela.getByLabelText(/^Sair de todos os aparelhos/),
+    );
+    fireEvent.press(linha);
+    const pedido = useConfirmStore.getState().request;
+    expect(pedido).not.toBeNull();
+    return pedido!;
+  };
+
+  it("a confirmação diz que todos saem e que o código será pedido de novo", async () => {
+    const pedido = await pedirConfirmacao();
+
+    expect(pedido.destructive).toBe(true);
+    expect(pedido.message).toMatch(/todos os aparelhos/i);
+    expect(pedido.message).toMatch(/código/i);
+    // Só abrir a confirmação não chama o servidor
+    expect(mockSairDeTudo).not.toHaveBeenCalled();
+  });
+
+  it("confirmado e aceito pelo servidor: faz o logout local completo", async () => {
+    mockSairDeTudo.mockResolvedValue(undefined);
+    const pedido = await pedirConfirmacao();
+
+    await act(async () => {
+      await pedido.onConfirm();
+    });
+
+    expect(mockSairDeTudo).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().token).toBeNull();
+  });
+
+  it("servidor antigo (404): avisa que ainda não existe e NÃO sai", async () => {
+    mockSairDeTudo.mockRejectedValue({ response: { status: 404 } });
+    const pedido = await pedirConfirmacao();
+
+    await act(async () => {
+      await pedido.onConfirm();
+    });
+
+    expect(useAuthStore.getState().token).toBe("t");
+    expect(useToastStore.getState().message).toMatch(/ainda não está disponível/);
+  });
+
+  it("falha comum: mostra o motivo e NÃO sai", async () => {
+    mockSairDeTudo.mockRejectedValue({
+      response: { status: 400, data: { detail: "Pedido recusado." } },
+    });
+    const pedido = await pedirConfirmacao();
+
+    await act(async () => {
+      await pedido.onConfirm();
+    });
+
+    expect(useAuthStore.getState().token).toBe("t");
+    expect(useToastStore.getState().message).toBe("Pedido recusado.");
+  });
+
+  it("dois toques no confirmar mandam UM pedido só", async () => {
+    let soltar!: () => void;
+    mockSairDeTudo.mockReturnValue(
+      new Promise<void>((resolve) => {
+        soltar = resolve;
+      }),
+    );
+    const pedido = await pedirConfirmacao();
+
+    await act(async () => {
+      const primeiro = pedido.onConfirm();
+      const segundo = pedido.onConfirm();
+      soltar();
+      await Promise.all([primeiro, segundo]);
+    });
+
+    expect(mockSairDeTudo).toHaveBeenCalledTimes(1);
   });
 });

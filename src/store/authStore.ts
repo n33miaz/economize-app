@@ -55,6 +55,11 @@ interface AuthState {
     options?: { deferCommit?: boolean; rememberDevice?: boolean },
   ) => Promise<LoginOutcome | undefined>;
   completeLogin: (token: string, userName: string) => void;
+  /**
+   * Troca o token da sessão ATUAL por um novo da mesma pessoa (troca de
+   * senha), sem limpar nada. Ver o comentário na implementação.
+   */
+  renewSession: (token: string, userName: string) => void;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
@@ -215,6 +220,26 @@ export const useAuthStore = create(
 
       completeLogin: (token, userName) => {
         openSession(token, userName);
+      },
+
+      renewSession: (token, userName) => {
+        // NÃO passa por `openSession`: aquela porta limpa os stores porque
+        // quem entra pode ser outra pessoa. Aqui é a mesma pessoa, no meio do
+        // uso, que acabou de trocar a senha — apagar o extrato e a conversa
+        // dela seria castigo por ter feito a coisa certa. Grava no mesmo
+        // estado (persistido) que o login grava, e só isso.
+        //
+        // Os pedidos ainda em voo com o token antigo voltam 401 (o servidor
+        // já o derrubou), mas o interceptor os vê como de "sessão encerrada"
+        // — o token mudou — e os descarta em silêncio, sem derrubar esta
+        // sessão nova
+        const userKey = userKeyFromToken(token);
+        set((state) => ({
+          token,
+          userName: userName || state.userName,
+          lastUserKey: userKey ?? state.lastUserKey,
+          error: null,
+        }));
       },
 
       register: async (name, email, password) => {

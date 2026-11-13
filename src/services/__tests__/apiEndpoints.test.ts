@@ -26,6 +26,7 @@ import api, {
   getReviewQueue,
   getTransactions,
   getUserMe,
+  logoutAllSessions,
   resetPassword,
   saveAiSettings,
   updateCategory,
@@ -183,6 +184,25 @@ describe("api — o contrato das rotas", () => {
     expect(cliente.post.mock.calls[0][0]).toBe("/users/me/change-password");
     expect(cliente.post.mock.calls[0][1])
       .toEqual({ currentPassword: "velha", newPassword: "nova" });
+  });
+
+  it("troca de senha: o token novo volta para quem chamou; 204 volta null", async () => {
+    // Servidor novo: 200 com a sessão nova (o token velho já morreu lá)
+    cliente.post.mockResolvedValue({ data: { token: "novo", name: "Ana" } });
+    await expect(changePassword("velha", "nova")).resolves.toEqual({
+      token: "novo",
+      name: "Ana",
+    });
+
+    // Servidor antigo: 204 sem corpo — o axios entrega "" — nada a trocar
+    cliente.post.mockResolvedValue({ data: "", status: 204 });
+    await expect(changePassword("velha", "nova")).resolves.toBeNull();
+  });
+
+  it("sair de todos os aparelhos é um POST sem corpo em /auth/logout-all", async () => {
+    cliente.post.mockResolvedValue({ data: "", status: 204 });
+    await logoutAllSessions();
+    expect(cliente.post).toHaveBeenCalledWith("/auth/logout-all");
   });
 
   it("o id vai no CAMINHO, não no corpo", async () => {
