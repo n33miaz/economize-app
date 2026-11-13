@@ -168,6 +168,9 @@ describe("parseAmount — a única leitura de valor digitado", () => {
     // inteiro, "R$", espaços e negativos
     ["100", 100],
     ["R$ 1.234,56", 1234.56],
+    ["US$ 12.50", 12.5],
+    ["$ 12,50", 12.5],
+    ["12,50 R$", 12.5],
     ["  2.500  ", 2500],
     ["R$ 18.000,50", 18000.5],
     ["-1.234,56", -1234.56],
@@ -178,7 +181,10 @@ describe("parseAmount — a única leitura de valor digitado", () => {
     expect(parseAmount(entrada)).toBe(esperado);
   });
 
-  it.each(["", "   ", "R$", "R$ ", "-", ",", ".", "abc", "1,234,567", "1-2"])(
+  it.each([
+    "", "   ", "R$", "R$ ", "-", ",", ".", "abc", "1,234,567", "1-2",
+    "12abc", "1a2", "R$ 12 x", "--5", "5-",
+  ])(
     "%j → null",
     (entrada) => {
       expect(parseAmount(entrada)).toBeNull();
@@ -234,7 +240,10 @@ describe("parseQuantity — leitura de quantidade", () => {
     expect(parseQuantity(entrada)).toBe(esperado);
   });
 
-  it.each(["", "  ", "abc", "-", "1.2.3", "1,2,3", "1.23.456"])(
+  it.each([
+    "", "  ", "abc", "-", "1.2.3", "1,2,3", "1.23.456",
+    "12abc", "1a2", "R$ 12 x", "--5", "5-",
+  ])(
     "%j → null",
     (entrada) => {
       expect(parseQuantity(entrada)).toBeNull();
