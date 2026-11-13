@@ -127,6 +127,45 @@ describe("Renda e jornada", () => {
     await waitFor(() => expect(addIncome).toHaveBeenCalledTimes(1));
   });
 
+  it("recusa nome de fonte acima de 120 caracteres sem salvar", async () => {
+    const addIncome = jest.fn();
+    useWishStore.setState({ ...BASE, addIncome } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(await waitFor(() => getByLabelText("Cadastrar fonte de renda")));
+    fireEvent.changeText(getByLabelText("Nome"), "a".repeat(121));
+    fireEvent.press(getByLabelText("Salvar fonte de renda"));
+
+    expect(addIncome).not.toHaveBeenCalled();
+  });
+
+  it("recusa sugestão com dia âncora fora do intervalo sem enviar", async () => {
+    const acceptSuggestion = jest.fn();
+    useWishStore.setState({
+      ...BASE,
+      acceptSuggestion,
+      income: {
+        ...RENDA,
+        suggestions: [
+          {
+            seriesId: "s1",
+            suggestedKind: "SALARY",
+            name: "Salário sugerido",
+            expectedAmount: 3000,
+            anchorDay: 32,
+          },
+        ],
+      },
+    } as never);
+    const { getByLabelText } = montar();
+
+    fireEvent.press(
+      await waitFor(() => getByLabelText("Confirmar Salário sugerido")),
+    );
+
+    expect(acceptSuggestion).not.toHaveBeenCalled();
+  });
+
   it("busca a renda ao abrir", async () => {
     const fetchIncome = jest.fn().mockResolvedValue(undefined);
     useWishStore.setState({

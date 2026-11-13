@@ -118,6 +118,29 @@ describe("Register", () => {
     expect(mockedPost).not.toHaveBeenCalled();
   });
 
+  it("recusa senha acima de 72 bytes sem chamar o servidor", () => {
+    const { getByLabelText, getByText } = renderRegister();
+    preencher(getByLabelText, {
+      nome: "Ana",
+      email: "ana@teste.com",
+      senha: "😀".repeat(19),
+    });
+
+    fireEvent.press(getByLabelText("Cadastrar"));
+
+    expect(
+      getByText("A senha pode ter no máximo 72 bytes — emojis contam mais de um."),
+    ).toBeTruthy();
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it("limita nome e e-mail no próprio campo", () => {
+    const { getByLabelText } = renderRegister();
+
+    expect(getByLabelText("Nome Completo").props.maxLength).toBe(100);
+    expect(getByLabelText("E-mail").props.maxLength).toBe(150);
+  });
+
   it("o e-mail vai sem espaços nas pontas e com a caixa que foi digitada", async () => {
     mockedPost.mockResolvedValue({ data: { token: "tok", name: "Ana" } });
     const { getByLabelText } = renderRegister();

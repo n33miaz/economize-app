@@ -62,6 +62,20 @@ describe("ResetPassword — validações e envio", () => {
     expect(mockedResetPassword).not.toHaveBeenCalled();
   });
 
+  it("bloqueia senha acima de 72 bytes sem chamar a API", () => {
+    const { getByLabelText, getByText } = renderScreen();
+    const senhaLonga = "😀".repeat(19);
+
+    fireEvent.changeText(getByLabelText("Nova senha"), senhaLonga);
+    fireEvent.changeText(getByLabelText("Confirmar nova senha"), senhaLonga);
+    fireEvent.press(getByLabelText("Redefinir senha"));
+
+    expect(
+      getByText("A senha pode ter no máximo 72 bytes — emojis contam mais de um."),
+    ).toBeTruthy();
+    expect(mockedResetPassword).not.toHaveBeenCalled();
+  });
+
   it("bloqueia confirmação divergente sem chamar a API", () => {
     const { getByLabelText, getByText } = renderScreen();
 

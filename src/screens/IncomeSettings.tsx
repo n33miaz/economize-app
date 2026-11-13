@@ -45,6 +45,8 @@ const KINDS: IncomeSourceKind[] = [
   "OTHER",
 ];
 
+const INCOME_NAME_MAX_LENGTH = 120;
+
 function KindChip({
   kind,
   selected,
@@ -193,6 +195,10 @@ export default function IncomeSettings() {
   const salvarFonte = async () => {
     if (!nome.trim()) {
       showToast("Dê um nome à fonte de renda.", "warning");
+      return;
+    }
+    if (nome.trim().length > INCOME_NAME_MAX_LENGTH) {
+      showToast("Nome deve ter no máximo 120 caracteres", "warning");
       return;
     }
     const montante = parseAmount(valor);
@@ -438,6 +444,24 @@ export default function IncomeSettings() {
                           valor só entra na conta depois deste toque */}
                       <Pressable
                         onPress={async () => {
+                          // Sugestões antigas também precisam caber antes de
+                          // confirmá-las: a rota só recebe o id da série.
+                          if (s.name.length > INCOME_NAME_MAX_LENGTH) {
+                            showToast(
+                              "Nome deve ter no máximo 120 caracteres",
+                              "warning",
+                            );
+                            return;
+                          }
+                          if (
+                            s.anchorDay != null &&
+                            (!Number.isInteger(s.anchorDay) ||
+                              s.anchorDay < 1 ||
+                              s.anchorDay > 31)
+                          ) {
+                            showToast("Dia deve estar entre 1 e 31", "warning");
+                            return;
+                          }
                           const result = await acceptSuggestion(s.seriesId);
                           showToast(result.message, result.ok ? "success" : "error");
                         }}
@@ -579,7 +603,12 @@ export default function IncomeSettings() {
           </View>
 
           <View className="mb-4">
-            <FloatingLabelInput label="Nome" value={nome} onChangeText={setNome} />
+            <FloatingLabelInput
+              label="Nome"
+              value={nome}
+              onChangeText={setNome}
+              maxLength={INCOME_NAME_MAX_LENGTH}
+            />
           </View>
           <View className="mb-4">
             <FloatingLabelInput

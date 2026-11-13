@@ -154,6 +154,30 @@ describe("Carteira", () => {
     );
   });
 
+  it("recusa quantidade fora da faixa aceita sem salvar", async () => {
+    const addTransaction = jest.fn();
+    useWalletStore.setState({ addTransaction } as never);
+
+    const tela = montar();
+    await preencher(tela, "123456789012", "10");
+    fireEvent.press(tela.getByLabelText("Salvar investimento"));
+
+    expect(addTransaction).not.toHaveBeenCalled();
+    expect(useToastStore.getState().message).toBe("Quantidade fora da faixa aceita");
+  });
+
+  it("recusa preço fora da faixa aceita sem salvar", async () => {
+    const addTransaction = jest.fn();
+    useWalletStore.setState({ addTransaction } as never);
+
+    const tela = montar();
+    await preencher(tela, "1", "1,12345");
+    fireEvent.press(tela.getByLabelText("Salvar investimento"));
+
+    expect(addTransaction).not.toHaveBeenCalled();
+    expect(useToastStore.getState().message).toBe("Preço fora da faixa aceita");
+  });
+
   it("falha ao salvar avisa e mantém o que foi digitado", async () => {
     const addTransaction = jest.fn().mockRejectedValue(new Error("rede"));
     useWalletStore.setState({ addTransaction } as never);

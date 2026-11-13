@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   SafeAreaProvider,
   type Metrics,
@@ -68,6 +68,21 @@ describe("Trocar senha", () => {
     await waitFor(() => expect(toJSON()).toBeTruthy());
     // Validação do lado do cliente é cortesia, não segurança — mas evita uma
     // ida ao servidor que já se sabe que vai voltar 400
+    expect(mockTrocar).not.toHaveBeenCalled();
+  });
+
+  it("recusa a nova senha acima de 72 bytes sem chamar o servidor", () => {
+    const { getByLabelText, getByText } = montar();
+    const senhaLonga = "😀".repeat(19);
+
+    fireEvent.changeText(getByLabelText("Senha atual"), "senha-atual");
+    fireEvent.changeText(getByLabelText("Nova senha"), senhaLonga);
+    fireEvent.changeText(getByLabelText("Confirmar nova senha"), senhaLonga);
+    fireEvent.press(getByLabelText("Salvar nova senha"));
+
+    expect(
+      getByText("A senha pode ter no máximo 72 bytes — emojis contam mais de um."),
+    ).toBeTruthy();
     expect(mockTrocar).not.toHaveBeenCalled();
   });
 });
