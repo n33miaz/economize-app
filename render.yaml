@@ -21,7 +21,12 @@ services:
     staticPublishPath: ./dist
     # Explícito de propósito: com dois sites no mesmo arquivo, o branch deixa
     # de ser detalhe e passa a ser a única coisa que os separa
-    branch: main
+    # Produção publica o develop desde 13/11/2026, por decisão do dono (o mesmo
+    # modelo do UniOver): todo PR juntado no develop vai ao ar. O develop é
+    # protegido no GitHub com os mesmos checks obrigatórios da main. A main fica
+    # parada como cópia de segurança; para desfazer, Rollback no painel ou
+    # voltar este campo (e o do painel) para main.
+    branch: develop
     autoDeploy: true
     envVars:
       # O Metro embute esta variável no bundle em tempo de build — por isso ela
