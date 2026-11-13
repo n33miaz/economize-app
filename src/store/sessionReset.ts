@@ -85,6 +85,10 @@ export const SESSION_RESETS: Record<string, SessionReset> = {
   categoriesStore: {
     load: () => require("./categoriesStore").useCategoriesStore,
   },
+  // Parcelas e compromissos contra a renda
+  commitmentsStore: {
+    load: () => require("./commitmentsStore").useCommitmentsStore,
+  },
   // O diálogo aberto guarda o texto e o CALLBACK de quem saiu
   confirmStore: { load: () => require("./confirmStore").useConfirmStore },
   // Instituições conectadas pelo Open Finance
