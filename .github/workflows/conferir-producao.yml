@@ -75,7 +75,9 @@ jobs:
             echo "::error::O index.html não referencia nenhum pacote JS"
             exit 1
           fi
-          read -r codigo tamanho < <(curl -sS -o /dev/null -w "%{http_code} %{size_download}" \
+          # O \n no fim não é enfeite: sem ele o `read` chega ao fim da entrada
+          # sem quebra de linha, devolve 1 e o `bash -e` derruba o passo
+          read -r codigo tamanho < <(curl -sS -o /dev/null -w "%{http_code} %{size_download}\n" \
             --max-time 60 --retry 3 --retry-delay 10 --retry-all-errors "$SITE$pacote")
           echo "$pacote: HTTP $codigo, $tamanho bytes"
           [ "$codigo" = "200" ]
