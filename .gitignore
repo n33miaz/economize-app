@@ -4,6 +4,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+# gerado pelo postinstall (scripts/gravar-versao.js) a cada npm ci
+public/version.json
 web-build/
 expo-env.d.ts
 
