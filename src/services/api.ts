@@ -1111,6 +1111,48 @@ export const getInstallments = async (): Promise<InstallmentOverview> => {
   return response.data;
 };
 
+/**
+ * Um mês do painel de compromissos: parcelas de compras já feitas mais dívidas
+ * recorrentes (financiamento, empréstimo, consórcio, rotativo).
+ */
+export interface CommitmentMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  /** Mês corrente: só o que ainda vai cair a partir de hoje. */
+  partial: boolean;
+  installments: number;
+  debts: number;
+  total: number;
+  /** Total sobre a renda, em %; nulo sem renda conhecida. */
+  shareOfIncome: number | null;
+  aboveThreshold: boolean;
+}
+
+export interface CommitmentsPanel {
+  /** Limite do aviso, em % — referência, não regra. */
+  thresholdPct: number;
+  income: {
+    amount: number | null;
+    /** SOURCES (cadastrada), MEASURED (medida no extrato) ou NONE. */
+    origin: "SOURCES" | "MEASURED" | "NONE";
+    sources: number;
+  };
+  months: CommitmentMonth[];
+  peakSharePct: number | null;
+  aboveThreshold: boolean;
+}
+
+/**
+ * Parcelas e compromissos dos próximos meses contra a renda. O servidor faz a
+ * conta inteira — o app só mostra, para não haver duas versões do percentual.
+ */
+export const getCommitments = async (months = 6): Promise<CommitmentsPanel> => {
+  const response = await api.get<CommitmentsPanel>("/analytics/commitments", {
+    params: { months },
+  });
+  return response.data;
+};
+
 /** Quanto saiu e quanto entrou num dia (EC-235) — alimenta o calendário. */
 export interface DailyTotal {
   /** `YYYY-MM-DD`. */

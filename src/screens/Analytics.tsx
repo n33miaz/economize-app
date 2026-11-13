@@ -31,6 +31,9 @@ import { useAdvancedView } from "../store/preferencesStore";
 import { plainHeaviest, plainVerdict } from "../utils/plainMonth";
 import { familyCategorySlices } from "../utils/family";
 import DebtBreakdown from "../components/DebtBreakdown";
+import CommitmentsPanel from "../components/CommitmentsPanel";
+import { useCommitmentsStore } from "../store/commitmentsStore";
+import { APP_ROUTES } from "../routes/routeNames";
 import CycleCaveats from "../components/CycleCaveats";
 import FamilyScopeToggle from "../components/FamilyScopeToggle";
 import MemberAvatar from "../components/MemberAvatar";
@@ -1221,6 +1224,11 @@ export default function Analytics() {
   const fetchCategories = useCategoriesStore((s) => s.fetch);
   const inFamilyScope = hasFamily && scope === "family";
 
+  // Parcelas e compromissos não dependem do período escolhido: o store
+  // guarda a resposta por alguns minutos e a troca de mês não pede de novo
+  const commitments = useCommitmentsStore((s) => s.panel);
+  const fetchCommitments = useCommitmentsStore((s) => s.fetchCommitments);
+
   // O recorte que a visão pessoal está lendo, na mesma gramática que a casa
   // usa — é ele que o painel de tetos recebe, para o limite mensal ser
   // esticado (ou encolhido) para o tamanho do ciclo que está na tela
@@ -1244,6 +1252,7 @@ export default function Analytics() {
   useFocusEffect(
     useCallback(() => {
       const load = async () => {
+        fetchCommitments();
         await fetchMonths();
         await fetchMonthly();
         // Só agora o mês selecionado existe com certeza; a casa segue o mesmo
@@ -1251,7 +1260,7 @@ export default function Analytics() {
         if (useFamilyStore.getState().scope === "family") loadFamily();
       };
       load();
-    }, [fetchMonths, fetchMonthly, loadFamily]),
+    }, [fetchMonths, fetchMonthly, loadFamily, fetchCommitments]),
   );
 
   // Troca de chip, de âncora ou de escopo: a casa recarrega no recorte novo.
@@ -1262,9 +1271,9 @@ export default function Analytics() {
 
   const onRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Promise.all([fetchMonths(), fetchMonthly()]);
+    await Promise.all([fetchMonths(), fetchMonthly(), fetchCommitments(true)]);
     if (useFamilyStore.getState().scope === "family") loadFamily();
-  }, [fetchMonths, fetchMonthly, loadFamily]);
+  }, [fetchMonths, fetchMonthly, loadFamily, fetchCommitments]);
 
   // Detalhe por subcategoria abre sob demanda: o ranking dos pais é a leitura
   // principal, a quebra é o segundo olhar
@@ -1484,6 +1493,15 @@ export default function Analytics() {
                 pergunta anterior — quanto do que saiu é compromisso de outro
                 mês, e não escolha deste */}
             <DebtBreakdown debt={debt} />
+
+            {/* Logo depois da dívida do período: aquela olha para trás,
+                esta para os próximos meses e contra a renda */}
+            <CommitmentsPanel
+              panel={commitments}
+              onRegisterIncome={() =>
+                navigation.navigate(APP_ROUTES.renda as never)
+              }
+            />
 
             <BlockGrid columns={columns}>
               {[
